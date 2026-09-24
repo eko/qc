@@ -1,0 +1,230 @@
+# syntax=docker/dockerfile:1
+#
+# qc, NVIDIA image: qc built with the cuda tag + libvmaf 3.2.1 built with its
+# CUDA feature extractors (and the VMAF v1 models) + ffmpeg 9.0.2 with
+# NVDEC/NVENC (nv-codec-headers), scale_cuda, libx264, libx265 and SVT-AV1 4.2.
+# See docs/gpu.md.
+#
+#   docker build -f Dockerfile.cuda -t qc:cuda .
+#   docker run --rm --gpus all -v "$PWD:/data" qc:cuda run source.mov --gpu --codecs h264
+#
+# Only the build stages need the CUDA toolkit; nothing in this image needs a
+# GPU to build, so it builds on any machine (linux/amd64 and linux/arm64,
+# i.e. x86 servers and Grace/Jetson-class arm64). At run time the NVIDIA
+# container toolkit injects the driver libraries (libcuda, libnvcuvid,
+# libnvidia-encode) selected by NVIDIA_DRIVER_CAPABILITIES below.
+#
+# The unit tests of the cuda build run in the "test" target; the GPU-specific
+# ones skip without a GPU:
+#
+#   docker build -f Dockerfile.cuda --target test .
+#
+# The image also ships gpuval, the GPU validation kit (make gpu-validate,
+# bench/gpu/validate.sh).
+
+ARG CUDA_VERSION=12.9.2
+ARG UBUNTU_RELEASE=24.04
+ARG GO_VERSION=1.27.1
+
+# ---------------------------------------------------------------------------
+# Toolchain: the CUDA devel image (nvcc for libvmaf's kernels), clang (for
+# ffmpeg's CUDA filters, see below), meson/nasm and the encoder libraries.
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_RELEASE} AS toolchain
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential ca-certificates clang cmake curl meson nasm ninja-build pkg-config xxd \
+        libdav1d-dev libx264-dev libx265-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# install-nv-codec-headers VERSION SHA256: libvmaf and ffmpeg reach the
+# driver through these headers (dynamic loading, nothing is linked).
+RUN printf '%s\n' '#!/bin/sh' 'set -eu' \
+        'curl -fsSL -o /tmp/h.tar.gz "https://github.com/FFmpeg/nv-codec-headers/archive/refs/tags/$1.tar.gz"' \
+        'echo "$2  /tmp/h.tar.gz" | sha256sum -c -' \
+        'mkdir -p /tmp/h && tar -xzf /tmp/h.tar.gz -C /tmp/h --strip-components=1' \
+        'make -C /tmp/h install PREFIX=/usr/local' \
+        'rm -rf /tmp/h /tmp/h.tar.gz' \
+        > /usr/local/bin/install-nv-codec-headers \
+    && chmod +x /usr/local/bin/install-nv-codec-headers
+
+# ---------------------------------------------------------------------------
+# SVT-AV1 from source: Ubuntu's 1.7 is two major versions behind the one qc's
+# AV1 probe CRFs were calibrated with, and refuses frames below 64×64.
+FROM toolchain AS svtav1
+
+ARG SVTAV1_VERSION=4.2.0
+ARG SVTAV1_SHA256=c7b13c4a84bd3751aa35fcc72be13e6875467e7c2216879251a486e5b1e4e740
+
+WORKDIR /src/svt-av1
+RUN curl -fsSL -o svt.tar.gz \
+        "https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v${SVTAV1_VERSION}/SVT-AV1-v${SVTAV1_VERSION}.tar.gz" \
+    && echo "${SVTAV1_SHA256}  svt.tar.gz" | sha256sum -c - \
+    && tar -xzf svt.tar.gz --strip-components=1 \
+    && rm svt.tar.gz \
+    && cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib \
+        -DBUILD_APPS=OFF -DBUILD_TESTING=OFF \
+    && cmake --build build \
+    && cmake --install build
+
+# ---------------------------------------------------------------------------
+# libvmaf with CUDA: nvcc compiles the VIF, ADM and motion kernels to SASS
+# for sm_75 (Turing) to sm_120 (Blackwell) plus PTX, so no JIT is needed on
+# supported GPUs. libvmaf 3.2.1 needs CUDA loader functions first shipped in
+# nv-codec-headers 13.1 (cuMemHostAlloc, cuMemFreeAsync...): they exist in
+# every driver since CUDA 11.2, so these headers raise no driver requirement.
+FROM toolchain AS libvmaf
+
+ARG LIBVMAF_VERSION=3.2.1
+ARG LIBVMAF_SHA256=5df7386911bc15fd1ca783132528748d219768ae4fc5f8e0b61184f041648092
+ARG LIBVMAF_NV_CODEC_HEADERS=n13.1.15.0
+ARG LIBVMAF_NV_CODEC_HEADERS_SHA256=2255bc74d038b95aa4be30f5f66322c2176acbdb90ada1851db6993536fbeaf7
+
+RUN install-nv-codec-headers "${LIBVMAF_NV_CODEC_HEADERS}" "${LIBVMAF_NV_CODEC_HEADERS_SHA256}"
+
+WORKDIR /src/vmaf
+RUN curl -fsSL -o vmaf.tar.gz "https://github.com/Netflix/vmaf/archive/refs/tags/v${LIBVMAF_VERSION}.tar.gz" \
+    && echo "${LIBVMAF_SHA256}  vmaf.tar.gz" | sha256sum -c - \
+    && tar -xzf vmaf.tar.gz --strip-components=1 \
+    && rm vmaf.tar.gz
+
+# The build directory must sit inside libvmaf/: the nvcc rules pass include
+# paths relative to it (-I ../src).
+WORKDIR /src/vmaf/libvmaf
+RUN meson setup build \
+        --prefix=/usr/local --libdir=lib --buildtype=release \
+        -Denable_cuda=true -Denable_nvcc=true \
+        -Denable_tests=false -Denable_docs=false -Denable_tools=false \
+    && meson compile -C build \
+    && meson install -C build \
+    && mkdir -p /usr/local/share/libvmaf \
+    && cp -r ../model /usr/local/share/libvmaf/model \
+    && test -f /usr/local/include/libvmaf/libvmaf_cuda.h
+
+# ---------------------------------------------------------------------------
+# ffmpeg with NVDEC, NVENC and scale_cuda. The CUDA filters are compiled
+# with clang (--enable-cuda-llvm): --enable-cuda-nvcc and --enable-libnpp
+# (scale_npp) would make the build non-free, hence not redistributable.
+# --enable-libvmaf also brings ffmpeg's libvmaf_cuda filter, used by the
+# GPU validation kit as an independent cross-check.
+FROM toolchain AS ffmpeg
+
+ARG FFMPEG_VERSION=9.0.2
+ARG FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+# The NVENC API version comes from these headers: n12.2 needs a Linux driver
+# >= 550.54.14, n13.0 (H.264 10-bit on Blackwell) >= 570. Take the oldest
+# covering the features used.
+ARG NV_CODEC_HEADERS=n12.2.72.0
+ARG NV_CODEC_HEADERS_SHA256=dbeaec433d93b850714760282f1d0992b1254fc3b5a6cb7d76fc1340a1e47563
+
+RUN install-nv-codec-headers "${NV_CODEC_HEADERS}" "${NV_CODEC_HEADERS_SHA256}"
+
+COPY --from=libvmaf /usr/local/lib/libvmaf.* /usr/local/lib/
+COPY --from=libvmaf /usr/local/lib/pkgconfig/libvmaf.pc /usr/local/lib/pkgconfig/
+COPY --from=libvmaf /usr/local/include/libvmaf /usr/local/include/libvmaf
+COPY --from=libvmaf /usr/local/share/libvmaf /usr/local/share/libvmaf
+COPY --from=svtav1 /usr/local/lib/libSvtAv1Enc.* /usr/local/lib/
+COPY --from=svtav1 /usr/local/lib/pkgconfig/SvtAv1Enc.pc /usr/local/lib/pkgconfig/
+COPY --from=svtav1 /usr/local/include/svt-av1 /usr/local/include/svt-av1
+RUN ldconfig
+
+WORKDIR /src/ffmpeg
+RUN curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
+    && echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" | sha256sum -c - \
+    && tar -xJf ffmpeg.tar.xz --strip-components=1 \
+    && rm ffmpeg.tar.xz
+
+RUN ./configure \
+        --prefix=/opt/ffmpeg \
+        --disable-autodetect --disable-doc --disable-ffplay --disable-debug \
+        --enable-gpl --enable-zlib \
+        --enable-libx264 --enable-libx265 --enable-libsvtav1 --enable-libdav1d --enable-libvmaf \
+        --enable-ffnvcodec --enable-cuda-llvm --enable-nvdec --enable-nvenc --enable-cuvid \
+    && make -j"$(nproc)" \
+    && make install \
+    && /opt/ffmpeg/bin/ffmpeg -hide_banner -hwaccels | grep -qx cuda \
+    && /opt/ffmpeg/bin/ffmpeg -hide_banner -encoders | grep -q av1_nvenc \
+    && /opt/ffmpeg/bin/ffmpeg -hide_banner -filters | grep -q scale_cuda \
+    && /opt/ffmpeg/bin/ffmpeg -hide_banner -filters | grep -q libvmaf_cuda
+
+# ---------------------------------------------------------------------------
+# qc, built with the cuda tag against the libvmaf above.
+FROM ffmpeg AS build
+
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG DATE=unknown
+
+COPY --from=golang:1.27.1 /usr/local/go /usr/local/go
+ENV PATH=/usr/local/go/bin:/opt/ffmpeg/bin:${PATH} \
+    CGO_ENABLED=1
+
+WORKDIR /src/qc
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/root/go/pkg/mod go mod download
+
+COPY . .
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -tags cuda -trimpath \
+        -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+        -o /out/qc ./cmd/qc \
+    && go build -trimpath -ldflags "-s -w" -o /out/gpuval ./bench/gpuval
+
+# ---------------------------------------------------------------------------
+# Tests of the cuda build: vet, then the packages touched by the GPU code.
+# CUDA-specific tests skip without a GPU (docker build has none); on a GPU
+# machine run them with bench/gpu/validate.sh instead.
+FROM build AS test
+
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go vet -tags cuda ./... \
+    && go test -tags cuda -count=1 ./vmaf/... ./decode/... ./encode/... ./nvidia/... ./bench/gpuval/...
+
+# ---------------------------------------------------------------------------
+# Runtime: CUDA base image (no toolkit; the driver comes from the host),
+# the encoder libraries, ffmpeg, libvmaf and qc.
+FROM nvidia/cuda:${CUDA_VERSION}-base-ubuntu${UBUNTU_RELEASE}
+
+ARG VERSION=dev
+
+LABEL org.opencontainers.image.title="qc (CUDA)" \
+      org.opencontainers.image.description="Fast video analysis on NVIDIA GPUs: NVDEC decoding, NVENC ladders, CUDA VMAF" \
+      org.opencontainers.image.source="https://github.com/eko/qc" \
+      org.opencontainers.image.url="https://github.com/eko/qc" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}"
+
+# video: NVDEC/NVENC libraries, compute: libcuda (CUDA VMAF, scale_cuda).
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
+    PATH=/opt/ffmpeg/bin:${PATH}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libdav1d7 libx264-164 libx265-199 zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /opt/ffmpeg/bin/
+COPY --from=libvmaf /usr/local/lib/libvmaf.so.3* /usr/local/lib/
+COPY --from=svtav1 /usr/local/lib/libSvtAv1Enc.so* /usr/local/lib/
+COPY --from=libvmaf /usr/local/share/libvmaf/model /usr/local/share/libvmaf/model
+COPY --from=build /out/qc /out/gpuval /usr/local/bin/
+
+# Fail the build when a runtime library is missing (no GPU needed for
+# that). /usr/local/share/libvmaf/model is one of vmaf.DefaultModelDirs.
+RUN ldconfig \
+    && ! ldd /opt/ffmpeg/bin/ffmpeg /usr/local/bin/qc | grep -q "not found" \
+    && ffmpeg -hide_banner -version >/dev/null \
+    && qc --help >/dev/null \
+    && useradd --uid 10001 --user-group --no-create-home --home-dir /data qc \
+    && mkdir -p /data \
+    && chown qc:qc /data
+
+USER qc
+WORKDIR /data
+
+ENTRYPOINT ["qc"]
+CMD ["--help"]

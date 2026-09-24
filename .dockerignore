@@ -1,0 +1,30 @@
+# Only the Go sources are needed to build the image.
+.git
+.github
+.scratch
+bin
+docs
+# The HTML report tests check the embedded logo against its published copy.
+!docs/assets
+packaging
+coverage.out
+*.pprof
+*.test
+/qc
+/ladderval
+/vmafsim
+
+# Media and reports never belong in the build context.
+*.mp4
+*.mov
+*.mkv
+*.y4m
+*.yuv
+*.report.json
+*.report.html
+
+.DS_Store
+.idea
+.vscode
+Dockerfile*
+.dockerignore

@@ -1,0 +1,52 @@
+{
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "hevc",
+            "codec_type": "video",
+            "profile": "Main 10",
+            "level": 153,
+            "width": 3840,
+            "height": 2160,
+            "pix_fmt": "yuv420p10le",
+            "color_range": "tv",
+            "color_space": "bt2020nc",
+            "color_transfer": "smpte2084",
+            "color_primaries": "bt2020",
+            "r_frame_rate": "24000/1001",
+            "avg_frame_rate": "24000/1001",
+            "disposition": {"default": 1, "attached_pic": 0},
+            "side_data_list": [
+                {
+                    "side_data_type": "Mastering display metadata",
+                    "red_x": "34000/50000",
+                    "red_y": "16000/50000",
+                    "min_luminance": "50/10000",
+                    "max_luminance": "10000000/10000"
+                },
+                {
+                    "side_data_type": "Content light level metadata",
+                    "max_content": 1000,
+                    "max_average": 400
+                }
+            ]
+        },
+        {
+            "index": 1,
+            "codec_name": "mjpeg",
+            "codec_type": "video",
+            "width": 600,
+            "height": 600,
+            "pix_fmt": "yuvj420p",
+            "r_frame_rate": "90000/1",
+            "avg_frame_rate": "0/0",
+            "disposition": {"default": 0, "attached_pic": 1}
+        }
+    ],
+    "format": {
+        "format_name": "matroska,webm",
+        "duration": "120.500000",
+        "size": "300000000",
+        "bit_rate": "19917012"
+    }
+}

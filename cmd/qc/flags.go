@@ -1,0 +1,251 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/bitstream"
+	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/quality"
+	"github.com/eko/qc/vmaf"
+)
+
+// addOutputFlags registers the flags shared by every command producing a
+// report.
+func addOutputFlags(
+	cmd *cobra.Command,
+) {
+	flags := cmd.Flags()
+	flags.StringP("format", "f", formatText, "stdout format: text or json")
+	flags.StringP("output", "o", "", "also write the full JSON report to this file")
+	flags.String("html", "", "also write a self-contained HTML report with charts to this file")
+	flags.String("cpuprofile", "", "write a Go CPU profile of the run to this file")
+	_ = flags.MarkHidden("cpuprofile")
+}
+
+// addAnalysisFlags registers the flags of the technical analysis.
+func addAnalysisFlags(
+	cmd *cobra.Command,
+) {
+	flags := cmd.Flags()
+	flags.Bool("fast", false, "container and bitstream only, no frame decoding (< 1s)")
+	flags.Duration("bitrate-interval", time.Second, "bucket size of the bitrate series")
+	flags.Duration("peak-window", time.Second, "sliding window of the peak bitrate")
+}
+
+// addModelFlag registers --model and --model-dir, shared by VMAF
+// measurements and ladders.
+func addModelFlag(
+	cmd *cobra.Command,
+) {
+	cmd.Flags().String("model", "auto", "VMAF model: auto (v1, 4K/HFR aware), a model name, a JSON path or a built-in version")
+	cmd.Flags().StringSlice("model-dir", vmaf.DefaultModelDirs(), "directories searched for model files")
+}
+
+// addQualityFlags registers the flags of VMAF measurements.
+func addQualityFlags(
+	cmd *cobra.Command,
+) {
+	addModelFlag(cmd)
+
+	flags := cmd.Flags()
+	flags.Bool("exact", false, "score every frame instead of sampling")
+	flags.Float64("precision", 0.5, "target half-width of the 95% confidence interval, in VMAF points")
+	flags.Float64("max-share", 0.4, "sampling budget: above this share of frames, score every frame instead")
+	flags.String("sample", "", "fixed budget instead of a precision, one round: a share of frames (5%) or clips per scene (2/scene)")
+	flags.Int("workers", 0, "clips scored concurrently (0 = NumCPU/2)")
+	flags.Int("vmaf-bit-depth", 0, "VMAF scoring depth: 8 or 10 (0 = 10 when either video has more than 8 bits)")
+	addMetricFlags(cmd)
+}
+
+// addMetricFlags registers the metrics measured next to VMAF: on a
+// comparison, and on the verification encodes of ladder rungs.
+func addMetricFlags(
+	cmd *cobra.Command,
+) {
+	flags := cmd.Flags()
+	flags.StringSlice("metrics", defaultMetrics,
+		"metrics measured with VMAF on the same frames: "+strings.Join(quality.Metrics()[1:], ", ")+" (--metrics= for VMAF only)")
+	flags.Bool("av2-ctc", false, "add the AOM AV2 common test conditions metrics: PSNR (Y, Cb, Cr, YUV), PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI")
+	flags.StringSlice("devices", nil, "also score the VMAF v1 model of these viewing devices: "+strings.Join(vmaf.Devices(), ", "))
+}
+
+// defaultMetrics are measured unless --metrics says otherwise: CAMBI is free
+// next to a VMAF v1 model, XPSNR and PSNR cost a few percent of VMAF.
+var defaultMetrics = []string{quality.MetricXPSNR, quality.MetricCAMBI, quality.MetricPSNR}
+
+// addLadderFlags registers the flags of ladder builds.
+func addLadderFlags(
+	cmd *cobra.Command,
+) {
+	flags := cmd.Flags()
+	flags.String("preset", "", "encoder preset (default: a fast preset of the codec)")
+	flags.String("rungs", "auto", "ladder shape: auto, a rung count (6) or the rung resolutions, top first (1080,720,720,540,360)")
+	flags.Float64("top-vmaf", 95, "quality of the top rung (the highest VMAF targeted)")
+	flags.Float64("min-vmaf", 30, "lowest acceptable rung quality")
+	flags.Float64("step", 6, "VMAF step between rungs (~1 JND)")
+	flags.Int("max-rungs", 8, "maximum number of rungs of the automatic shape")
+	flags.Int64("min-bitrate", 145_000, "lowest rung bitrate (bits/s)")
+	flags.Int64("max-bitrate", 0, "highest rung bitrate (bits/s, 0 = no cap)")
+	flags.IntSlice("heights", ladder.DefaultHeights(), "candidate resolutions (heights above the source are dropped)")
+	flags.Bool("no-verify", false, "skip the verification encode of each rung")
+	flags.Bool("commands", false, "print the ffmpeg command of each rung")
+	flags.Int("parallel", 2, "probe encodes run concurrently")
+	flags.Int("encode-bit-depth", 8, "bit depth of the ladder encodes: 8 or 10 (Main10, best for HEVC/AV1)")
+	flags.String("probing", "fixed", "probe placement: fixed (3 CRFs per resolution) or adaptive (uncertainty-driven)")
+	flags.Bool("per-shot", false, "add a per-shot version of every rung: one CRF per shot at equal rate-quality slope")
+	flags.Bool("per-shot-resolution", false, "experimental: per-shot rungs whose shots also pick their resolution among neighbouring rungs' (implies --per-shot)")
+	flags.String("film-grain", "off", "AV1 film grain synthesis: off, auto (detect and calibrate) or a level 1-50")
+}
+
+// analysisOptions maps the analysis flags to library options.
+func analysisOptions(
+	config AnalysisConfig,
+) analysis.Options {
+	return analysis.Options{
+		Bitstream: bitstream.Options{
+			Interval:   config.BitrateInterval,
+			PeakWindow: config.PeakWindow,
+		},
+	}
+}
+
+// qualityOptions maps the VMAF flags to library options.
+func qualityOptions(
+	config Config,
+) quality.Options {
+	q := config.Quality
+	// validate already rejected a malformed --sample.
+	sample, _ := quality.ParseSample(q.Sample)
+
+	return quality.Options{
+		Model:     q.Model,
+		ModelDirs: q.ModelDir,
+		Exact:     q.Exact,
+		Precision: q.Precision,
+		MaxShare:  q.MaxShare,
+		Sample:    sample,
+		Workers:   q.Workers,
+		BitDepth:  q.VMAFBitDepth,
+		Metrics:   q.metrics(),
+		Devices:   q.Devices,
+		Backend:   gpuSettingsOf(config).backend,
+	}
+}
+
+// metrics is --metrics, plus the AV2 CTC set with --av2-ctc.
+func (c QualityConfig) metrics() []string {
+	if !c.AV2CTC {
+		return c.Metrics
+	}
+
+	return append(slices.Clone(c.Metrics), quality.AV2CTCMetrics()...)
+}
+
+// ladderOptions maps the ladder flags to library options: the model and
+// metrics of the VMAF flags apply to the verification of the rungs.
+func ladderOptions(
+	config Config,
+) ladder.Options {
+	l := config.Ladder
+	// validate already rejected malformed values.
+	rungCount, resolutions, _ := parseRungs(l.Rungs)
+	filmGrain, _ := parseFilmGrain(l.FilmGrain)
+	gpu := gpuSettingsOf(config)
+
+	return ladder.Options{
+		Preset: l.Preset,
+		Constraints: ladder.Constraints{
+			TopVMAF:     l.TopVMAF,
+			MinVMAF:     l.MinVMAF,
+			Step:        l.Step,
+			MaxRungs:    l.MaxRungs,
+			Rungs:       rungCount,
+			Resolutions: resolutions,
+			MinBitrate:  l.MinBitrate,
+			MaxBitrate:  l.MaxBitrate,
+		},
+		Heights:    l.Heights,
+		SkipVerify: l.NoVerify,
+		Model:      config.Quality.Model,
+		ModelDirs:  config.Quality.ModelDir,
+		Metrics:    config.Quality.metrics(),
+		Devices:    config.Quality.Devices,
+		Parallel:   l.Parallel,
+		BitDepth:   l.EncodeBitDepth,
+		Probing:    ladder.Probing(l.Probing),
+		PerShot:    l.PerShot,
+		// PerShotResolution implies PerShot in the ladder options.
+		PerShotResolution: l.PerShotResolution,
+		FilmGrain:         filmGrain,
+		Encoder:           gpu.encoder,
+		Backend:           gpu.backend,
+	}
+}
+
+// ErrInvalidFilmGrain is returned for a malformed --film-grain value.
+var ErrInvalidFilmGrain = errors.New("invalid --film-grain")
+
+// parseFilmGrain reads --film-grain: "" or "off", "auto", or a level 0–50
+// (0 is off).
+func parseFilmGrain(
+	s string,
+) (int, error) {
+	switch s = strings.TrimSpace(strings.ToLower(s)); s {
+	case "", "off":
+		return 0, nil
+	case "auto":
+		return ladder.FilmGrainAuto, nil
+	}
+
+	level, err := strconv.Atoi(s)
+	if err != nil || level < 0 || level > 50 {
+		return 0, fmt.Errorf("%w %q: want off, auto or a level 0-50", ErrInvalidFilmGrain, s)
+	}
+
+	return level, nil
+}
+
+// ErrInvalidRungs is returned for a malformed --rungs value.
+var ErrInvalidRungs = errors.New("invalid --rungs")
+
+// parseRungs reads the ladder shape: "" or "auto", a rung count ("6"), or
+// rung resolutions top first ("1080,720,720,540,360"; a "p" suffix is
+// accepted).
+func parseRungs(
+	s string,
+) (int, []int, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" || s == "auto" {
+		return 0, nil, nil
+	}
+
+	if !strings.Contains(s, ",") && !strings.HasSuffix(s, "p") {
+		count, err := strconv.Atoi(s)
+		if err != nil || count < 1 {
+			return 0, nil, fmt.Errorf("%w %q: want auto, a positive count or resolutions like 1080,720,540", ErrInvalidRungs, s)
+		}
+
+		return count, nil, nil
+	}
+
+	var heights []int
+
+	for field := range strings.SplitSeq(s, ",") {
+		h, err := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(field), "p"))
+		if err != nil || h < 1 {
+			return 0, nil, fmt.Errorf("%w %q: %q is not a resolution height", ErrInvalidRungs, s, field)
+		}
+
+		heights = append(heights, h)
+	}
+
+	return 0, heights, nil
+}

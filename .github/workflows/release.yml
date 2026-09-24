@@ -1,0 +1,296 @@
+name: Release
+
+# A pushed v* tag releases qc: the checks CI runs, the multi-arch image
+# ghcr.io/eko/qc:<version> (+ :latest), the CUDA image when Dockerfile.cuda
+# exists, then the GitHub release with the notes of CHANGELOG.md.
+# See RELEASING.md.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  check:
+    name: Lint and test
+    # Same environment as CI: Homebrew's ffmpeg and libvmaf ≥ 3.2.1.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install ffmpeg, libvmaf and golangci-lint
+        run: brew install ffmpeg libvmaf pkg-config golangci-lint
+
+      - name: make check
+        run: make check
+
+  metadata:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      commit: ${{ steps.meta.outputs.commit }}
+      date: ${{ steps.meta.outputs.date }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the tag and the release notes
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          # Fails before any build when CHANGELOG.md has no notes for it.
+          if ! packaging/release/changelog-notes.sh "$version" > /dev/null; then
+            echo "::error file=CHANGELOG.md::no '## [$version]' section: add the release notes before tagging"
+            exit 1
+          fi
+          case "$version" in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          {
+            echo "version=$version"
+            echo "commit=${GITHUB_SHA::12}"
+            echo "date=$(git log -1 --format=%cI)"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+  image:
+    name: Image (${{ matrix.platform }})
+    needs: [check, metadata]
+    # Native runners per architecture: ffmpeg, SVT-AV1 and libvmaf take
+    # minutes to build natively, far longer under QEMU.
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Platform slug
+        id: platform
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: echo "slug=${PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image labels
+        id: labels
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+
+      # Pushed by digest only: the merge job tags the multi-arch index.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.labels.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ needs.metadata.outputs.commit }}
+            DATE=${{ needs.metadata.outputs.date }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ steps.platform.outputs.slug }}
+          cache-to: type=gha,scope=${{ steps.platform.outputs.slug }},mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Smoke test
+        run: |
+          docker pull "${IMAGE}@${DIGEST}"
+          packaging/docker/smoke-test.sh "${IMAGE}@${DIGEST}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - name: Export the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ steps.platform.outputs.slug }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Multi-arch image
+    needs: [metadata, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # v1.2.3 → 1.2.3, 1.2 and latest; a pre-release (v1.2.3-rc.1) only
+      # gets its own tag.
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          flavor: |
+            latest=auto
+
+      - name: Create the manifest list
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          # shellcheck disable=SC2046 # one argument per tag and per digest
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Inspect
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+
+  cuda:
+    name: CUDA image
+    needs: [check, metadata]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Dockerfile.cuda is optional: releases without it skip this image.
+      - name: Look for Dockerfile.cuda
+        id: cuda
+        run: |
+          if [ -f Dockerfile.cuda ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::no Dockerfile.cuda, skipping the CUDA image"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # CUDA base images are large: make room on the runner.
+      - name: Free disk space
+        if: steps.cuda.outputs.exists == 'true'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: docker/setup-buildx-action@v4
+        if: steps.cuda.outputs.exists == 'true'
+
+      - uses: docker/login-action@v4
+        if: steps.cuda.outputs.exists == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        if: steps.cuda.outputs.exists == 'true'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+          flavor: |
+            latest=false
+            suffix=-cuda
+
+      - name: Build and push
+        if: steps.cuda.outputs.exists == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.cuda
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ needs.metadata.outputs.commit }}
+            DATE=${{ needs.metadata.outputs.date }}
+          push: true
+          cache-from: type=gha,scope=cuda
+          cache-to: type=gha,scope=cuda,mode=max
+          provenance: mode=max
+          sbom: true
+
+  release:
+    name: GitHub release
+    needs: [metadata, merge, cuda]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+        run: |
+          packaging/release/changelog-notes.sh "$VERSION" > notes.md
+          {
+            echo
+            echo "### Docker"
+            echo
+            echo '```sh'
+            echo "docker run --rm -v \"\$PWD:/data\" ${IMAGE}:${VERSION} version --check"
+            echo '```'
+          } >> notes.md
+          flags=(--verify-tag --title "$TAG" --notes-file notes.md)
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "${flags[@]}"

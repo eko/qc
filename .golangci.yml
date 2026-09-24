@@ -1,0 +1,142 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nolintlint
+    - perfsprint
+    - revive
+    - unconvert
+    - wrapcheck
+    # Architecture guards: imports that would point the wrong way, and the
+    # size of what reads as one unit (functions, interfaces).
+    - contextcheck
+    - depguard
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - interfacebloat
+    - sloglint
+  settings:
+    depguard:
+      rules:
+        # The libvmaf (cgo) adapter is wired by composition roots only:
+        # services depend on the quality.Engine port, so the library builds
+        # without cgo.
+        cgo-adapter:
+          files:
+            - $all
+            - "!$test"
+            - "!**/cmd/**"
+            - "!**/bench/**"
+            - "!**/vmaf/libvmaf/**"
+          deny:
+            - pkg: github.com/eko/qc/vmaf/libvmaf
+              desc: depend on the quality.Engine port; wire libvmaf in cmd/qc
+        # Subprocesses belong to the ffmpeg/ffprobe adapters.
+        subprocesses:
+          files:
+            - $all
+            - "!$test"
+            - "!**/internal/ffexec/**"
+            - "!**/internal/testutil/**"
+            - "!**/bench/**"
+          deny:
+            - pkg: os/exec
+              desc: run external tools through an adapter (internal/ffexec)
+        ffexec:
+          files:
+            - $all
+            - "!$test"
+            - "!**/decode/**"
+            - "!**/probe/**"
+            - "!**/bitstream/**"
+            - "!**/encode/**"
+            - "!**/nvidia/**"
+            - "!**/cmd/**"
+            - "!**/bench/**"
+            - "!**/internal/ffexec/**"
+          deny:
+            - pkg: github.com/eko/qc/internal/ffexec
+              desc: only the ffmpeg/ffprobe adapters run subprocesses
+        # Presenters and the CLI stack stay out of the library.
+        presenters:
+          files:
+            - $all
+            - "!**/cmd/**"
+            - "!**/internal/tui/**"
+            - "!**/internal/htmlreport/**"
+          deny:
+            - pkg: github.com/eko/qc/internal/tui
+              desc: presenters are used by cmd/qc only
+            - pkg: github.com/eko/qc/internal/htmlreport
+              desc: presenters are used by cmd/qc only
+            - pkg: github.com/eko/qc/internal/findings
+              desc: findings are presentation logic, for the presenters only
+            - pkg: github.com/charmbracelet
+              desc: terminal UI libraries belong to internal/tui and cmd/qc
+        cli:
+          files:
+            - $all
+            - "!**/cmd/**"
+          deny:
+            - pkg: github.com/spf13/cobra
+              desc: the CLI stack belongs to cmd/qc
+            - pkg: github.com/spf13/viper
+              desc: configuration is loaded by cmd/qc and passed as options
+            - pkg: go.uber.org/fx
+              desc: dependency injection happens in the composition root (cmd/qc)
+    funlen:
+      lines: 60
+      statements: 40
+      ignore-comments: true
+    gocognit:
+      min-complexity: 30
+    interfacebloat:
+      max: 5
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/eko/qc/*
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+        # errgroup only relays errors returned by our own goroutines.
+        - (*golang.org/x/sync/errgroup.Group).Wait()
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - wrapcheck
+      # Table-driven tests are long and branchy by nature.
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocognit
+      # cgo-generated code trips gocritic's duplicate sub-expression check.
+      - path: vmaf/libvmaf/(libvmaf|cuda)\.go
+        text: dupSubExpr
+        linters:
+          - gocritic
+      # ffmpeg binaries, input and output paths are user-provided by design.
+      - text: "G204|G304"
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/eko/qc

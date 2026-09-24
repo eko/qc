@@ -1,0 +1,353 @@
+// Package pipeline chains every analysis of a title: technical analysis,
+// VMAF against a reference and streaming ladders, reporting each stage.
+package pipeline
+
+import (
+	"cmp"
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/quality"
+)
+
+// ErrNothingToDo is returned when every stage is disabled.
+var ErrNothingToDo = errors.New("pipeline: nothing to do")
+
+// Options selects the stages. The zero value analyses the source only.
+type Options struct {
+	// Source is the video analysed, the distorted side of the VMAF
+	// comparison, and the source of the ladders unless LadderSource is set.
+	Source string
+	// Reference, when set, measures VMAF of Source against it.
+	Reference string
+	// LadderSource, when set, is the video the ladders are built from
+	// instead of Source: typically the mezzanine (the Reference) when
+	// Source is an encode under test. It is not analysed by the run.
+	LadderSource string
+	// SkipAnalysis skips the decoded-frame analysis (the container and
+	// bitstream inspection always runs).
+	SkipAnalysis bool
+	// Codecs builds one ladder per codec (h264, hevc, av1).
+	Codecs   []string
+	Analysis analysis.Options
+	Quality  quality.Options
+	Ladder   ladder.Options
+}
+
+// Report gathers the results of a run.
+type Report struct {
+	SchemaVersion int                  `json:"schemaVersion"`
+	GeneratedAt   time.Time            `json:"generatedAt"`
+	Analysis      *analysis.Report     `json:"analysis"`
+	Comparison    *analysis.Comparison `json:"comparison,omitempty"`
+	Ladders       []*ladder.Result     `json:"ladders,omitempty"`
+	Elapsed       string               `json:"elapsed"`
+}
+
+// StageResult is what a stage produced, for the Done hook: the domain
+// result of the stage's kind, the other fields nil. Presenters word it (the
+// CLI's dashboard shows a one-line summary).
+type StageResult struct {
+	Stage Stage
+	// Analysis is the inspection (KindInspect) or the frame analysis
+	// (KindAnalysis) of the source.
+	Analysis *analysis.Report
+	// Comparison is the VMAF measurement (KindVMAF).
+	Comparison *analysis.Comparison
+	// Ladder is the ladder built (KindLadder), with at least one rung.
+	Ladder *ladder.Result
+}
+
+// Stage identifies a step of the pipeline.
+type Stage struct {
+	Kind  string
+	Label string
+	// Codec is set on ladder stages.
+	Codec string
+}
+
+// Stage kinds.
+const (
+	KindInspect  = "inspect"
+	KindAnalysis = "analysis"
+	KindVMAF     = "vmaf"
+	KindLadder   = "ladder"
+)
+
+// Hooks receive the pipeline events. Every field is optional; i is the
+// index of the stage in Stages(opts). Progress hooks may be called from
+// worker goroutines and must be fast.
+type Hooks struct {
+	// Start is called when stage i starts.
+	Start func(i int)
+	// Done is called when stage i succeeds, with its result.
+	Done func(i int, r StageResult)
+	// Analysis reports the progress of the frame analysis.
+	Analysis func(i int, p analysis.Progress)
+	// Quality reports the progress of the VMAF measurement.
+	Quality func(i int, p quality.Progress)
+	// Ladder reports the progress of a ladder.
+	Ladder func(i int, p ladder.Progress)
+}
+
+// Analyzer inspects, analyses and compares files. *analysis.Analyzer
+// implements it.
+type Analyzer interface {
+	Analyze(
+		ctx context.Context,
+		path string,
+		opts analysis.Options,
+	) (*analysis.Report, error)
+	Compare(
+		ctx context.Context,
+		refPath, distPath string,
+		opts analysis.CompareOptions,
+	) (*analysis.Comparison, error)
+}
+
+// LadderBuilder builds streaming ladders. *ladder.Engine implements it.
+type LadderBuilder interface {
+	Build(
+		ctx context.Context,
+		source string,
+		opts ladder.Options,
+	) (*ladder.Result, error)
+}
+
+// Runner runs pipelines.
+type Runner struct {
+	analyzer Analyzer
+	ladders  LadderBuilder
+}
+
+// NewRunner returns a Runner. ladders is only used when ladders are
+// requested.
+func NewRunner(
+	analyzer Analyzer,
+	ladders LadderBuilder,
+) *Runner {
+	return &Runner{analyzer: analyzer, ladders: ladders}
+}
+
+// Stages lists the stages opts will run, in order.
+func Stages(
+	opts Options,
+) []Stage {
+	stages := []Stage{{Kind: KindInspect, Label: "Inspect"}}
+
+	if !opts.SkipAnalysis {
+		stages = append(stages, Stage{Kind: KindAnalysis, Label: "Frame analysis"})
+	}
+
+	if opts.Reference != "" {
+		label := "VMAF"
+		if sample := opts.Quality.Sample; !sample.IsZero() {
+			label += " · " + sample.String()
+		}
+
+		stages = append(stages, Stage{Kind: KindVMAF, Label: label})
+	}
+
+	for _, codec := range opts.Codecs {
+		stages = append(stages, Stage{Kind: KindLadder, Label: "Ladder · " + codec, Codec: codec})
+	}
+
+	return stages
+}
+
+// elapsedPrecision rounds Report.Elapsed: finer digits are noise for a run
+// that takes seconds to minutes.
+const elapsedPrecision = 10 * time.Millisecond
+
+// errNoRungs fails a ladder stage whose ladder has no rung: there is
+// nothing to encode, and a run must not end as if it succeeded.
+var errNoRungs = errors.New("ladder has no rungs")
+
+// Run executes the stages of opts, calling hooks as they start and finish.
+// On failure it returns the partial report along with the error, prefixed
+// with the label of the failed stage.
+func (r *Runner) Run(
+	ctx context.Context,
+	opts Options,
+	hooks Hooks,
+) (*Report, error) {
+	started := time.Now()
+	stages := Stages(opts)
+
+	// The inspection alone is only a preamble of the other stages.
+	if len(stages) == 1 {
+		return nil, ErrNothingToDo
+	}
+
+	rep := &Report{SchemaVersion: analysis.SchemaVersion, GeneratedAt: started.UTC()}
+
+	for i, stage := range stages {
+		hooks.start(i)
+
+		result, err := r.runStage(ctx, i, stage, opts, hooks, rep)
+		if err != nil {
+			return rep, fmt.Errorf("%s: %w", stage.Label, err)
+		}
+
+		result.Stage = stage
+		hooks.done(i, result)
+	}
+
+	rep.Elapsed = time.Since(started).Round(elapsedPrecision).String()
+
+	return rep, nil
+}
+
+// runStage runs stage i, stores its result in rep and returns it for the
+// Done hook.
+func (r *Runner) runStage(
+	ctx context.Context,
+	i int,
+	stage Stage,
+	opts Options,
+	hooks Hooks,
+	rep *Report,
+) (StageResult, error) {
+	switch stage.Kind {
+	case KindInspect:
+		return r.inspect(ctx, opts, rep)
+	case KindAnalysis:
+		return r.analyze(ctx, opts, rep, func(p analysis.Progress) { hooks.analysis(i, p) })
+	case KindVMAF:
+		return r.compare(ctx, opts, rep, func(p quality.Progress) { hooks.quality(i, p) })
+	case KindLadder:
+		return r.ladder(ctx, stage.Codec, opts, rep, func(p ladder.Progress) { hooks.ladder(i, p) })
+	default:
+		return StageResult{}, fmt.Errorf("unknown stage %q", stage.Kind)
+	}
+}
+
+// inspect reads the container and bitstream of the source (no decoding).
+func (r *Runner) inspect(
+	ctx context.Context,
+	opts Options,
+	rep *Report,
+) (StageResult, error) {
+	aopts := opts.Analysis
+	aopts.SkipVideo = true
+
+	report, err := r.analyzer.Analyze(ctx, opts.Source, aopts)
+	if err != nil {
+		return StageResult{}, err
+	}
+
+	rep.Analysis = report
+
+	return StageResult{Analysis: report}, nil
+}
+
+// analyze runs the full technical analysis of the source; its report
+// replaces the inspection's.
+func (r *Runner) analyze(
+	ctx context.Context,
+	opts Options,
+	rep *Report,
+	progress func(analysis.Progress),
+) (StageResult, error) {
+	aopts := opts.Analysis
+	// This stage is the frame analysis: Options.SkipAnalysis disables it.
+	aopts.SkipVideo = false
+	aopts.Progress = progress
+
+	report, err := r.analyzer.Analyze(ctx, opts.Source, aopts)
+	if err != nil {
+		return StageResult{}, err
+	}
+
+	rep.Analysis = report
+
+	return StageResult{Analysis: report}, nil
+}
+
+// compare measures VMAF of the source against the reference.
+func (r *Runner) compare(
+	ctx context.Context,
+	opts Options,
+	rep *Report,
+	progress func(quality.Progress),
+) (StageResult, error) {
+	qopts := opts.Quality
+	qopts.Progress = progress
+
+	// The source is already inspected (and analysed, unless skipped): the
+	// comparison reuses it, and takes its shot cuts for scene budgets.
+	comparison, err := r.analyzer.Compare(ctx, opts.Reference, opts.Source, analysis.CompareOptions{
+		Bitstream: opts.Analysis.Bitstream,
+		Quality:   qopts,
+		Distorted: rep.Analysis,
+	})
+	if err != nil {
+		return StageResult{}, err
+	}
+
+	rep.Comparison = comparison
+
+	return StageResult{Comparison: comparison}, nil
+}
+
+// ladder builds the ladder for codec, from the ladder source.
+func (r *Runner) ladder(
+	ctx context.Context,
+	codec string,
+	opts Options,
+	rep *Report,
+	progress func(ladder.Progress),
+) (StageResult, error) {
+	lopts := opts.Ladder
+	lopts.Codec = codec
+	lopts.Progress = progress
+
+	res, err := r.ladders.Build(ctx, cmp.Or(opts.LadderSource, opts.Source), lopts)
+	if err != nil {
+		return StageResult{}, err
+	}
+
+	if len(res.Rungs) == 0 {
+		return StageResult{}, errNoRungs
+	}
+
+	rep.Ladders = append(rep.Ladders, res)
+
+	return StageResult{Ladder: res}, nil
+}
+
+// The helpers below call a hook when it is set.
+
+func (h Hooks) start(i int) {
+	if h.Start != nil {
+		h.Start(i)
+	}
+}
+
+func (h Hooks) done(i int, r StageResult) {
+	if h.Done != nil {
+		h.Done(i, r)
+	}
+}
+
+func (h Hooks) analysis(i int, p analysis.Progress) {
+	if h.Analysis != nil {
+		h.Analysis(i, p)
+	}
+}
+
+func (h Hooks) quality(i int, p quality.Progress) {
+	if h.Quality != nil {
+		h.Quality(i, p)
+	}
+}
+
+func (h Hooks) ladder(i int, p ladder.Progress) {
+	if h.Ladder != nil {
+		h.Ladder(i, p)
+	}
+}

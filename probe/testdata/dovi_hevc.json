@@ -1,0 +1,35 @@
+{
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "hevc",
+            "codec_type": "video",
+            "profile": "Main 10",
+            "width": 3840,
+            "height": 2160,
+            "pix_fmt": "yuv420p10le",
+            "color_transfer": "smpte2084",
+            "color_primaries": "bt2020",
+            "r_frame_rate": "24/1",
+            "avg_frame_rate": "24/1",
+            "disposition": {"default": 1, "attached_pic": 0},
+            "side_data_list": [
+                {
+                    "side_data_type": "DOVI configuration record",
+                    "dv_version_major": 1,
+                    "dv_version_minor": 0,
+                    "dv_profile": 8,
+                    "dv_level": 6,
+                    "rpu_present_flag": 1,
+                    "el_present_flag": 0,
+                    "bl_present_flag": 1,
+                    "dv_bl_signal_compatibility_id": 1
+                }
+            ]
+        }
+    ],
+    "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "10.000000"
+    }
+}
