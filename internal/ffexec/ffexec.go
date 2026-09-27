@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 const (
@@ -84,6 +86,41 @@ func Stream(
 	args []string,
 	consume func(io.Reader) error,
 ) error {
+	return run(ctx, bin, args, 0, func(outputs []io.Reader) error {
+		return consume(outputs[0])
+	})
+}
+
+// ExtraOutput is the file descriptor of the extra output of StreamPair in
+// the child process: ffmpeg writes to it as "pipe:3".
+const ExtraOutput = "pipe:3"
+
+// StreamPair runs bin with args like Stream, with a second output: a pipe
+// the process sees as file descriptor 3 (ExtraOutput). consume receives
+// stdout and that pipe. A process writing both outputs as it goes (ffmpeg
+// with two outputs) blocks on whichever pipe is full: consume must read
+// both as the process writes them, typically in turn.
+func StreamPair(
+	ctx context.Context,
+	bin string,
+	args []string,
+	consume func(stdout, extra io.Reader) error,
+) error {
+	return run(ctx, bin, args, 1, func(outputs []io.Reader) error {
+		return consume(outputs[0], outputs[1])
+	})
+}
+
+// run starts bin with args, stdout and extra more output pipes (file
+// descriptors 3 and up), hands their readers to consume, then drains them
+// and waits for the process. See Stream for the error semantics.
+func run(
+	ctx context.Context,
+	bin string,
+	args []string,
+	extra int,
+	consume func([]io.Reader) error,
+) error {
 	path, err := exec.LookPath(bin)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrNotFound, bin)
@@ -99,23 +136,30 @@ func Stream(
 	stderr := &boundedBuffer{limit: maxStderr}
 	cmd.Stderr = stderr
 
-	stdout, err := cmd.StdoutPipe()
+	outputs, closeOutputs, err := pipes(cmd, extra)
 	if err != nil {
-		return fmt.Errorf("ffexec: stdout pipe: %w", err)
+		return err
 	}
+	defer closeOutputs()
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("ffexec: start %s: %w", bin, err)
 	}
 
-	consumeErr := consume(stdout)
+	// The child holds its own copies of the write ends.
+	for _, w := range cmd.ExtraFiles {
+		_ = w.Close()
+	}
+
+	consumeErr := consume(outputs)
 	if consumeErr != nil {
 		cancel()
 	}
 
-	// Wait must not run before stdout is fully read: a consumer that stops
-	// early would otherwise leave the process blocked on a full pipe forever.
-	_, _ = io.Copy(io.Discard, stdout)
+	// Wait must not run before the outputs are fully read: a consumer that
+	// stops early would otherwise leave the process blocked on a full pipe
+	// forever.
+	drain(outputs)
 
 	waitErr := cmd.Wait()
 
@@ -131,6 +175,58 @@ func Stream(
 	}
 
 	return nil
+}
+
+// pipes connects stdout and extra more pipes to cmd and returns their read
+// ends, and what closes the extra read ends once done (exec closes stdout's
+// itself).
+func pipes(
+	cmd *exec.Cmd,
+	extra int,
+) ([]io.Reader, func(), error) {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("ffexec: stdout pipe: %w", err)
+	}
+
+	outputs := []io.Reader{stdout}
+
+	var readers []*os.File
+
+	closeAll := func() {
+		for _, r := range readers {
+			_ = r.Close()
+		}
+	}
+
+	for range extra {
+		r, w, err := os.Pipe()
+		if err != nil {
+			closeAll()
+
+			return nil, nil, fmt.Errorf("ffexec: extra pipe: %w", err)
+		}
+
+		readers = append(readers, r)
+		outputs = append(outputs, r)
+		cmd.ExtraFiles = append(cmd.ExtraFiles, w)
+	}
+
+	return outputs, closeAll, nil
+}
+
+// drain reads every output to its end, concurrently: the process may be
+// blocked writing any of them.
+func drain(
+	outputs []io.Reader,
+) {
+	var wg sync.WaitGroup
+
+	for _, r := range outputs {
+		wg.Go(func() { _, _ = io.Copy(io.Discard, r) })
+	}
+
+	wg.Wait()
 }
 
 // boundedBuffer is an io.Writer keeping only the first limit bytes written;

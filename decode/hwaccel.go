@@ -205,5 +205,10 @@ func gpuFilters(
 		chain = append(chain, "extractplanes=y")
 	}
 
+	if req.ToneMap != nil && pool.Chroma() {
+		// scale_cuda cannot tone map: the CPU scaler does, at the same size.
+		chain = append(chain, scaleFilter(req))
+	}
+
 	return strings.Join(chain, ",")
 }

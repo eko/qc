@@ -195,3 +195,31 @@ func ExampleConstraints_Shape() {
 	// count
 	// resolutions
 }
+
+// The ladder of an HDR10 source: every encode is 10-bit and carries the
+// source's colour description and HDR10 metadata (the rendered commands
+// too); rungs also get the HDR metrics.
+func ExampleEngine_Build_hdr() {
+	res, err := exampleEngine().Build(context.Background(), "hdr10.mov", ladder.Options{
+		Codec:     "hevc",
+		HDRMetric: quality.HDRMetricPQ, // VMAF on the PQ signal: ranks the rungs of this title
+	})
+	if err != nil {
+		fmt.Println(err)
+
+		return
+	}
+
+	if h := res.HDR; h != nil {
+		fmt.Println(h.Signal.Color.Transfer, h.BitDepthUpgraded)
+	}
+
+	for _, r := range res.Rungs {
+		if r.Measured != nil {
+			fmt.Printf("%dp wPSNR %.2f dB, ΔE ITP %.2f\n", r.Height,
+				r.Measured.Metrics[quality.SeriesWPSNRY], r.Measured.Metrics[quality.SeriesDeltaEITP])
+		}
+
+		fmt.Println(r.Command)
+	}
+}

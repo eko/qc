@@ -36,6 +36,10 @@ func Comparison(
 ) []Finding {
 	var out []Finding
 
+	if f, ok := hdrComparison(v.HDR); ok {
+		out = append(out, f)
+	}
+
 	if v.Fallback != "" {
 		out = append(out, Finding{Level: Info, Code: Fallback, Text: v.Fallback})
 	}

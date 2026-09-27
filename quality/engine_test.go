@@ -210,7 +210,7 @@ func TestScoreJob(
 			models, err := testCase.engine.LoadModels([]vmaf.ModelSpec{{}})
 			require.NoError(t, err)
 
-			cr, err := r.scoreJob(models, nil, job, 1)
+			cr, err := r.scoreJob(models, &goMeters{}, job, 1)
 			models.Close()
 
 			assert.Empty(t, job.pairs, "pairs are drained")

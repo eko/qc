@@ -133,7 +133,16 @@ func analysisFinding(
 		return worded(f, nil, "Interlaced source (%s)", f.Text), true
 	}
 
-	return finding{}, false
+	return hdrFinding(f)
+}
+
+// hdrFinding words an HDR finding, if f is one.
+func hdrFinding(
+	f findings.Finding,
+) (finding, bool) {
+	text := hdrFindingText(f)
+
+	return worded(f, nil, "%s", text), text != ""
 }
 
 // segmentFinding holds every black or frozen segment in one finding, the
@@ -196,6 +205,10 @@ func comparisonFinding(
 		return []finding{worded(f, nil, "No visible banding: CAMBI ≤ %.0f on every scored frame", f.Limit)}
 	case findings.SampledOnly:
 		return []finding{worded(f, nil, "Min and 5th percentile come from sampled frames only: use --exact for quality gates")}
+	}
+
+	if w, ok := hdrFinding(f); ok {
+		return []finding{w}
 	}
 
 	return nil
@@ -271,7 +284,7 @@ func ladderFinding(
 			r.Measured.Metrics[quality.SeriesXPSNRY], lo.Measured.Metrics[quality.SeriesXPSNRY]), true
 	}
 
-	return finding{}, false
+	return hdrFinding(f)
 }
 
 // bitsPerMegabit converts bitrates to Mb/s.

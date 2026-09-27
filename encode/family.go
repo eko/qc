@@ -1,6 +1,9 @@
 package encode
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Feature is an encoder capability callers such as the ladder engine
 // depend on: they ask the codec (Codec.Supports) instead of guessing from
@@ -111,12 +114,14 @@ type x265 struct{ cpuFamily }
 func (x265) privateArgs(
 	p Params,
 ) []string {
-	params := "log-level=error"
+	params := []string{"log-level=error"}
 	if p.GOP > 0 {
-		params += ":scenecut=0"
+		params = append(params, "scenecut=0")
 	}
 
-	return []string{"-x265-params", params}
+	params = append(params, p.Signal.x265Params()...)
+
+	return []string{"-x265-params", strings.Join(params, ":")}
 }
 
 func (x265) supports(
@@ -128,14 +133,21 @@ func (x265) supports(
 // svtAV1 is libsvtav1, the only family synthesising film grain.
 type svtAV1 struct{ cpuFamily }
 
+// privateArgs gather film grain synthesis and HDR10 metadata in one
+// -svtav1-params: ffmpeg keeps only the last of repeated options.
 func (svtAV1) privateArgs(
 	p Params,
 ) []string {
+	params := p.Signal.svtParams()
 	if p.FilmGrain > 0 {
-		return grainArgs(p.FilmGrain)
+		params = append(grainParams(p.FilmGrain), params...)
 	}
 
-	return nil
+	if len(params) == 0 {
+		return nil
+	}
+
+	return []string{"-svtav1-params", strings.Join(params, ":")}
 }
 
 func (svtAV1) supports(
@@ -144,13 +156,13 @@ func (svtAV1) supports(
 	return f == FeatureChunkJoin || f == FeatureFilmGrain
 }
 
-// grainArgs are the SVT-AV1 options synthesising film grain of level (1–50):
-// the encoder denoises its input, codes the clean picture and signals grain
-// parameters the decoder adds back.
-func grainArgs(
+// grainParams are the SVT-AV1 parameters synthesising film grain of level
+// (1–50): the encoder denoises its input, codes the clean picture and
+// signals grain parameters the decoder adds back.
+func grainParams(
 	level int,
 ) []string {
-	return []string{"-svtav1-params", fmt.Sprintf("film-grain=%d:film-grain-denoise=1", level)}
+	return []string{fmt.Sprintf("film-grain=%d", level), "film-grain-denoise=1"}
 }
 
 // familyOf finds the family of a codec that carries none, built by hand or

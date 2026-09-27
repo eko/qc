@@ -240,3 +240,56 @@ func TestBoundedBuffer(
 		})
 	}
 }
+
+func TestStreamPair(
+	t *testing.T,
+) {
+	// Two outputs of one lavfi source: 10 gray 8×8 frames on stdout, the
+	// same frames at 4×4 on the extra pipe.
+	args := []string{
+		"-v", "error", "-f", "lavfi", "-i", "color=gray:size=8x8:duration=0.4:rate=25",
+		"-filter_complex", "[0:v]split=2[a][b];[b]scale=4:4[c]",
+		"-map", "[a]", "-pix_fmt", "gray", "-f", "rawvideo", "-",
+		"-map", "[c]", "-pix_fmt", "gray", "-f", "rawvideo", ExtraOutput,
+	}
+
+	var main, extra int
+
+	err := StreamPair(testContext(t), "ffmpeg", args, func(stdout, pipe io.Reader) error {
+		a, b := make([]byte, 64), make([]byte, 16)
+
+		for {
+			if _, err := io.ReadFull(stdout, a); err != nil {
+				return nil
+			}
+
+			main++
+
+			if _, err := io.ReadFull(pipe, b); err != nil {
+				return err
+			}
+
+			extra++
+		}
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 10, main)
+	assert.Equal(t, 10, extra)
+}
+
+func TestStreamPairConsumerStoppingEarly(
+	t *testing.T,
+) {
+	args := []string{
+		"-v", "error", "-f", "lavfi", "-i", "color=black:size=320x180",
+		"-filter_complex", "[0:v]split=2[a][b]",
+		"-map", "[a]", "-f", "rawvideo", "-", "-map", "[b]", "-f", "rawvideo", ExtraOutput,
+	}
+
+	err := StreamPair(testContext(t), "ffmpeg", args, func(io.Reader, io.Reader) error {
+		return errConsumer
+	})
+
+	require.ErrorIs(t, err, errConsumer)
+}

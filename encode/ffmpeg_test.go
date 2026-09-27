@@ -285,3 +285,52 @@ func availableEncoders(
 
 	return encoders
 }
+
+// TestEncodeCarriesHDRSignal encodes an untagged raw 10-bit clip (as the
+// ladder's digest is) with the HDR10 signal of its source, and checks what
+// ffprobe reads back: the colour description, and the mastering display
+// and content light level (SEI for x265, metadata OBUs for SVT-AV1).
+func TestEncodeCarriesHDRSignal(
+	t *testing.T,
+) {
+	raw := testutil.Generate(t, testutil.Clip{Seconds: 0.4, PixelFormat: "yuv420p10le", Codec: "rawvideo", Name: "raw.nut"})
+
+	testCases := []struct {
+		codec     string
+		signal    Signal
+		wantRange media.DynamicRange
+		wantCLL   int
+	}{
+		{codec: "hevc", signal: hdr10, wantRange: media.DynamicRangeHDR10, wantCLL: 1567},
+		{codec: "av1", signal: hdr10, wantRange: media.DynamicRangeHDR10, wantCLL: 1567},
+		{codec: "h264", signal: Signal{Color: bt2100HLG}, wantRange: media.DynamicRangeHLG},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.codec, func(t *testing.T) {
+			codec, err := Lookup(testCase.codec)
+			require.NoError(t, err)
+
+			out := filepath.Join(t.TempDir(), "out.mp4")
+			p := Params{Width: 320, Height: 180, CRF: 30, Preset: fastestPreset(codec), GOP: 5, BitDepth: 10, Signal: testCase.signal}
+			require.NoError(t, NewFFmpeg("ffmpeg").Encode(t.Context(), codec, raw, out, p))
+
+			info, err := probe.NewFFprobe("ffprobe").Probe(t.Context(), out)
+			require.NoError(t, err)
+
+			video := info.Video[0]
+			assert.Equal(t, testCase.signal.Color.Primaries, video.Color.Primaries)
+			assert.Equal(t, testCase.signal.Color.Transfer, video.Color.Transfer)
+			assert.Equal(t, testCase.signal.Color.Space, video.Color.Space)
+			assert.Equal(t, testCase.wantRange, video.HDR.DynamicRange)
+
+			if testCase.wantCLL > 0 {
+				require.NotNil(t, video.HDR.ContentLightLevel)
+				assert.Equal(t, testCase.wantCLL, video.HDR.ContentLightLevel.MaxCLL)
+				require.NotNil(t, video.HDR.MasteringDisplay)
+				assert.InDelta(t, 1000, video.HDR.MasteringDisplay.MaxLuminance, 1e-6)
+				assert.InDelta(t, 0.265, video.HDR.MasteringDisplay.Green.X, 1e-4)
+			}
+		})
+	}
+}

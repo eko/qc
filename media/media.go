@@ -119,6 +119,9 @@ const (
 	DynamicRangeHLG         DynamicRange = "HLG"
 	DynamicRangePQ          DynamicRange = "PQ"
 	DynamicRangeDolbyVision DynamicRange = "DolbyVision"
+	// DynamicRangeHDR10Plus is HDR10 with SMPTE ST 2094-40 dynamic
+	// metadata, found in the frames (not at stream level).
+	DynamicRangeHDR10Plus DynamicRange = "HDR10+"
 )
 
 // HDR describes high dynamic range signalling found at stream level.
@@ -127,12 +130,26 @@ type HDR struct {
 	MasteringDisplay  *MasteringDisplay  `json:"masteringDisplay,omitempty"`
 	ContentLightLevel *ContentLightLevel `json:"contentLightLevel,omitempty"`
 	DolbyVision       *DolbyVision       `json:"dolbyVision,omitempty"`
+	// HDR10Plus is set when the first frame carries SMPTE ST 2094-40
+	// dynamic metadata (HDR10+).
+	HDR10Plus bool `json:"hdr10Plus,omitempty"`
 }
 
-// MasteringDisplay is the SMPTE ST 2086 mastering display colour volume.
+// MasteringDisplay is the SMPTE ST 2086 mastering display colour volume:
+// luminances in cd/m², primaries and white point as CIE 1931 xy.
 type MasteringDisplay struct {
-	MinLuminance float64 `json:"minLuminance"`
-	MaxLuminance float64 `json:"maxLuminance"`
+	MinLuminance float64      `json:"minLuminance"`
+	MaxLuminance float64      `json:"maxLuminance"`
+	Red          Chromaticity `json:"red,omitzero"`
+	Green        Chromaticity `json:"green,omitzero"`
+	Blue         Chromaticity `json:"blue,omitzero"`
+	WhitePoint   Chromaticity `json:"whitePoint,omitzero"`
+}
+
+// Chromaticity is a CIE 1931 xy colour coordinate.
+type Chromaticity struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 // ContentLightLevel holds MaxCLL / MaxFALL in cd/m².

@@ -65,6 +65,7 @@ func (b *build) command(
 	return b.codec.CommandLine(b.source, fmt.Sprintf("%02d-%dp.mp4", i+1, r.Height), encode.Params{
 		Width: r.Width, Height: r.Height, CRF: r.CRF, Preset: b.opts.Preset,
 		GOP: b.gop(), MaxRate: r.MaxRate, BufSize: r.BufSize, BitDepth: b.opts.BitDepth, FilmGrain: b.grain,
+		Signal: b.signal,
 	})
 }
 

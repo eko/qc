@@ -75,6 +75,8 @@ func addMetricFlags(
 		"metrics measured with VMAF on the same frames: "+strings.Join(quality.Metrics()[1:], ", ")+" (--metrics= for VMAF only)")
 	flags.Bool("av2-ctc", false, "add the AOM AV2 common test conditions metrics: PSNR (Y, Cb, Cr, YUV), PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI")
 	flags.StringSlice("devices", nil, "also score the VMAF v1 model of these viewing devices: "+strings.Join(vmaf.Devices(), ", "))
+	flags.String("hdr-metric", string(quality.HDRMetricPQ),
+		"VMAF on HDR (PQ/HLG) references: pq (on the HDR signal, fast, not HDR-calibrated) or tonemap (on an SDR tone mapping, slower)")
 }
 
 // defaultMetrics are measured unless --metrics says otherwise: CAMBI is free
@@ -137,7 +139,15 @@ func qualityOptions(
 		Metrics:   q.metrics(),
 		Devices:   q.Devices,
 		Backend:   gpuSettingsOf(config).backend,
+		HDRMetric: q.hdrMetric(),
 	}
+}
+
+// hdrMetric is --hdr-metric (validate rejected unknown values).
+func (c QualityConfig) hdrMetric() quality.HDRMetric {
+	metric, _ := quality.ParseHDRMetric(c.HDRMetric)
+
+	return metric
 }
 
 // metrics is --metrics, plus the AV2 CTC set with --av2-ctc.
@@ -178,6 +188,7 @@ func ladderOptions(
 		ModelDirs:  config.Quality.ModelDir,
 		Metrics:    config.Quality.metrics(),
 		Devices:    config.Quality.Devices,
+		HDRMetric:  config.Quality.hdrMetric(),
 		Parallel:   l.Parallel,
 		BitDepth:   l.EncodeBitDepth,
 		Probing:    ladder.Probing(l.Probing),

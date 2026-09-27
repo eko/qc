@@ -123,3 +123,34 @@ func (c Clip) withDefaults() Clip {
 
 	return c
 }
+
+// Metadata of the synthetic HDR10 clips of HDRClip: a P3 D65 mastering
+// display of 1000 cd/m² (x265's units: 0.00002 for chromaticities, 0.0001
+// cd/m² for luminances), MaxCLL 1000 and MaxFALL 400 cd/m².
+const (
+	hdrMasterDisplay = "G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,50)"
+	hdrMaxCLL        = "1000,400"
+)
+
+// HDRClip returns a 10-bit HEVC clip tagged with BT.2020 primaries and
+// matrix and transfer (smpte2084 or arib-std-b67): its code values are
+// testsrc2's, labelled as HDR, which is all signalling and metric tests
+// need. PQ clips also carry HDR10 metadata (hdrMasterDisplay, hdrMaxCLL)
+// in their SEI. The colours are set on the frames (setparams): ffmpeg's
+// encoders take them from the frames, and ignore -color_trc when the
+// frames say otherwise.
+func HDRClip(
+	transfer string,
+) Clip {
+	params := "log-level=error"
+	if transfer == "smpte2084" {
+		params += ":hdr10=1:master-display=" + hdrMasterDisplay + ":max-cll=" + hdrMaxCLL
+	}
+
+	return Clip{
+		Codec:       "libx265",
+		PixelFormat: "yuv420p10le",
+		Filter:      "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=" + transfer + ":colorspace=bt2020nc:range=tv",
+		Args:        []string{"-preset", "ultrafast", "-x265-params", params},
+	}
+}

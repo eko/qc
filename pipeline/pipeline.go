@@ -7,10 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/media"
 	"github.com/eko/qc/quality"
 )
 
@@ -234,6 +236,9 @@ func (r *Runner) inspect(
 ) (StageResult, error) {
 	aopts := opts.Analysis
 	aopts.SkipVideo = true
+	// The frame analysis that follows reads the first frame's HDR metadata
+	// while it decodes: the inspection need not wait for it.
+	aopts.DeferHDRMetadata = !opts.SkipAnalysis
 
 	report, err := r.analyzer.Analyze(ctx, opts.Source, aopts)
 	if err != nil {
@@ -306,6 +311,10 @@ func (r *Runner) ladder(
 	lopts.Codec = codec
 	lopts.Progress = progress
 
+	if lopts.ContentLight == nil && opts.LadderSource == "" {
+		lopts.ContentLight = measuredLight(rep.Analysis)
+	}
+
 	res, err := r.ladders.Build(ctx, cmp.Or(opts.LadderSource, opts.Source), lopts)
 	if err != nil {
 		return StageResult{}, err
@@ -318,6 +327,22 @@ func (r *Runner) ladder(
 	rep.Ladders = append(rep.Ladders, res)
 
 	return StageResult{Ladder: res}, nil
+}
+
+// measuredLight is the content light level the frame analysis measured on
+// an HDR source, for its encodes to carry when the source signals none:
+// the robust MaxCLL (the strict maximum of a 4:2:0 source overshoots, see
+// light.RobustPercentile) and MaxFALL. It is nil without a light analysis.
+func measuredLight(
+	report *analysis.Report,
+) *media.ContentLightLevel {
+	if report == nil || report.Video == nil || report.Video.Light == nil {
+		return nil
+	}
+
+	l := report.Video.Light
+
+	return &media.ContentLightLevel{MaxCLL: int(math.Round(l.MaxCLLRobust)), MaxFALL: int(math.Round(l.MaxFALL))}
 }
 
 // The helpers below call a hook when it is set.

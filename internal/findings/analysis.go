@@ -65,7 +65,7 @@ func Analysis(
 		out = append(out, Finding{Level: Warn, Code: Interlaced, Text: v.FieldOrder})
 	}
 
-	return out
+	return append(out, videoHDRFindings(r)...)
 }
 
 func bitstreamFindings(

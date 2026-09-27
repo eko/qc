@@ -11,6 +11,7 @@ import (
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/media"
+	"github.com/eko/qc/quality"
 	"github.com/eko/qc/vmaf"
 )
 
@@ -133,6 +134,15 @@ type Options struct {
 	// get XPSNR, banding (CAMBI) or per-device VMAF; probes stay VMAF-only.
 	Metrics []string
 	Devices []string
+	// HDRMetric is how VMAF scores the probes and rungs of an HDR (PQ or
+	// HLG) source (see quality.HDRMetric): on the HDR signal by default,
+	// which ranks encodes of the title consistently, or on an SDR tone
+	// mapping.
+	HDRMetric quality.HDRMetric
+	// ContentLight is the content light level of an HDR10 source that
+	// signals none, typically measured by its analysis (MaxCLL, MaxFALL):
+	// the encodes then carry it.
+	ContentLight *media.ContentLightLevel
 	// Model is the VMAF model (see vmaf.ResolveModel).
 	Model string
 	// ModelDirs are searched for model files (default vmaf.DefaultModelDirs).
@@ -211,6 +221,7 @@ func (e *Engine) Build(
 	}
 
 	res.Shape = opts.Constraints.Shape()
+	res.HDR = hdrLadder(&opts, video)
 
 	dir, cleanup, err := workDir(opts.WorkDir)
 	if err != nil {
@@ -219,6 +230,9 @@ func (e *Engine) Build(
 	defer cleanup()
 
 	run := &build{engine: e, codec: codec, opts: opts, source: source, workDir: dir, video: video}
+	if res.HDR != nil {
+		run.signal = res.HDR.Signal
+	}
 
 	if res.Timings, err = run.stages(ctx, res, duration); err != nil {
 		return nil, err

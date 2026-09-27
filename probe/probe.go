@@ -5,7 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/eko/qc/internal/ffexec"
 	"github.com/eko/qc/media"
@@ -27,21 +31,54 @@ type commandOutput func(
 	args []string,
 ) ([]byte, error)
 
-// FFprobe implements Prober using the ffprobe binary.
+// FFprobe implements Prober using the ffprobe binary. It is safe for
+// concurrent use.
 type FFprobe struct {
 	bin    string
 	output commandOutput
+
+	// mu guards firstFrames: the side data of the first frame of the HDR
+	// files probed, by file version. A run inspects its source twice (the
+	// inspection, then the frame analysis): the second probe reuses it.
+	mu          sync.Mutex
+	firstFrames map[fileVersion][]ffprobeSideData
+}
+
+// fileVersion identifies the content of a file: a path whose size or
+// modification time changed is probed again.
+type fileVersion struct {
+	path    string
+	size    int64
+	modTime time.Time
 }
 
 // NewFFprobe returns a Prober backed by the given ffprobe binary.
 func NewFFprobe(
 	bin string,
 ) *FFprobe {
-	return &FFprobe{bin: bin, output: ffexec.Output}
+	return &FFprobe{bin: bin, output: ffexec.Output, firstFrames: map[fileVersion][]ffprobeSideData{}}
 }
 
-// Probe implements Prober.
+// Probe implements Prober: ProbeStreams, then ProbeHDR.
 func (f *FFprobe) Probe(
+	ctx context.Context,
+	path string,
+) (*media.Info, error) {
+	info, err := f.ProbeStreams(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := f.ProbeHDR(ctx, info); err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+// ProbeStreams reads the container and its streams, with the HDR metadata
+// the container signals, without reading any frame.
+func (f *FFprobe) ProbeStreams(
 	ctx context.Context,
 	path string,
 ) (*media.Info, error) {
@@ -64,6 +101,99 @@ func (f *FFprobe) Probe(
 	info.Path = path
 
 	return info, nil
+}
+
+// ProbeHDR completes the HDR description of the primary video of info from
+// the side data of its first frame. Containers often carry HDR10 metadata
+// only in the bitstream (HEVC and AV1 SEI/metadata OBUs in MP4), and HDR10+
+// dynamic metadata never is at stream level. Only PQ, HLG and Dolby Vision
+// streams pay for this second, one-frame call (about 65 ms, most of it
+// ffprobe's start): SDR probing is unchanged. Callers with slower work to
+// do (decoding the video) run it meanwhile.
+func (f *FFprobe) ProbeHDR(
+	ctx context.Context,
+	info *media.Info,
+) error {
+	if len(info.Video) == 0 {
+		return nil
+	}
+
+	video := &info.Video[0]
+	if !video.Color.IsHDR() && video.HDR.DolbyVision == nil {
+		return nil
+	}
+
+	sideData, err := f.firstFrame(ctx, info.Path, video.Index)
+	if err != nil {
+		return fmt.Errorf("probe %s: %w", info.Path, err)
+	}
+
+	addSideData(&video.HDR, sideData)
+	video.HDR.DynamicRange = classify(video.HDR, video.Color.Transfer)
+
+	return nil
+}
+
+// firstFrame returns the side data of the first frame of stream index of
+// path, from the cache when this version of the file was probed before.
+func (f *FFprobe) firstFrame(
+	ctx context.Context,
+	path string,
+	index int,
+) ([]ffprobeSideData, error) {
+	key, cacheable := versionOf(path)
+	if cacheable {
+		f.mu.Lock()
+		cached, ok := f.firstFrames[key]
+		f.mu.Unlock()
+
+		if ok {
+			return cached, nil
+		}
+	}
+
+	out, err := f.output(ctx, f.bin, []string{
+		"-v", "error",
+		"-print_format", "json",
+		"-select_streams", strconv.Itoa(index),
+		"-read_intervals", "%+#1",
+		"-show_frames",
+		path,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("first frame: %w", err)
+	}
+
+	var frames ffprobeFrames
+	if err := json.Unmarshal(out, &frames); err != nil {
+		return nil, fmt.Errorf("decode ffprobe frame json: %w", err)
+	}
+
+	var sideData []ffprobeSideData
+	for _, fr := range frames.Frames {
+		sideData = append(sideData, fr.SideDataList...)
+	}
+
+	if cacheable {
+		f.mu.Lock()
+		f.firstFrames[key] = sideData
+		f.mu.Unlock()
+	}
+
+	return sideData, nil
+}
+
+// versionOf identifies the version of a local file; ok is false for what
+// cannot be stat'ed (URLs, missing files), which are not cached.
+func versionOf(
+	path string,
+) (fileVersion, bool) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return fileVersion{}, false
+	}
+
+	return fileVersion{path: path, size: st.Size(), modTime: st.ModTime()}, true
 }
 
 // Parse converts ffprobe JSON output (-show_format -show_streams) into media.Info.
@@ -152,18 +282,33 @@ func parseVideo(
 	return video, nil
 }
 
-// parseHDR classifies the dynamic range from the transfer characteristics and
-// the side data. Dolby Vision wins over the transfer function because profile
-// 8 streams also signal a compatible HDR10 or HLG base layer; PQ without
-// mastering metadata is reported as PQ rather than HDR10, which requires it.
+// parseHDR reads the HDR side data of a stream and classifies its dynamic
+// range.
 func parseHDR(
 	s ffprobeStream,
 ) media.HDR {
-	hdr := media.HDR{DynamicRange: media.DynamicRangeSDR}
+	var hdr media.HDR
 
-	for _, sd := range s.SideDataList {
-		switch sd.SideDataType {
-		case "DOVI configuration record":
+	addSideData(&hdr, s.SideDataList)
+	hdr.DynamicRange = classify(hdr, s.ColorTransfer)
+
+	return hdr
+}
+
+// hdr10PlusSideData identifies SMPTE ST 2094-40 dynamic metadata in the
+// side data type names of ffprobe ("HDR Dynamic Metadata SMPTE2094-40
+// (HDR10+)").
+const hdr10PlusSideData = "SMPTE2094-40"
+
+// addSideData records the HDR metadata of side data entries, keeping what
+// hdr already holds: stream-level values win over the first frame's.
+func addSideData(
+	hdr *media.HDR,
+	list []ffprobeSideData,
+) {
+	for _, sd := range list {
+		switch {
+		case sd.SideDataType == "DOVI configuration record" && hdr.DolbyVision == nil:
 			hdr.DolbyVision = &media.DolbyVision{
 				Profile:         sd.DVProfile,
 				Level:           sd.DVLevel,
@@ -172,31 +317,53 @@ func parseHDR(
 				BLPresent:       sd.BLPresentFlag == 1,
 				CompatibilityID: sd.DVBLSignalCompatibilityID,
 			}
-		case "Mastering display metadata":
-			hdr.MasteringDisplay = &media.MasteringDisplay{
-				MinLuminance: fraction(sd.MinLuminance),
-				MaxLuminance: fraction(sd.MaxLuminance),
-			}
-		case "Content light level metadata":
-			hdr.ContentLightLevel = &media.ContentLightLevel{
-				MaxCLL:  sd.MaxContent,
-				MaxFALL: sd.MaxAverage,
-			}
+		case sd.SideDataType == "Mastering display metadata" && hdr.MasteringDisplay == nil:
+			hdr.MasteringDisplay = mastering(sd)
+		case sd.SideDataType == "Content light level metadata" && hdr.ContentLightLevel == nil:
+			hdr.ContentLightLevel = &media.ContentLightLevel{MaxCLL: sd.MaxContent, MaxFALL: sd.MaxAverage}
+		case strings.Contains(sd.SideDataType, hdr10PlusSideData):
+			hdr.HDR10Plus = true
 		}
 	}
+}
 
+// mastering converts SMPTE ST 2086 side data.
+func mastering(
+	sd ffprobeSideData,
+) *media.MasteringDisplay {
+	return &media.MasteringDisplay{
+		MinLuminance: fraction(sd.MinLuminance),
+		MaxLuminance: fraction(sd.MaxLuminance),
+		Red:          media.Chromaticity{X: fraction(sd.RedX), Y: fraction(sd.RedY)},
+		Green:        media.Chromaticity{X: fraction(sd.GreenX), Y: fraction(sd.GreenY)},
+		Blue:         media.Chromaticity{X: fraction(sd.BlueX), Y: fraction(sd.BlueY)},
+		WhitePoint:   media.Chromaticity{X: fraction(sd.WhitePointX), Y: fraction(sd.WhitePointY)},
+	}
+}
+
+// classify gives the dynamic range of a stream from its HDR metadata and
+// transfer characteristic. Dolby Vision wins over the transfer function
+// because profile 8 streams also signal a compatible HDR10 or HLG base
+// layer; HDR10+ needs PQ; PQ without mastering metadata is reported as PQ
+// rather than HDR10, which requires it.
+func classify(
+	hdr media.HDR,
+	transfer string,
+) media.DynamicRange {
 	switch {
 	case hdr.DolbyVision != nil:
-		hdr.DynamicRange = media.DynamicRangeDolbyVision
-	case s.ColorTransfer == "arib-std-b67":
-		hdr.DynamicRange = media.DynamicRangeHLG
-	case s.ColorTransfer == "smpte2084" && hdr.MasteringDisplay != nil:
-		hdr.DynamicRange = media.DynamicRangeHDR10
-	case s.ColorTransfer == "smpte2084":
-		hdr.DynamicRange = media.DynamicRangePQ
+		return media.DynamicRangeDolbyVision
+	case transfer == media.TransferHLG:
+		return media.DynamicRangeHLG
+	case transfer == media.TransferPQ && hdr.HDR10Plus:
+		return media.DynamicRangeHDR10Plus
+	case transfer == media.TransferPQ && hdr.MasteringDisplay != nil:
+		return media.DynamicRangeHDR10
+	case transfer == media.TransferPQ:
+		return media.DynamicRangePQ
 	}
 
-	return hdr
+	return media.DynamicRangeSDR
 }
 
 func parseAudio(
@@ -335,8 +502,24 @@ type ffprobeSideData struct {
 	ELPresentFlag             int    `json:"el_present_flag"`
 	BLPresentFlag             int    `json:"bl_present_flag"`
 	DVBLSignalCompatibilityID int    `json:"dv_bl_signal_compatibility_id"`
+	RedX                      string `json:"red_x"`
+	RedY                      string `json:"red_y"`
+	GreenX                    string `json:"green_x"`
+	GreenY                    string `json:"green_y"`
+	BlueX                     string `json:"blue_x"`
+	BlueY                     string `json:"blue_y"`
+	WhitePointX               string `json:"white_point_x"`
+	WhitePointY               string `json:"white_point_y"`
 	MinLuminance              string `json:"min_luminance"`
 	MaxLuminance              string `json:"max_luminance"`
 	MaxContent                int    `json:"max_content"`
 	MaxAverage                int    `json:"max_average"`
+}
+
+// ffprobeFrames mirrors ffprobe's -show_frames output: only the side data
+// of the frames is used.
+type ffprobeFrames struct {
+	Frames []struct {
+		SideDataList []ffprobeSideData `json:"side_data_list"`
+	} `json:"frames"`
 }

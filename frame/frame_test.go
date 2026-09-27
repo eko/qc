@@ -197,3 +197,51 @@ func TestReleaseWithoutPool(
 
 	assert.NotPanics(t, f.Release)
 }
+
+func TestPoolSampleGrid(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name     string
+		width    int
+		height   int
+		step     int
+		wantStep int
+		wantGrid [2]int
+		wantLuma int
+	}{
+		{name: "even step", width: 1920, height: 1080, step: 4, wantStep: 4, wantGrid: [2]int{480, 270}, wantLuma: 1},
+		{name: "odd step rounds up, partial cells count", width: 10, height: 6, step: 3, wantStep: 4, wantGrid: [2]int{3, 2}, wantLuma: 1},
+		{name: "no grid", width: 10, height: 6, wantGrid: [2]int{}, wantLuma: 3},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			pool := NewPool(testCase.width, testCase.height, PoolOptions{SampleStep: testCase.step, Chroma: true, HighBitDepth: true})
+			assert.Equal(t, testCase.wantStep, pool.SampleStep())
+			assert.Equal(t, testCase.wantGrid, pool.GridSize())
+
+			f := pool.Get()
+			defer f.Release()
+
+			assert.Equal(t, testCase.wantStep, f.Samples.Step)
+			assert.Len(t, pool.Planes(f), testCase.wantLuma, "a sampling pool reads the luma alone")
+
+			planes := pool.SamplePlanes(f)
+			require.Len(t, planes, 3)
+
+			for _, p := range planes {
+				assert.Equal(t, testCase.wantGrid, [2]int{p.Width, p.Height})
+				assert.Len(t, p.Pix, testCase.wantGrid[0]*testCase.wantGrid[1]*2)
+			}
+		})
+	}
+}
+
+func TestPlaneUint16(
+	t *testing.T,
+) {
+	p := Plane{Width: 2, Height: 1, Stride: 4, BytesPerSample: 2, Pix: []byte{0x01, 0x02, 0xff, 0x03}}
+
+	assert.Equal(t, []uint16{0x0201, 0x03ff}, p.Uint16())
+}

@@ -184,7 +184,7 @@ func (l *fakeLab) Compare(
 	}
 
 	sampled := opts.Quality.Budget && opts.Quality.MaxShare == probeShare
-	if opts.Reference != l.digest || (!sampled && !opts.Quality.Exact) {
+	if !l.isDigest(opts.Reference) || (!sampled && !opts.Quality.Exact) {
 		return nil, errors.New("fake: measurement not against the inspected digest in budget or exact mode")
 	}
 
@@ -208,6 +208,14 @@ func (l *fakeLab) Compare(
 		Distorted: &analysis.Report{Bitstream: &bitstream.Report{AverageBitrate: l.model.bitrate(p)}},
 		VMAF:      withExtras(&quality.Result{Mean: vmaf, HalfWidth: opts.Quality.Precision / 2}, opts.Quality),
 	}, nil
+}
+
+// isDigest reports whether report is the inspection of the digest, or its
+// copy carrying the colour of an HDR source (withSignal).
+func (l *fakeLab) isDigest(
+	report *analysis.Report,
+) bool {
+	return report == l.digest || (report != nil && report.Info != nil && l.digest.Info != nil && report.Info.Path == l.digest.Info.Path)
 }
 
 // withExtras adds the requested metrics and devices to res: XPSNR follows

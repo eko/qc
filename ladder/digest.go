@@ -54,6 +54,7 @@ func (b *build) makeDigest(
 		return Digest{}, fmt.Errorf("ladder: inspect digest: %w", err)
 	}
 
+	report = withSignal(report, b.video)
 	b.digest, b.digestReport = path, report
 	b.reference, b.referenceReport = path, report
 

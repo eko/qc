@@ -217,7 +217,8 @@ qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93
   (`bufsize = 4 × bitrate`), the HLS peak limit for VOD. A 1.5× cap was tried
   first: it cost up to 4 VMAF points on a cartoon with a very bursty bitrate.
 - **10-bit**: `--encode-bit-depth 10` encodes in `yuv420p10le` (Main10). It
-  is usually more efficient for HEVC and AV1, even from 8-bit sources.
+  is usually more efficient for HEVC and AV1, even from 8-bit sources. HDR
+  sources are always encoded in 10 bits ([section 10](#10-hdr-sources)).
 - Every rung comes with a copy-pasteable ffmpeg command for the whole title,
   writing to a numbered file (`01-1080p.mp4`, `02-720p.mp4`…) so rungs sharing
   a resolution do not overwrite each other.
@@ -451,6 +452,21 @@ for the least perceived quality.
   correlated than a fine one).
 
 Film grain cannot be combined with per-shot rungs.
+
+## 10. HDR sources
+
+A PQ or HLG source gets a 10-bit ladder (an 8-bit request, the default
+included, is upgraded and reported) whose every probe, rung and rendered
+command carries the source's colour description (`setparams` on the frames,
+which the encoders turn into VUI or sequence header fields) and, for HDR10,
+its mastering display and content light level: x265 `hdr10=1:hdr10-opt=1:
+master-display=…:max-cll=…`, SVT-AV1 `mastering-display=…:content-light=…`,
+colour tags only for x264 (HDR in H.264 is rarely played, the ladder warns)
+and NVENC (which writes the metadata only when ffmpeg forwards it from the
+source). The digest keeps the code values, and its measurements know they
+score HDR. Rungs are placed by VMAF on the HDR signal (`--hdr-metric pq`) or
+on an SDR tone mapping (`tonemap`); verified rungs also get wPSNR and ΔE
+ITP. Why, and the checks of the rendered encodes: [hdr.md](hdr.md#5-hdr-ladders).
 
 ## Cost and accuracy
 

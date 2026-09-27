@@ -6,7 +6,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/eko/qc/quality/xpsnr"
 	"github.com/eko/qc/vmaf"
 )
 
@@ -82,27 +81,34 @@ func (r *run) seekRuns(
 	return group.Wait()
 }
 
-// work scores queued clips on its own model instances (and XPSNR meter)
-// until the queue closes, freeing a slot after each clip.
+// work scores queued clips on its own model instances (and pure-Go
+// meters) until the queue closes, freeing a slot after each clip.
 func (r *run) work(
 	queue <-chan *clipJob,
 	slots <-chan struct{},
 	threads int,
 	collect func(clipResult, int),
 ) error {
-	models, err := r.meter.engine.LoadModels(r.models)
-	if err != nil {
-		return err
-	}
-	defer models.Close()
+	meter := r.newGoMeters(threads)
 
-	var meter *xpsnr.Meter
-	if r.xpsnr {
-		meter = xpsnr.New(r.spec.Width, r.spec.Height, r.bitDepth, r.ref.Video.AvgFrameRate.Float(), threads)
+	score := func(job *clipJob) (clipResult, error) {
+		return r.measureJob(meter, job)
+	}
+
+	if len(r.models) > 0 {
+		models, err := r.meter.engine.LoadModels(r.models)
+		if err != nil {
+			return err
+		}
+		defer models.Close()
+
+		score = func(job *clipJob) (clipResult, error) {
+			return r.scoreJob(models, meter, job, threads)
+		}
 	}
 
 	for job := range queue {
-		cr, err := r.scoreJob(models, meter, job, threads)
+		cr, err := score(job)
 		<-slots
 
 		if err != nil {
@@ -115,12 +121,12 @@ func (r *run) work(
 	return nil
 }
 
-// scoreJob scores the pairs of a clip with every model, extractor and XPSNR
-// (when meter is set) and keeps the values of the clip frames, dropping the
+// scoreJob scores the pairs of a clip with every model, extractor and
+// pure-Go meter and keeps the values of the clip frames, dropping the
 // warm-up ones.
 func (r *run) scoreJob(
 	models vmaf.Models,
-	meter *xpsnr.Meter,
+	meter *goMeters,
 	job *clipJob,
 	threads int,
 ) (clipResult, error) {
@@ -139,7 +145,7 @@ func (r *run) scoreJob(
 	}
 	defer scorer.Close()
 
-	distortions, pairs, err := r.push(scorer, meter, job)
+	pairs, err := r.push(scorer, meter, job)
 	if err != nil {
 		return clipResult{}, err
 	}
@@ -149,35 +155,62 @@ func (r *run) scoreJob(
 		return clipResult{}, err
 	}
 
-	return r.clipFrames(job, out, distortions, pairs)
+	return r.clipFrames(job, out, meter, pairs)
 }
 
-// push feeds the pairs of job to scorer, and to the XPSNR meter when set,
-// and returns the XPSNR distortions and the number of pairs scored. On
-// failure the remaining pairs are drained.
-func (r *run) push(
-	scorer vmaf.Scorer,
-	meter *xpsnr.Meter,
+// measureJob measures the pairs of a clip with the pure-Go meters alone (a
+// pass without VMAF, see hdrMetricsPass) and keeps the values of the clip
+// frames.
+func (r *run) measureJob(
+	meter *goMeters,
 	job *clipJob,
-) ([]xpsnr.Distortion, int, error) {
-	if meter != nil {
-		meter.Reset()
+) (clipResult, error) {
+	meter.reset()
+
+	pairs := 0
+
+	for p := range job.pairs {
+		meter.measure(p, pairs == 0 && job.warmFrom > 0)
+		p.release()
+
+		pairs++
 	}
 
-	var distortions []xpsnr.Distortion
+	c := job.clip
+	lo := c.from - job.warmFrom
+	hi := min(pairs, lo+(c.to-c.from))
+
+	if lo >= hi {
+		return clipResult{}, fmt.Errorf("%w: clip %d-%d, %d frames decoded", errShortDecode, c.from, c.to, pairs)
+	}
+
+	values := map[string][]float64{}
+	meter.values(values)
+
+	for name, v := range values {
+		values[name] = v[lo:hi]
+	}
+
+	return clipResult{clip: c, values: values, decoded: 2 * pairs}, nil
+}
+
+// push feeds the pairs of job to scorer and to the pure-Go meters, and
+// returns the number of pairs scored. On failure the remaining pairs are
+// drained.
+func (r *run) push(
+	scorer vmaf.Scorer,
+	meter *goMeters,
+	job *clipJob,
+) (int, error) {
+	meter.reset()
 
 	pairs := 0
 
 	for p := range job.pairs {
 		err := scorer.Push(p.ref, p.dist)
-		if err == nil && meter != nil {
-			if pairs == 0 && job.warmFrom > 0 {
-				// The clip starts mid-video: its warm-up frame becomes
-				// the history instead of black.
-				meter.Prime(p.ref)
-			}
-
-			distortions = append(distortions, meter.Measure(p.ref, p.dist))
+		if err == nil {
+			// A clip starting mid-video primes XPSNR with its warm-up frame.
+			meter.measure(p, pairs == 0 && job.warmFrom > 0)
 		}
 
 		p.release()
@@ -185,14 +218,14 @@ func (r *run) push(
 		if err != nil {
 			drainPairs(job.pairs)
 
-			return nil, pairs, err
+			return pairs, err
 		}
 
 		pairs++
 		r.pairScored()
 	}
 
-	return distortions, pairs, nil
+	return pairs, nil
 }
 
 // clipFrames keeps the values of the clip frames of job, dropping the
@@ -201,7 +234,7 @@ func (r *run) push(
 func (r *run) clipFrames(
 	job *clipJob,
 	out vmaf.Scores,
-	distortions []xpsnr.Distortion,
+	meter *goMeters,
 	pairs int,
 ) (clipResult, error) {
 	c := job.clip
@@ -212,7 +245,7 @@ func (r *run) clipFrames(
 		return clipResult{}, fmt.Errorf("%w: clip %d-%d, %d frames decoded", errShortDecode, c.from, c.to, pairs)
 	}
 
-	values := r.clipValues(out, distortions)
+	values := r.clipValues(out, meter)
 	for name, v := range values {
 		values[name] = v[lo:hi]
 	}
@@ -221,10 +254,10 @@ func (r *run) clipFrames(
 }
 
 // clipValues gathers the raw per-pair values of every series of a clip:
-// device models, their aliases, libvmaf features and XPSNR distortions.
+// device models, their aliases, libvmaf features and the pure-Go metrics.
 func (r *run) clipValues(
 	out vmaf.Scores,
-	distortions []xpsnr.Distortion,
+	meter *goMeters,
 ) map[string][]float64 {
 	values := map[string][]float64{}
 
@@ -239,17 +272,7 @@ func (r *run) clipValues(
 	}
 
 	featureValues(out.Features, values)
-
-	if r.xpsnr {
-		for plane, name := range []string{SeriesXPSNRY, SeriesXPSNRU, SeriesXPSNRV} {
-			v := make([]float64, len(distortions))
-			for i, d := range distortions {
-				v[i] = d[plane]
-			}
-
-			values[name] = v
-		}
-	}
+	meter.values(values)
 
 	return values
 }

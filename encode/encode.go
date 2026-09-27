@@ -128,6 +128,9 @@ type Params struct {
 	// FilmGrain is the SVT-AV1 film grain synthesis level (1–50; 0 off,
 	// ignored by the other encoders).
 	FilmGrain int
+	// Signal is the colour signal the encode carries (HDR sources); the
+	// zero value leaves it to the input frames.
+	Signal Signal
 }
 
 // Args returns the ffmpeg output arguments for p, without input or output path.
@@ -140,9 +143,15 @@ func (c Codec) Args(
 	}
 
 	impl := c.impl()
+
+	filter := fmt.Sprintf("scale=%d:%d:flags=bicubic,format=%s", p.Width, p.Height, impl.pixelFormat(p.BitDepth))
+	if tags := p.Signal.setParams(); tags != "" {
+		filter += "," + tags
+	}
+
 	args := []string{
 		"-an", "-sn", "-dn",
-		"-vf", fmt.Sprintf("scale=%d:%d:flags=bicubic,format=%s", p.Width, p.Height, impl.pixelFormat(p.BitDepth)),
+		"-vf", filter,
 		"-c:v", c.Encoder,
 		"-preset", preset,
 	}

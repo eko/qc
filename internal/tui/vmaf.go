@@ -93,6 +93,10 @@ func scoreSection(
 		stats = append(stats, stat("gpu", gpu))
 	}
 
+	if h := v.HDR; h != nil {
+		stats = append(stats, stat("hdr", badge.Render(hdrVMAFLabel(h))))
+	}
+
 	switch {
 	case v.Sample != nil:
 		stats = append(stats, stat("budget", v.Sample.Summary()), stat("strata", strconv.Itoa(len(v.Strata))))

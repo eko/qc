@@ -90,7 +90,7 @@ func Ladder(
 		out = append(out, Finding{Level: Warn, Code: RankConflict, Index: conflict.Higher, Other: conflict.Lower})
 	}
 
-	return out
+	return append(out, hdrLadderFindings(r)...)
 }
 
 // topFinding says whether the top rung reaches the targeted quality.

@@ -124,14 +124,24 @@ func metricSection(
 		subtitle = fmt.Sprintf("%.0f%% confidence intervals from the clips VMAF sampled", v.Confidence*100)
 	}
 
+	notes := []string{"PSNR YUV weights the planes 14:1:1 (AV2 CTC). XPSNR pools frames like ffmpeg (square-mean-root). " +
+		"CAMBI uses the VMAF v1 options; lower is better, and its worst 5% is the 95th percentile."}
+	if v.HDR != nil {
+		notes = append(notes, hdrMetricsNote)
+	}
+
 	return section{
 		Title:    "Metrics",
 		Subtitle: subtitle,
 		Table:    t,
-		Notes: []string{"PSNR YUV weights the planes 14:1:1 (AV2 CTC). XPSNR pools frames like ffmpeg (square-mean-root). " +
-			"CAMBI uses the VMAF v1 options; lower is better, and its worst 5% is the 95th percentile."},
+		Notes:    notes,
 	}
 }
+
+// hdrMetricsNote explains the HDR metrics of the table.
+const hdrMetricsNote = "wPSNR weights the error of each sample by the brightness of the reference (JVET HDR test " +
+	"conditions); ΔE ITP is the ITU-R BT.2124 colour difference, 1 being a just noticeable difference, per frame " +
+	"its mean and 99th percentile; both measured on the HDR signal."
 
 // bandingSection charts CAMBI over the scored frames and lists the segments
 // above the visibility threshold.
@@ -274,6 +284,10 @@ func comparisonCards(
 	vmafCard := card{Label: "VMAF", Value: fmt.Sprintf("%.2f", v.Mean), Detail: "exact · every frame", Tone: vmafTone(v.Mean)}
 	if v.Mode == quality.ModeSampled {
 		vmafCard.Detail = fmt.Sprintf("± %.2f · %.0f%% CI", v.HalfWidth, v.Confidence*100)
+	}
+
+	if h := v.HDR; h != nil {
+		vmafCard.Label = "VMAF · " + hdrVMAFLabel(h)
 	}
 
 	cards := []card{vmafCard}

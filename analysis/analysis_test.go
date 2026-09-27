@@ -75,6 +75,8 @@ func TestAnalyzerIntegration(
 	v := report.Video
 	require.NotNil(t, v)
 	assert.Equal(t, 100, v.FramesDecoded)
+	assert.Nil(t, v.Light, "no light levels for SDR")
+	assert.Empty(t, report.Frames.PeakNits)
 	require.Len(t, v.Shots, 3)
 	assert.Equal(t, media.Seconds(2), v.Shots[1].Start)
 	assert.Equal(t, media.Seconds(3), v.Shots[2].Start)
@@ -151,4 +153,34 @@ func newAnalyzer(
 		decode.NewFFmpeg("ffmpeg", 0),
 		meter,
 	)
+}
+
+// TestAnalyzerHDRLightLevels analyses a letterboxed PQ clip: the frames go
+// through the 10-bit sampling pool, the light analyzer measures them, and
+// the averages exclude the black bars crop found.
+func TestAnalyzerHDRLightLevels(
+	t *testing.T,
+) {
+	clip := testutil.HDRClip(media.TransferPQ)
+	clip.Seconds = 0.4
+	clip.Filter = "pad=320:240:0:30:black," + clip.Filter
+	path := testutil.Generate(t, clip)
+
+	report, err := newAnalyzer(nil).Analyze(t.Context(), path, analysis.Options{})
+	require.NoError(t, err)
+
+	l := report.Video.Light
+	require.NotNil(t, l)
+	assert.Equal(t, media.TransferPQ, l.Transfer)
+	assert.Equal(t, 2, l.SampleStep)
+	assert.InDelta(t, 0.75, l.ActiveShare, 0.02, "the bars are a quarter of the picture")
+	assert.Greater(t, l.MaxCLL, l.MaxFALL)
+	assert.GreaterOrEqual(t, l.MaxCLL, l.MaxCLLRobust)
+	assert.Positive(t, l.MaxFALL)
+
+	frames := report.Frames
+	assert.Len(t, frames.PeakNits, len(frames.PTS))
+	assert.Len(t, frames.RobustPeakNits, len(frames.PTS))
+	assert.Len(t, frames.AverageNits, len(frames.PTS))
+	assert.Equal(t, media.DynamicRangeHDR10, report.Info.Video[0].HDR.DynamicRange)
 }

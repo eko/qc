@@ -185,6 +185,10 @@ func TestFFmpegDecodePixels(
 			name: "8-bit source to 16-bit samples", path: path8, width: 320, height: 180,
 			opts: frame.PoolOptions{HighBitDepth: true}, wantLuma: black10Luma,
 		},
+		{
+			name: "sampling pool: 8-bit luma and 10-bit samples", path: path10, width: 320, height: 180,
+			opts: frame.PoolOptions{SampleStep: 4, ThumbMaxWidth: 80}, wantLuma: black8Luma,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -205,6 +209,13 @@ func TestFFmpegDecodePixels(
 
 				if testCase.opts.ThumbMaxWidth > 0 {
 					assertUniform(t, &f.Thumb, testCase.wantLuma)
+				}
+
+				if testCase.opts.SampleStep > 0 {
+					assert.Equal(t, 80, f.Samples.Y.Width)
+					assertUniform(t, &f.Samples.Y, black10Luma)
+					assertUniform(t, &f.Samples.Cb, black10Chroma)
+					assertUniform(t, &f.Samples.Cr, black10Chroma)
 				}
 			})
 			assert.Len(t, frames, 2)
@@ -300,10 +311,13 @@ func TestReadFramesErrors(
 
 	testCases := []struct {
 		name      string
+		pool      *frame.Pool
 		input     []byte
 		selection [][2]int
 		wantErrIs error
 		wantErr   string
+		// grid is the extra output of a sampling pool.
+		grid []byte
 	}{
 		{
 			name:      "truncated luma",
@@ -318,6 +332,21 @@ func TestReadFramesErrors(
 			wantErr:   "read frame 1: read plane 1",
 		},
 		{
+			name:      "truncated sample grid",
+			pool:      frame.NewPool(2, 2, frame.PoolOptions{SampleStep: 2}),
+			input:     make([]byte, 4),
+			grid:      make([]byte, 2),
+			wantErrIs: io.ErrUnexpectedEOF,
+			wantErr:   "read frame 0: read plane 1",
+		},
+		{
+			name:      "missing sample grid",
+			pool:      frame.NewPool(2, 2, frame.PoolOptions{SampleStep: 2}),
+			input:     make([]byte, 4),
+			wantErrIs: io.ErrUnexpectedEOF,
+			wantErr:   "read frame 0: sample grid",
+		},
+		{
 			name:      "more frames than selected",
 			input:     make([]byte, 2*frameSize),
 			selection: [][2]int{{0, 1}},
@@ -329,8 +358,14 @@ func TestReadFramesErrors(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			req := Request{Pool: pool, Select: testCase.selection}
+			read := planeReader(bytes.NewReader(testCase.input), pool)
 
-			err := readFrames(bytes.NewReader(testCase.input), req, func(f *frame.Frame) error {
+			if testCase.pool != nil {
+				req.Pool = testCase.pool
+				read = sampledReader(bytes.NewReader(testCase.input), bytes.NewReader(testCase.grid), testCase.pool)
+			}
+
+			err := readFrames(req, read, func(f *frame.Frame) error {
 				f.Release()
 
 				return nil
@@ -349,7 +384,7 @@ func TestReadFramesUnknownRate(
 
 	var got []decoded
 
-	err := readFrames(bytes.NewReader(make([]byte, 2)), req, func(f *frame.Frame) error {
+	err := readFrames(req, planeReader(bytes.NewReader(make([]byte, 2)), req.Pool), func(f *frame.Frame) error {
 		defer f.Release()
 
 		got = append(got, decoded{Index: f.Index, PTS: f.PTS})
@@ -426,4 +461,136 @@ func TestFFmpegDecodeResolutionChange(
 	assert.Equal(t, []int{20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 42, 43, 44}, indices)
 	assert.Equal(t, alone(parts[0], 22), lumas[22], "frames scaled exactly as the chunk alone")
 	assert.Equal(t, alone(parts[1], 15), lumas[40], "the frame selected after the change is the right one")
+}
+
+// TestFFmpegDecodeToneMap decodes a bright PQ clip with and without tone
+// mapping: a PQ code value of 70% (about 1 000 cd/m²) is far above SDR
+// white, and the perceptual mapping brings it into the SDR range, which a
+// plain decode leaves at its PQ code value.
+func TestFFmpegDecodeToneMap(
+	t *testing.T,
+) {
+	clip := testutil.HDRClip(media.TransferPQ)
+	clip.Source, clip.Seconds = "color", 0.2
+	clip.Filter = "drawbox=c=0xB3B3B3:t=fill," + clip.Filter
+	path := testutil.Generate(t, clip)
+
+	testCases := []struct {
+		name    string
+		toneMap *ToneMap
+		check   func(t *testing.T, luma float64)
+	}{
+		{
+			name: "pq code values untouched",
+			check: func(t *testing.T, luma float64) {
+				assert.InDelta(t, 64+0.7*876, luma, 8)
+			},
+		},
+		{
+			name:    "tone mapped to sdr",
+			toneMap: &ToneMap{Input: media.Color{Transfer: media.TransferPQ}},
+			check: func(t *testing.T, luma float64) {
+				// About 1 000 cd/m² maps near SDR white (852 measured):
+				// far from its PQ code value, within the SDR range.
+				assert.Greater(t, luma, 64+0.85*876)
+				assert.LessOrEqual(t, luma, 940.0)
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			pool := frame.NewPool(clipWidth, clipHeight, frame.PoolOptions{Chroma: true, HighBitDepth: true})
+			req := Request{
+				Path: path, Pool: pool, SourceWidth: clipWidth, SourceHeight: clipHeight,
+				FrameRate: clipRate, MaxFrames: 1, ToneMap: testCase.toneMap,
+			}
+
+			var luma float64
+
+			decodeAll(t, req, func(f *frame.Frame) {
+				luma = float64(f.Luma.Uint16()[clipWidth*clipHeight/2+clipWidth/2])
+			})
+			testCase.check(t, luma)
+		})
+	}
+}
+
+// TestReadFramesSampled reads two frames of a sampling pool: the 8-bit luma
+// from one output, the 10-bit grid from the other.
+func TestReadFramesSampled(
+	t *testing.T,
+) {
+	pool := frame.NewPool(4, 2, frame.PoolOptions{SampleStep: 2})
+	luma := []byte{1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18}
+
+	var grid []byte
+	for v := range 12 {
+		grid = append(grid, byte(v+1), 3) // 2 points × 3 planes × 2 frames, 0x03xx
+	}
+
+	var got [][2]uint16
+
+	err := readFrames(Request{Pool: pool}, sampledReader(bytes.NewReader(luma), bytes.NewReader(grid), pool), func(f *frame.Frame) error {
+		defer f.Release()
+
+		got = append(got, [2]uint16{uint16(f.Luma.Pix[0]), f.Samples.Cr.Uint16()[1]})
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, [][2]uint16{{1, 0x0306}, {11, 0x030c}}, got)
+}
+
+// TestFFmpegDecodeSampleGridPoints decodes a frame whose every sample
+// codes its position: the grid holds the luma pixel at the centre of each
+// 4×4 cell and the chroma sample covering it, untouched.
+func TestFFmpegDecodeSampleGridPoints(
+	t *testing.T,
+) {
+	testutil.RequireFFmpeg(t)
+
+	const width, height = 32, 16
+
+	var raw []byte
+	put := func(v int) { raw = append(raw, byte(v), byte(v>>8)) }
+
+	for y := range height {
+		for x := range width {
+			put(64*y + x)
+		}
+	}
+
+	for plane := range 2 {
+		for y := range height / 2 {
+			for x := range width / 2 {
+				put(500*plane + 16*y + x)
+			}
+		}
+	}
+
+	dir := t.TempDir()
+	rawPath, path := filepath.Join(dir, "frame.yuv"), filepath.Join(dir, "frame.nut")
+	require.NoError(t, os.WriteFile(rawPath, raw, 0o600))
+
+	out, err := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "yuv420p10le",
+		"-s", fmt.Sprintf("%dx%d", width, height), "-i", rawPath, "-c:v", "rawvideo", path).CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	pool := frame.NewPool(width, height, frame.PoolOptions{SampleStep: 4})
+	req := Request{Path: path, Pool: pool, SourceWidth: width, SourceHeight: height, FrameRate: clipRate}
+
+	decodeAll(t, req, func(f *frame.Frame) {
+		ys, cbs, crs := f.Samples.Y.Uint16(), f.Samples.Cb.Uint16(), f.Samples.Cr.Uint16()
+
+		for j := range 4 {
+			for i := range 8 {
+				k := j*8 + i
+				assert.Equal(t, 64*(4*j+2)+4*i+2, int(ys[k]), "luma of point (%d, %d)", i, j)
+				assert.Equal(t, 16*(2*j+1)+2*i+1, int(cbs[k]), "Cb of point (%d, %d)", i, j)
+				assert.Equal(t, 500+16*(2*j+1)+2*i+1, int(crs[k]), "Cr of point (%d, %d)", i, j)
+			}
+		}
+	})
 }

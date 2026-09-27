@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,30 @@ func TestGenerate(
 			info, err := os.Stat(path)
 			require.NoError(t, err)
 			assert.Positive(t, info.Size())
+		})
+	}
+}
+
+func TestHDRClip(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name     string
+		transfer string
+		hdr10    bool
+	}{
+		{name: "pq carries hdr10 metadata", transfer: "smpte2084", hdr10: true},
+		{name: "hlg", transfer: "arib-std-b67"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			clip := HDRClip(testCase.transfer)
+
+			assert.Equal(t, "libx265", clip.Codec)
+			assert.Equal(t, "yuv420p10le", clip.PixelFormat)
+			assert.Contains(t, clip.Filter, "color_trc="+testCase.transfer)
+			assert.Equal(t, testCase.hdr10, strings.Contains(strings.Join(clip.Args, " "), "master-display"))
 		})
 	}
 }

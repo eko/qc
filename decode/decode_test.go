@@ -125,6 +125,29 @@ func TestFilters(
 			},
 			want: "scale=320:180:flags=bicubic,format=yuv420p10le",
 		},
+
+		{
+			name: "hlg tone mapped with its own tags",
+			req: Request{
+				Pool:        frame.NewPool(320, 180, frame.PoolOptions{Chroma: true, HighBitDepth: true}),
+				SourceWidth: 320, SourceHeight: 180,
+				ToneMap: &ToneMap{Input: media.Color{
+					Transfer: media.TransferHLG, Primaries: "bt2020", Space: "bt2020nc", Range: "pc",
+				}},
+			},
+			want: "scale=320:180:flags=bicubic:in_transfer=arib-std-b67:in_primaries=bt2020:in_color_matrix=bt2020nc:" +
+				"in_range=pc:out_transfer=bt709:out_primaries=bt709:out_color_matrix=bt709:out_range=tv:intent=perceptual," +
+				"format=yuv420p10le",
+		},
+		{
+			name: "luma pools are not tone mapped",
+			req: Request{
+				Pool:        frame.NewPool(320, 180, frame.PoolOptions{}),
+				SourceWidth: 320, SourceHeight: 180,
+				ToneMap: &ToneMap{Input: media.Color{Transfer: media.TransferPQ}},
+			},
+			want: "extractplanes=y,scale=320:180:flags=bicubic,format=gray",
+		},
 	}
 
 	for _, testCase := range testCases {

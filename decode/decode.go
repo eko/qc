@@ -59,6 +59,9 @@ type Request struct {
 	// Codec is the ffprobe codec name of the video, when known: hardware
 	// decoding is only tried for codecs NVDEC decodes.
 	Codec string
+	// ToneMap, when set, converts HDR frames to SDR while scaling (pools
+	// with chroma only, see ToneMap).
+	ToneMap *ToneMap
 }
 
 // FFmpeg decodes with an ffmpeg subprocess writing raw planes to a pipe, as
@@ -114,9 +117,7 @@ func (d *FFmpeg) Decode(
 			return fn(f)
 		}
 
-		err := ffexec.Stream(ctx, d.bin, d.args(req, mode), func(r io.Reader) error {
-			return readFrames(r, req, count)
-		})
+		err := d.run(ctx, req, mode, count)
 
 		switch {
 		case err == nil:
@@ -131,8 +132,28 @@ func (d *FFmpeg) Decode(
 	}
 }
 
-// args builds the ffmpeg command line decoding req in mode.
-func (d *FFmpeg) args(
+// run runs one ffmpeg decode of req in mode. A sampling pool takes two
+// outputs of one decode (see sampledArgs).
+func (d *FFmpeg) run(
+	ctx context.Context,
+	req Request,
+	mode HWAccel,
+	fn func(*frame.Frame) error,
+) error {
+	if req.Pool.SampleStep() > 0 {
+		return ffexec.StreamPair(ctx, d.bin, d.sampledArgs(req, mode), func(luma, grid io.Reader) error {
+			return readFrames(req, sampledReader(luma, grid, req.Pool), fn)
+		})
+	}
+
+	return ffexec.Stream(ctx, d.bin, d.args(req, mode), func(r io.Reader) error {
+		return readFrames(req, planeReader(r, req.Pool), fn)
+	})
+}
+
+// inputArgs are the arguments before the input file: log level, threads,
+// hardware decoding and the seek.
+func (d *FFmpeg) inputArgs(
 	req Request,
 	mode HWAccel,
 ) []string {
@@ -150,6 +171,16 @@ func (d *FFmpeg) args(
 		seek := req.Start.Seconds() - frameDuration(req.FrameRate)/2
 		args = append(args, "-ss", strconv.FormatFloat(max(seek, 0), 'f', seekDecimals, 64))
 	}
+
+	return args
+}
+
+// args builds the ffmpeg command line decoding req in mode.
+func (d *FFmpeg) args(
+	req Request,
+	mode HWAccel,
+) []string {
+	args := d.inputArgs(req, mode)
 
 	chain := filters(req)
 	if mode == HWAccelCUDAScale {
@@ -206,7 +237,7 @@ func filters(
 	// and the scale keeps every frame at the pool's size. Frames already at
 	// that size and format pass through untouched (vf_scale's passthrough),
 	// so measurements stay bit-exact.
-	chain = append(chain, fmt.Sprintf("scale=%d:%d:flags=bicubic", pool.Width(), pool.Height()))
+	chain = append(chain, scaleFilter(req))
 
 	switch {
 	case pool.Chroma() && pool.HighBitDepth():
@@ -271,12 +302,12 @@ func frameDuration(
 // errTooManyFrames reports that ffmpeg piped more frames than selected.
 var errTooManyFrames = errors.New("more frames than selected")
 
-// readFrames reads raw frames from r until EOF, numbers and timestamps them,
+// readFrames reads raw frames with read until EOF, numbers and timestamps them,
 // and hands them to fn. The k-th piped frame is the k-th decoded frame, or
 // the k-th selected one when req.Select is set.
 func readFrames(
-	r io.Reader,
 	req Request,
+	read func(*frame.Frame) error,
 	fn func(*frame.Frame) error,
 ) error {
 	step := frameDuration(req.FrameRate)
@@ -285,7 +316,7 @@ func readFrames(
 	for k := 0; ; k++ {
 		f := req.Pool.Get()
 
-		if err := readPlanes(r, req.Pool.Planes(f)); err != nil {
+		if err := read(f); err != nil {
 			f.Release()
 
 			if errors.Is(err, io.EOF) {
@@ -314,6 +345,17 @@ func readFrames(
 		if err := fn(f); err != nil {
 			return err
 		}
+	}
+}
+
+// planeReader reads the raw frames of r straight into the planes of pooled
+// frames.
+func planeReader(
+	r io.Reader,
+	pool *frame.Pool,
+) func(*frame.Frame) error {
+	return func(f *frame.Frame) error {
+		return readPlanes(r, pool.Planes(f))
 	}
 }
 

@@ -35,6 +35,8 @@ type build struct {
 	digestReport *analysis.Report
 	workDir      string
 	video        media.VideoStream
+	// signal is the colour signal of every encode (HDR sources).
+	signal encode.Signal
 
 	// probing records how the probes were placed.
 	probing ProbingReport
@@ -377,7 +379,7 @@ func (b *build) params(
 		Width: p.Width, Height: p.Height, CRF: p.CRF, Preset: b.opts.Preset,
 		GOP:     b.gop(),
 		MaxRate: rate.MaxRate, BufSize: rate.BufSize,
-		BitDepth: b.opts.BitDepth, FilmGrain: b.grain,
+		BitDepth: b.opts.BitDepth, FilmGrain: b.grain, Signal: b.signal,
 	}
 }
 
@@ -403,13 +405,17 @@ func (b *build) score(
 	q := quality.Options{
 		Model: b.opts.Model, ModelDirs: b.opts.ModelDirs, Precision: b.opts.Precision,
 		InitialClips: b.opts.ProbeClips, Budget: true, MaxShare: probeShare, Backend: b.opts.Backend,
+		HDRMetric: b.opts.HDRMetric, SkipHDRMetrics: true,
 	}
 
 	switch mode {
 	case scoreRung:
-		q.Metrics, q.Devices = b.opts.Metrics, b.opts.Devices
+		q.Metrics, q.Devices, q.SkipHDRMetrics = b.opts.Metrics, b.opts.Devices, false
 	case scoreExact:
-		q = quality.Options{Model: b.opts.Model, ModelDirs: b.opts.ModelDirs, Exact: true, Backend: b.opts.Backend}
+		q = quality.Options{
+			Model: b.opts.Model, ModelDirs: b.opts.ModelDirs, Exact: true, Backend: b.opts.Backend,
+			HDRMetric: b.opts.HDRMetric, SkipHDRMetrics: true,
+		}
 	}
 
 	cmp, err := b.engine.inspector.Compare(ctx, b.reference, path, analysis.CompareOptions{Reference: b.referenceReport, Quality: q})

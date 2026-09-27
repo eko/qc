@@ -55,7 +55,8 @@ func (a *Analyzer) Compare(
 
 	stop := timings.track("inspect")
 
-	if err := a.inspectPair(ctx, refPath, distPath, opts, cmp); err != nil {
+	deferred, err := a.inspectPair(ctx, refPath, distPath, opts, cmp)
+	if err != nil {
 		return nil, fmt.Errorf("compare %s to %s: %w", distPath, refPath, err)
 	}
 
@@ -66,12 +67,31 @@ func (a *Analyzer) Compare(
 
 	stop = timings.track("vmaf")
 
-	result, err := a.meter.Measure(ctx,
-		quality.Input{Path: refPath, Video: refVideo, Bitstream: cmp.Reference.Bitstream},
-		quality.Input{Path: distPath, Video: distVideo, Bitstream: cmp.Distorted.Bitstream},
-		qualityOptions(opts),
-	)
-	if err != nil {
+	group, gctx := errgroup.WithContext(ctx)
+
+	var result *quality.Result
+
+	group.Go(func() (err error) {
+		result, err = a.meter.Measure(gctx,
+			quality.Input{Path: refPath, Video: refVideo, Bitstream: cmp.Reference.Bitstream},
+			quality.Input{Path: distPath, Video: distVideo, Bitstream: cmp.Distorted.Bitstream},
+			qualityOptions(opts),
+		)
+
+		return err
+	})
+
+	// The measurement needs the colour of the videos, not their HDR
+	// metadata: the first frames are read meanwhile.
+	for _, report := range deferred {
+		group.Go(func() (err error) {
+			report.Info, err = a.completeHDR(gctx, report.Info)
+
+			return err
+		})
+	}
+
+	if err := group.Wait(); err != nil {
 		return nil, fmt.Errorf("compare %s to %s: %w", distPath, refPath, err)
 	}
 
@@ -84,14 +104,17 @@ func (a *Analyzer) Compare(
 }
 
 // inspectPair inspects the reference (unless opts carries it) and the
-// distorted file concurrently, filling cmp.Reference and cmp.Distorted.
+// distorted file concurrently, filling cmp.Reference and cmp.Distorted. It
+// returns the reports it inspected, whose first frame's HDR metadata is
+// still to read (see HDRProber).
 func (a *Analyzer) inspectPair(
 	ctx context.Context,
 	refPath, distPath string,
 	opts CompareOptions,
 	cmp *Comparison,
-) error {
-	inspectOpts := Options{Bitstream: opts.Bitstream, SkipVideo: true}
+) ([]*Report, error) {
+	_, canDefer := a.prober.(HDRProber)
+	inspectOpts := Options{Bitstream: opts.Bitstream, SkipVideo: true, DeferHDRMetadata: canDefer}
 
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -117,7 +140,21 @@ func (a *Analyzer) inspectPair(
 		})
 	}
 
-	return group.Wait()
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	var deferred []*Report
+
+	if canDefer && opts.Reference == nil {
+		deferred = append(deferred, cmp.Reference)
+	}
+
+	if canDefer && opts.Distorted == nil {
+		deferred = append(deferred, cmp.Distorted)
+	}
+
+	return deferred, nil
 }
 
 // qualityOptions are the measurement options of a comparison: a fixed

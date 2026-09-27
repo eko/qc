@@ -75,6 +75,25 @@ func TestWizardAnswersRunArgs(
 			},
 			want: []string{"source.mov", "--codecs=hevc", "--skip-analysis"},
 		},
+		{
+			name: "hdr tone mapping",
+			answers: wizardAnswers{
+				Source:    "hdr.mov",
+				Actions:   []string{actionLadder},
+				Codecs:    []string{"hevc"},
+				HDRMetric: "tonemap",
+			},
+			want: []string{"hdr.mov", "--codecs=hevc", "--skip-analysis", "--hdr-metric", "tonemap"},
+		},
+		{
+			name: "hdr default metric and tone mapping without vmaf are left out",
+			answers: wizardAnswers{
+				Source:    "hdr.mov",
+				Actions:   []string{actionAnalysis},
+				HDRMetric: "tonemap",
+			},
+			want: []string{"hdr.mov", "--codecs="},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -246,7 +265,7 @@ func TestRunWizard(
 			env := environment{
 				wizard: true,
 				width:  defaultWidth,
-				askWizard: func(bool) (wizardAnswers, error) {
+				askWizard: func(wizardContext) (wizardAnswers, error) {
 					return testCase.answers, testCase.err
 				},
 			}
@@ -277,4 +296,24 @@ func TestWizardBrand(
 	assert.Equal(t, brandOrange, theme.Focused.Title.GetForeground())
 	assert.Equal(t, brandOrange, theme.Group.Title.GetForeground())
 	assert.Equal(t, brandOrange, theme.Focused.FocusedButton.GetBackground())
+}
+
+func TestWizardInvalidConfiguration(
+	t *testing.T,
+) {
+	t.Setenv("QC_CONFIG", filepath.Join(t.TempDir(), "missing.yaml"))
+
+	env := environment{
+		wizard: true,
+		width:  defaultWidth,
+		askWizard: func(wizardContext) (wizardAnswers, error) {
+			return wizardAnswers{}, errors.New("not asked")
+		},
+	}
+
+	code, _, stderr := execute(t, env)
+
+	assert.Equal(t, 1, code)
+	assert.Contains(t, stderr, "missing.yaml")
+	assert.NotContains(t, stderr, "not asked")
 }

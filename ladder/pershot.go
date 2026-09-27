@@ -354,7 +354,7 @@ func (b *build) allocateRung(
 
 	ps.Command = b.codec.ChunkCommandLine(b.source, fmt.Sprintf("%02d-%dp-pershot.mp4", i+1, r.Height), b.video.AvgFrameRate,
 		ps.Chunks, encode.Params{Width: r.Width, Height: r.Height, Preset: b.opts.Preset, GOP: b.gop(),
-			MaxRate: r.MaxRate, BufSize: r.BufSize, BitDepth: b.opts.BitDepth})
+			MaxRate: r.MaxRate, BufSize: r.BufSize, BitDepth: b.opts.BitDepth, Signal: b.signal})
 
 	r.PerShot = ps
 

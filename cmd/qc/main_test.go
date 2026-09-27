@@ -345,6 +345,7 @@ func TestLoadConfigFromEnvironment(
 		Parallel:    2,
 		BitDepth:    8,
 		Probing:     ladder.ProbingAdaptive,
+		HDRMetric:   quality.HDRMetricPQ,
 	}, opts.Ladder, "the rungs get the metrics and devices of the comparison")
 	assert.Equal(t, quality.Options{
 		Model:     "auto",
@@ -353,6 +354,7 @@ func TestLoadConfigFromEnvironment(
 		MaxShare:  0.4,
 		Metrics:   []string{quality.MetricXPSNR, quality.MetricCAMBI, quality.MetricPSNR},
 		Devices:   []string{vmaf.DevicePhone, vmaf.Device4K},
+		HDRMetric: quality.HDRMetricPQ,
 	}, opts.Quality)
 }
 

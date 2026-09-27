@@ -11,7 +11,10 @@ scored in one round and the report gives the interval they reach (see
 
 The same frames also feed other metrics (XPSNR, CAMBI, PSNR, PSNR-HVS, SSIM,
 MS-SSIM, CIEDE2000) and the VMAF of other viewing devices, each reported with
-its own interval: see [section 5](#5-other-metrics-and-devices).
+its own interval: see [section 5](#5-other-metrics-and-devices). HDR (PQ,
+HLG) references also get wPSNR and ΔE ITP, and VMAF is labelled as not
+HDR-calibrated or scored on an SDR tone mapping (`--hdr-metric`): see
+[HDR references](#hdr-references) and [hdr.md](hdr.md).
 
 ## 1. Scoring setup
 
@@ -39,7 +42,11 @@ instead of 88.2 on the test clip). Frame rates must match.
 Frames are scored at 10 bits when either video has more than 8 bits
 (`--vmaf-bit-depth` overrides). Netflix recommends 10-bit input for v1 so that
 CAMBI sees banding. In that case ffmpeg outputs `yuv420p10le`, frames carry
-16-bit samples, and pictures are handed to libvmaf with `bpc = 10`.
+16-bit samples, and pictures are handed to libvmaf with `bpc = 10`. The
+scale filter converts neither range, matrix, primaries nor transfer (YUV to
+YUV): PQ and HLG code values reach libvmaf untouched (bit-exact with a plain
+decode at the same size), unless `--hdr-metric tonemap` asks for an SDR
+tone mapping.
 
 ### The binding (`vmaf`)
 
@@ -357,6 +364,8 @@ without decoding anything again.
 | `ms-ssim` | `ms_ssim` | libvmaf `float_ms_ssim` | 260 ms (4×) |
 | `ciede2000` | `ciede2000` | libvmaf `ciede` | 620 ms (9×) |
 | `--devices phone` | `vmaf_phone` | a second model in the same context | 41 ms (65%) |
+| automatic on PQ references | `wpsnr_y`, `wpsnr_cb`, `wpsnr_cr` | Go (`quality/hdr`), JVET HDR CTC | 2–4 ms |
+| automatic on PQ and HLG references | `deltae_itp`, `deltae_itp_p99` | Go (`quality/hdr`), ITU-R BT.2124 | 4–6 ms |
 
 Costs are single-thread CPU time on an M2 Max, 8-bit frames, next to VMAF v1
 (`vmaf_v1.0.16_3d0h`: 63 ms per frame). The default is `xpsnr,cambi,psnr`:
@@ -438,6 +447,19 @@ identical frames are capped at 100 dB.
 (arXiv:2605.15800, computed with libvmaf there too): PSNR Y, Cb, Cr and the
 weighted **PSNR-YUV with 4:2:0 weights 7/8, 1/16, 1/16 (14:1:1)**, applied
 to each frame's dB values, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, VMAF and CAMBI.
+
+### HDR references
+
+A PQ or HLG reference adds the HDR metrics to every measurement (verified
+ladder rungs included, probes excepted): wPSNR per plane (PQ only), the
+luma-weighted PSNR of the JVET HDR test conditions, and the mean and
+per-frame 99th percentile of ΔE ITP (BT.2124). They cost 7–14 ms per 1080p
+frame, 8–16% of libvmaf's CPU; +6% on the wall time of a comparison. The
+result says how VMAF was scored (`hdr`: `transfer`, `metric`,
+`vmafCalibrated`, `note`): on the HDR signal (`--hdr-metric pq`, the
+default, not calibrated for PQ), or on an SDR tone mapping of both videos
+(`tonemap`, slower: the HDR metrics then need a second decode of the scored
+clips). Formulas, validation and costs: [hdr.md](hdr.md).
 
 ### Devices
 

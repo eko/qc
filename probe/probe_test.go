@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -255,4 +257,175 @@ func TestFFprobeProbe(
 	assert.Equal(t, 8, video.BitDepth)
 	assert.Equal(t, media.Rational{Num: 25, Den: 1}, video.AvgFrameRate)
 	assert.Equal(t, media.DynamicRangeSDR, video.HDR.DynamicRange)
+}
+
+func TestFFprobeFirstFrame(
+	t *testing.T,
+) {
+	const (
+		pqStream  = `{"streams":[{"index":1,"codec_type":"video","color_transfer":"smpte2084"}]}`
+		sdrStream = `{"streams":[{"index":0,"codec_type":"video","color_transfer":"bt709"}]}`
+		hdrFrame  = `{"frames":[{"side_data_list":[` +
+			`{"side_data_type":"Mastering display metadata","red_x":"34000/50000","red_y":"16000/50000",` +
+			`"green_x":"13250/50000","green_y":"34500/50000","blue_x":"7500/50000","blue_y":"3000/50000",` +
+			`"white_point_x":"15635/50000","white_point_y":"16450/50000",` +
+			`"min_luminance":"1/10000","max_luminance":"10000000/10000"},` +
+			`{"side_data_type":"Content light level metadata","max_content":1567,"max_average":972}]}]}`
+		hdr10PlusFrame = `{"frames":[{"side_data_list":[` +
+			`{"side_data_type":"HDR Dynamic Metadata SMPTE2094-40 (HDR10+)"}]}]}`
+	)
+
+	errFrame := errors.New("frame probe failed")
+
+	testCases := []struct {
+		name      string
+		stream    string
+		frame     string
+		frameErr  error
+		wantCalls int
+		wantRange media.DynamicRange
+		wantErr   string
+		check     func(t *testing.T, hdr media.HDR)
+	}{
+		{
+			name: "sdr needs no frame", stream: sdrStream, wantCalls: 1, wantRange: media.DynamicRangeSDR,
+		},
+		{
+			name: "hdr10 metadata in the bitstream", stream: pqStream, frame: hdrFrame, wantCalls: 2,
+			wantRange: media.DynamicRangeHDR10,
+			check: func(t *testing.T, hdr media.HDR) {
+				require.NotNil(t, hdr.MasteringDisplay)
+				assert.InDelta(t, 0.68, hdr.MasteringDisplay.Red.X, 1e-9)
+				assert.InDelta(t, 0.69, hdr.MasteringDisplay.Green.Y, 1e-9)
+				assert.InDelta(t, 0.06, hdr.MasteringDisplay.Blue.Y, 1e-9)
+				assert.InDelta(t, 0.3127, hdr.MasteringDisplay.WhitePoint.X, 1e-9)
+				assert.InDelta(t, 0.0001, hdr.MasteringDisplay.MinLuminance, 1e-12)
+				require.NotNil(t, hdr.ContentLightLevel)
+				assert.Equal(t, media.ContentLightLevel{MaxCLL: 1567, MaxFALL: 972}, *hdr.ContentLightLevel)
+			},
+		},
+		{
+			name: "hdr10+ dynamic metadata", stream: pqStream, frame: hdr10PlusFrame, wantCalls: 2,
+			wantRange: media.DynamicRangeHDR10Plus,
+			check: func(t *testing.T, hdr media.HDR) {
+				assert.True(t, hdr.HDR10Plus)
+			},
+		},
+		{name: "frame probe failure", stream: pqStream, frameErr: errFrame, wantErr: "first frame: frame probe failed"},
+		{name: "unparsable frame output", stream: pqStream, frame: "{", wantErr: "decode ffprobe frame json"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			calls := 0
+			prober := NewFFprobe("ffprobe")
+			prober.output = func(_ context.Context, _ string, args []string) ([]byte, error) {
+				calls++
+				if calls == 1 {
+					return []byte(testCase.stream), nil
+				}
+
+				assert.Contains(t, args, "-show_frames")
+				assert.Contains(t, args, "1")
+
+				return []byte(testCase.frame), testCase.frameErr
+			}
+
+			info, err := prober.Probe(t.Context(), "in.mp4")
+			if testCase.wantErr != "" {
+				require.ErrorContains(t, err, testCase.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, testCase.wantCalls, calls)
+			assert.Equal(t, testCase.wantRange, info.Video[0].HDR.DynamicRange)
+
+			if testCase.check != nil {
+				testCase.check(t, info.Video[0].HDR)
+			}
+		})
+	}
+}
+
+func TestFFprobeProbeHDR(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name      string
+		transfer  string
+		wantRange media.DynamicRange
+	}{
+		{name: "hdr10 from the sei of an mp4", transfer: media.TransferPQ, wantRange: media.DynamicRangeHDR10},
+		{name: "hlg", transfer: media.TransferHLG, wantRange: media.DynamicRangeHLG},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			clip := testutil.HDRClip(testCase.transfer)
+			clip.Seconds = 0.4
+			path := testutil.Generate(t, clip)
+
+			info, err := NewFFprobe("ffprobe").Probe(t.Context(), path)
+			require.NoError(t, err)
+
+			video := info.Video[0]
+			assert.Equal(t, testCase.wantRange, video.HDR.DynamicRange)
+			assert.True(t, video.MeasurableHDR())
+			assert.Equal(t, "bt2020", video.Color.Primaries)
+			assert.Equal(t, 10, video.BitDepth)
+		})
+	}
+}
+
+func TestFFprobeFirstFrameWithoutVideo(
+	t *testing.T,
+) {
+	calls := 0
+	prober := NewFFprobe("ffprobe")
+	prober.output = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+
+		return []byte(`{"streams":[{"codec_type":"audio"}]}`), nil
+	}
+
+	info, err := prober.Probe(t.Context(), "in.m4a")
+	require.NoError(t, err)
+	assert.Empty(t, info.Video)
+	assert.Equal(t, 1, calls)
+}
+
+func TestFFprobeFirstFrameIsCachedPerFileVersion(
+	t *testing.T,
+) {
+	path := filepath.Join(t.TempDir(), "hdr.mp4")
+	require.NoError(t, os.WriteFile(path, []byte("v1"), 0o600))
+
+	frameCalls := 0
+	prober := NewFFprobe("ffprobe")
+	prober.output = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		if slices.Contains(args, "-show_frames") {
+			frameCalls++
+
+			return []byte(`{"frames":[{"side_data_list":[{"side_data_type":"Content light level metadata","max_content":1000,"max_average":400}]}]}`), nil
+		}
+
+		return []byte(`{"streams":[{"index":0,"codec_type":"video","color_transfer":"smpte2084"}]}`), nil
+	}
+
+	probeCLL := func() int {
+		info, err := prober.Probe(t.Context(), path)
+		require.NoError(t, err)
+
+		return info.Video[0].HDR.ContentLightLevel.MaxCLL
+	}
+
+	assert.Equal(t, 1000, probeCLL())
+	assert.Equal(t, 1000, probeCLL())
+	assert.Equal(t, 1, frameCalls, "the same file is probed once")
+
+	require.NoError(t, os.WriteFile(path, []byte("version 2"), 0o600))
+	assert.Equal(t, 1000, probeCLL())
+	assert.Equal(t, 2, frameCalls, "a changed file is probed again")
 }

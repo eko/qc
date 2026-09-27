@@ -69,10 +69,13 @@ single-width, so layouts stay aligned in every terminal.
    - shape: automatic, a number of rungs, or one rung per listed resolution;
    - top and minimum VMAF;
    - bitrate cap (kb/s), encoder preset, 8 or 10-bit, verification on or off;
-5. when an NVIDIA GPU is usable with the ffmpeg in use (`QC_FFMPEG`, the
+5. when the picked video (or the reference) is HDR and VMAF is measured, how
+   VMAF scores it: on the HDR signal or on an SDR tone mapping
+   (`--hdr-metric`), with the detected format (HDR10, HLG…) in the question;
+6. when an NVIDIA GPU is usable with the ffmpeg in use (`QC_FFMPEG`, the
    `QC_CONFIG` file or `PATH`; see [GPU](#nvidia-gpu)), whether to use it
    (`--gpu`);
-6. optionally name an HTML report.
+7. optionally name an HTML report.
 
 It prints the equivalent `qc run` command, only with the options that differ
 from the defaults, and runs exactly that command with the dashboard.
@@ -148,6 +151,7 @@ file counts as given, like `--precision`, and conflicts with `--sample`.
 | `--metrics` | xpsnr,cambi,psnr | metrics measured on the frames VMAF decodes, each with its own CI: `xpsnr`, `cambi`, `psnr`, `psnr-hvs`, `ssim`, `ms-ssim`, `ciede2000`; `--metrics=` for VMAF only |
 | `--av2-ctc` | off | add the AOM AV2 CTC set: PSNR Y/Cb/Cr and PSNR-YUV 14:1:1, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI (MS-SSIM and CIEDE2000 cost 4× and 9× VMAF) |
 | `--devices` | none | also score the VMAF v1 model of `phone`, `tv`, `4k` (HFR variants above 30 fps); `4k` against a 1080p primary is a second pass at 2160p |
+| `--hdr-metric` | pq | VMAF on HDR (PQ/HLG) references: `pq` (on the HDR signal, fast, not HDR-calibrated) or `tonemap` (on an SDR BT.709 tone mapping of both videos, slower); HDR references always get wPSNR and ΔE ITP — see [HDR](hdr.md#4-vmaf-on-hdr) |
 
 The costs behind these defaults, and how the primary VMAF is chosen, are in
 [the VMAF engine](vmaf.md#5-other-metrics-and-devices).
@@ -175,6 +179,7 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 | `--per-shot-resolution` | off | experimental, implies `--per-shot`: each shot also picks its resolution among the rung's and the neighbouring rung resolutions; renditions change resolution mid-stream — see [per-shot resolution](ladder.md#per-shot-resolution-experimental) |
 | `--film-grain` | off | AV1 only: `off`, `auto` (detect grain, calibrate the level) or a synthesis level `1`–`50`; fidelity is then scored against a denoised reference; cannot be combined with `--per-shot` on an AV1 ladder — see [film grain](ladder.md#9-film-grain-synthesis-av1) |
 | `--metrics`, `--av2-ctc`, `--devices` (ladder only; `run` shares the VMAF ones) | xpsnr,cambi,psnr | measured on the verification encodes of the rungs, next to VMAF: flags banding-limited rungs and rungs VMAF and XPSNR order differently — see [rung quality](ladder.md#rung-quality) |
+| `--hdr-metric` (ladder only; `run` shares the VMAF one) | pq | how VMAF scores the probes and rungs of an HDR source; HDR sources are always encoded in 10 bits with their colour description and HDR10 metadata — see [HDR ladders](hdr.md#5-hdr-ladders) |
 
 ### NVIDIA GPU
 
@@ -204,7 +209,8 @@ Paste the output of `qc version --check` in bug reports. See
 
 - **Terminal**: cards, a bitrate chart, SI/TI/luma/frame-size sparklines, a
   timeline of shots, black/frozen segments and keyframes, the hardest shots,
-  findings. For VMAF: a score gauge with its interval, and quality over time.
+  findings. HDR videos get a format badge and a light level block (MaxCLL,
+  MaxFALL, peak and average light over time). For VMAF: a score gauge with its interval, and quality over time.
   For ladders: the rate-quality chart, the rung table (predicted vs measured)
   and findings.
 - **JSON** (`schemaVersion` 1): the full results. Durations are in seconds, and
@@ -216,8 +222,8 @@ Paste the output of `qc version --check` in bug reports. See
   - **Header**: key numbers as cards (duration, resolution, codec, bitrate,
     VMAF ± CI, worst frame, rungs, banding) and a findings count linking to
     the findings, listed by severity (warning, note, passed).
-  - **Charts** (bitrate, frame sizes with keyframes, SI/TI, luma, VMAF,
-    CAMBI, rate-quality): hovering shows the exact values at the pointer —
+  - **Charts** (bitrate, frame sizes with keyframes, SI/TI, luma, light
+    levels of HDR videos, VMAF, CAMBI, rate-quality): hovering shows the exact values at the pointer —
     time as hh:mm:ss.mmm and frame number, every series at that time, the
     other metrics of the same frame under VMAF, the black/frozen/banded
     segment under the cursor. Ladder points show bitrate, VMAF (± its

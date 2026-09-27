@@ -133,3 +133,48 @@ func ExampleAnalyzer_Compare_gpu() {
 	fmt.Printf("VMAF %.2f ± %.2f\n", cmp.VMAF.Mean, cmp.VMAF.HalfWidth)
 	fmt.Println(cmp.VMAF.GPUSummary()) // e.g. NVDEC decoding (cuda) · VMAF features on CUDA
 }
+
+// An HDR (PQ or HLG) video also gets its light levels: the CTA-861.3
+// MaxCLL and MaxFALL measured on the decoded frames, next to the values it
+// signals, and a comparison against an HDR reference reports the HDR
+// metrics (wPSNR, ΔE ITP) and how to read VMAF on it.
+func ExampleAnalyzer_Analyze_hdr() {
+	analyzer := exampleAnalyzer()
+
+	report, err := analyzer.Analyze(context.Background(), "hdr10.mov", analysis.Options{})
+	if err != nil {
+		fmt.Println(err)
+
+		return
+	}
+
+	video, _ := report.Info.PrimaryVideo()
+	fmt.Println(video.HDR.DynamicRange) // HDR10, HLG, HDR10+, DolbyVision...
+
+	if l := report.Video.Light; l != nil {
+		fmt.Printf("MaxCLL %.0f (strict %.0f) MaxFALL %.0f cd/m²\n", l.MaxCLLRobust, l.MaxCLL, l.MaxFALL)
+	}
+
+	if cll := video.HDR.ContentLightLevel; cll != nil {
+		fmt.Printf("signalled %d / %d cd/m²\n", cll.MaxCLL, cll.MaxFALL)
+	}
+
+	cmp, err := analyzer.Compare(context.Background(), "hdr10.mov", "encode.mp4", analysis.CompareOptions{
+		Quality: quality.Options{HDRMetric: quality.HDRMetricToneMap}, // VMAF on an SDR tone mapping
+	})
+	if err != nil {
+		fmt.Println(err)
+
+		return
+	}
+
+	for _, name := range []string{quality.SeriesWPSNRY, quality.SeriesDeltaEITP} {
+		if m, ok := cmp.VMAF.Metric(name); ok {
+			fmt.Printf("%s %.2f ± %.2f\n", quality.DescribeSeries(name).Label, m.Mean, m.HalfWidth)
+		}
+	}
+
+	if h := cmp.VMAF.HDR; h != nil {
+		fmt.Println(h.Note)
+	}
+}

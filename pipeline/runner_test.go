@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/analyze/light"
 	"github.com/eko/qc/analyze/siti"
 	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/decode"
@@ -38,6 +39,8 @@ type fakeAnalyzer struct {
 	analysisErr error
 	compareErr  error
 	vmaf        quality.Result
+	// light is the light analysis of an HDR source, nil for SDR.
+	light *light.Result
 
 	analyzed []analysis.Options
 	compared []analysis.CompareOptions
@@ -68,6 +71,7 @@ func (a *fakeAnalyzer) Analyze(
 	report.Video = &analysis.VideoReport{
 		Shots: []analysis.ShotReport{shotAt(0), shotAt(2), shotAt(5)},
 		SITI:  siti.Result{SISummary: stats.Summary{Mean: 42.4}, TISummary: stats.Summary{Mean: 7.6}},
+		Light: a.light,
 	}
 
 	return report, a.analysisErr
@@ -459,4 +463,74 @@ func TestRunIntegration(
 	require.NotNil(t, rep.Analysis.Video)
 	assert.Equal(t, 10, rep.Analysis.Video.FramesDecoded)
 	assert.Equal(t, 10, rep.Comparison.VMAF.FramesScored)
+}
+
+func TestRunPassesMeasuredLight(
+	t *testing.T,
+) {
+	measured := &light.Result{MaxCLL: 4000, MaxCLLRobust: 1521.6, MaxFALL: 972.8}
+	signalled := &media.ContentLightLevel{MaxCLL: 1000, MaxFALL: 400}
+
+	testCases := []struct {
+		name  string
+		light *light.Result
+		opts  Options
+		want  *media.ContentLightLevel
+	}{
+		{
+			name: "robust MaxCLL and MaxFALL of the analysed source", light: measured,
+			opts: Options{Source: "hdr.mov", Codecs: []string{"hevc"}},
+			want: &media.ContentLightLevel{MaxCLL: 1522, MaxFALL: 973},
+		},
+		{
+			name: "sdr: nothing", opts: Options{Source: "sdr.mov", Codecs: []string{"hevc"}},
+		},
+		{
+			name: "another ladder source was not analysed", light: measured,
+			opts: Options{Source: "encode.mp4", LadderSource: "mezzanine.mov", Codecs: []string{"hevc"}},
+		},
+		{
+			name: "the caller's level wins", light: measured,
+			opts: Options{Source: "hdr.mov", Codecs: []string{"hevc"}, Ladder: ladder.Options{ContentLight: signalled}},
+			want: signalled,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ladders := &fakeLadders{rungs: []ladder.Rung{{Height: 720}}}
+
+			_, err := NewRunner(&fakeAnalyzer{light: testCase.light}, ladders).Run(t.Context(), testCase.opts, Hooks{})
+			require.NoError(t, err)
+
+			require.Len(t, ladders.built, 1)
+			assert.Equal(t, testCase.want, ladders.built[0].ContentLight)
+		})
+	}
+}
+
+func TestRunInspectionDefersHDRMetadata(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name string
+		opts Options
+		want bool
+	}{
+		{name: "a frame analysis follows", opts: Options{Source: "hdr.mov"}, want: true},
+		{name: "inspection only", opts: Options{Source: "hdr.mov", SkipAnalysis: true, Reference: "ref.mov"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			analyzer := &fakeAnalyzer{}
+
+			_, err := NewRunner(analyzer, &fakeLadders{}).Run(t.Context(), testCase.opts, Hooks{})
+			require.NoError(t, err)
+
+			require.NotEmpty(t, analyzer.analyzed)
+			assert.True(t, analyzer.analyzed[0].SkipVideo)
+			assert.Equal(t, testCase.want, analyzer.analyzed[0].DeferHDRMetadata)
+		})
+	}
 }

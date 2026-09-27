@@ -30,11 +30,17 @@ func (r *run) configureMetrics() error {
 		return err
 	}
 
-	r.opts.Metrics, r.opts.Devices = metrics, names
+	hdrMetric, err := ParseHDRMetric(string(r.opts.HDRMetric))
+	if err != nil {
+		return err
+	}
+
+	r.opts.Metrics, r.opts.Devices, r.opts.HDRMetric = metrics, names, hdrMetric
 	r.extractors = extractors(metrics)
 	r.xpsnr = slices.Contains(metrics, MetricXPSNR)
 	r.series = metricSeries(metrics, r.spec.Width, r.spec.Height, r.bitDepth)
 	r.modelSeries = []string{""}
+	r.configureHDR()
 
 	fps := r.ref.Video.AvgFrameRate.Float()
 	passes := map[[2]int]int{}
@@ -49,6 +55,27 @@ func (r *run) configureMetrics() error {
 	}
 
 	return nil
+}
+
+// configureHDR plans the HDR metrics of a PQ or HLG reference: on the
+// scored frames, or in a second pass on the HDR frames when VMAF scores
+// tone-mapped ones.
+func (r *run) configureHDR() {
+	if !r.ref.Video.MeasurableHDR() {
+		return
+	}
+
+	r.toneMap = r.opts.HDRMetric == HDRMetricToneMap
+	if r.opts.SkipHDRMetrics {
+		return
+	}
+
+	r.hdr = !r.toneMap
+	r.hdrPass = r.toneMap
+
+	for _, name := range hdrSeriesOf(r.ref.Video.Color.Transfer) {
+		r.series = append(r.series, series{name: name})
+	}
 }
 
 // addDevice plans how a device is scored: as the primary model itself, in
@@ -86,11 +113,6 @@ func (r *run) devicePasses(
 	results []clipResult,
 	workers, threads int,
 ) error {
-	clips := make([]clip, len(results))
-	for i, cr := range results {
-		clips[i] = cr.clip
-	}
-
 	for _, pass := range r.passes {
 		sub := &run{
 			meter:    r.meter,
@@ -110,27 +132,68 @@ func (r *run) devicePasses(
 			sub.modelSeries = append(sub.modelSeries, d.series)
 		}
 
-		scored, err := sub.score(ctx, clips, workers, threads, 0)
-		if err != nil {
+		if err := r.mergePass(ctx, sub, results, workers, threads); err != nil {
 			return err
 		}
-
-		for i, cr := range scored {
-			for name, values := range cr.values {
-				results[i].values[name] = values
-			}
-		}
-
-		r.mu.Lock()
-		r.decoded += sub.decoded
-
-		for plan, count := range sub.plans {
-			r.plans[plan] += count
-		}
-		r.mu.Unlock()
 	}
 
 	return nil
+}
+
+// mergePass scores the clips of results in the extra pass sub and adds its
+// series to results, its decoded frames and plans to r's.
+func (r *run) mergePass(
+	ctx context.Context,
+	sub *run,
+	results []clipResult,
+	workers, threads int,
+) error {
+	clips := make([]clip, len(results))
+	for i, cr := range results {
+		clips[i] = cr.clip
+	}
+
+	scored, err := sub.score(ctx, clips, workers, threads, 0)
+	if err != nil {
+		return err
+	}
+
+	for i, cr := range scored {
+		for name, values := range cr.values {
+			results[i].values[name] = values
+		}
+	}
+
+	r.mu.Lock()
+	r.decoded += sub.decoded
+
+	for plan, count := range sub.plans {
+		r.plans[plan] += count
+	}
+	r.mu.Unlock()
+
+	return nil
+}
+
+// hdrMetricsPass measures the HDR metrics of the clips of results on the
+// HDR frames, in a second decode of the same clips: VMAF scored tone-mapped
+// frames (HDRMetricToneMap), and wPSNR and ΔE ITP must see the HDR signal.
+func (r *run) hdrMetricsPass(
+	ctx context.Context,
+	results []clipResult,
+	workers, threads int,
+) error {
+	if !r.hdrPass {
+		return nil
+	}
+
+	sub := &run{
+		meter: r.meter, ref: r.ref, dist: r.dist, spec: r.spec, opts: r.opts,
+		n: r.n, bitDepth: r.bitDepth, backend: r.backend, plans: map[string]int{}, hdr: true,
+	}
+	sub.opts.Progress = nil
+
+	return r.mergePass(ctx, sub, results, workers, threads)
 }
 
 // addMetrics estimates every metric and device series from the clips of

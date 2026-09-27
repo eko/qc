@@ -44,6 +44,9 @@ type Result struct {
 	Devices []DeviceResult `json:"devices,omitempty"`
 	// Banding lists the banded segments when CAMBI is measured.
 	Banding *Banding `json:"banding,omitempty"`
+	// HDR tells how VMAF was scored on a PQ or HLG reference, and how to
+	// read it; nil for SDR.
+	HDR *HDRReport `json:"hdr,omitempty"`
 	// Backend is "cuda" when the model features were extracted on an
 	// NVIDIA GPU, empty on the CPU.
 	Backend string `json:"backend,omitempty"`
@@ -135,6 +138,7 @@ func (r *run) result(
 		Backend:       backendName(r.backend.Backend),
 		BackendNote:   r.backend.Reason,
 		HWAccel:       hwAccel(r.meter.decoder),
+		HDR:           hdrReport(r.ref.Video, r.opts.HDRMetric),
 	}
 
 	var all []float64

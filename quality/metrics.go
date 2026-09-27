@@ -180,6 +180,7 @@ func (s series) report(
 // headlineSeries are the series that sum a metric up in one number.
 var headlineSeries = []string{
 	SeriesXPSNRY, SeriesPSNRY, SeriesPSNRHVS, SeriesSSIM, SeriesMSSSIM, SeriesCIEDE2000, SeriesCAMBI,
+	SeriesWPSNRY, SeriesDeltaEITP,
 }
 
 // HeadlineSeries returns the series that sum a metric up in one number, in
@@ -506,18 +507,23 @@ type SeriesInfo struct {
 
 // seriesInfo describes the known series.
 var seriesInfo = map[string]SeriesInfo{
-	SeriesXPSNRY:    {Label: "XPSNR Y", Unit: "dB", Decimals: 2},
-	SeriesXPSNRU:    {Label: "XPSNR U", Unit: "dB", Decimals: 2},
-	SeriesXPSNRV:    {Label: "XPSNR V", Unit: "dB", Decimals: 2},
-	SeriesCAMBI:     {Label: "CAMBI (banding)", LowerIsBetter: true, Decimals: 2},
-	SeriesPSNRY:     {Label: "PSNR Y", Unit: "dB", Decimals: 2},
-	SeriesPSNRCb:    {Label: "PSNR Cb", Unit: "dB", Decimals: 2},
-	SeriesPSNRCr:    {Label: "PSNR Cr", Unit: "dB", Decimals: 2},
-	SeriesPSNRYUV:   {Label: "PSNR YUV 14:1:1", Unit: "dB", Decimals: 2},
-	SeriesPSNRHVS:   {Label: "PSNR-HVS", Unit: "dB", Decimals: 2},
-	SeriesSSIM:      {Label: "SSIM", Decimals: 4},
-	SeriesMSSSIM:    {Label: "MS-SSIM", Decimals: 4},
-	SeriesCIEDE2000: {Label: "CIEDE2000", Unit: "dB", Decimals: 2},
+	SeriesXPSNRY:       {Label: "XPSNR Y", Unit: "dB", Decimals: 2},
+	SeriesXPSNRU:       {Label: "XPSNR U", Unit: "dB", Decimals: 2},
+	SeriesXPSNRV:       {Label: "XPSNR V", Unit: "dB", Decimals: 2},
+	SeriesCAMBI:        {Label: "CAMBI (banding)", LowerIsBetter: true, Decimals: 2},
+	SeriesPSNRY:        {Label: "PSNR Y", Unit: "dB", Decimals: 2},
+	SeriesPSNRCb:       {Label: "PSNR Cb", Unit: "dB", Decimals: 2},
+	SeriesPSNRCr:       {Label: "PSNR Cr", Unit: "dB", Decimals: 2},
+	SeriesPSNRYUV:      {Label: "PSNR YUV 14:1:1", Unit: "dB", Decimals: 2},
+	SeriesPSNRHVS:      {Label: "PSNR-HVS", Unit: "dB", Decimals: 2},
+	SeriesSSIM:         {Label: "SSIM", Decimals: 4},
+	SeriesMSSSIM:       {Label: "MS-SSIM", Decimals: 4},
+	SeriesCIEDE2000:    {Label: "CIEDE2000", Unit: "dB", Decimals: 2},
+	SeriesWPSNRY:       {Label: "wPSNR Y", Unit: "dB", Decimals: 2},
+	SeriesWPSNRCb:      {Label: "wPSNR Cb", Unit: "dB", Decimals: 2},
+	SeriesWPSNRCr:      {Label: "wPSNR Cr", Unit: "dB", Decimals: 2},
+	SeriesDeltaEITP:    {Label: "ΔE ITP", LowerIsBetter: true, Decimals: 2},
+	SeriesDeltaEITPP99: {Label: "ΔE ITP p99", LowerIsBetter: true, Decimals: 2},
 }
 
 // DescribeSeries returns how to read a series; unknown names are shown as

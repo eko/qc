@@ -22,9 +22,8 @@ type environment struct {
 	wizard bool
 	// width is the width of the text reports.
 	width int
-	// askWizard runs the interactive wizard form, with the GPU question
-	// when offerGPU.
-	askWizard func(offerGPU bool) (wizardAnswers, error)
+	// askWizard runs the interactive wizard form (see wizardContext).
+	askWizard func(ctx wizardContext) (wizardAnswers, error)
 	// gpuAvailable reports whether the ffmpeg binary can use an NVIDIA GPU
 	// (nvidia.Available); nil offers no GPU.
 	gpuAvailable func(ctx context.Context, ffmpeg string) bool

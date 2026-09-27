@@ -33,6 +33,8 @@ reliability you ask for allows.
   adaptively where the rungs are uncertain, add per-shot rungs, or let AV1
   synthesise film grain; verified rungs are checked for banding and for
   VMAF/XPSNR disagreements.
+- **HDR aware**: HDR10/HLG checked, MaxCLL/MaxFALL measured, wPSNR and ΔE ITP
+  next to VMAF, 10-bit ladders carrying the HDR10 metadata ([HDR](docs/hdr.md)).
 - **A terminal UI you'll enjoy**: a live dashboard with progress, ETA and
   panels that show VMAF converging and probes landing on a braille chart. There
   is also an interactive wizard, plus JSON and self-contained HTML reports.
@@ -103,6 +105,7 @@ content: [docs/validation.md](docs/validation.md).
 - [Architecture](docs/architecture.md)
 - [Technical analysis](docs/analysis.md)
 - [VMAF engine](docs/vmaf.md)
+- [HDR](docs/hdr.md): detection, light levels, HDR metrics, HDR ladders
 - [Ladder engine](docs/ladder.md)
 - [Validation](docs/validation.md)
 - [CLI](docs/cli.md)
@@ -192,7 +195,7 @@ fmt.Println(cmp.VMAF.GPUSummary()) // e.g. "NVDEC decoding (cuda) · VMAF featur
 `quality/xpsnr` also works on its own, on decoded frames, and matches
 ffmpeg's `xpsnr` filter. Runnable examples are on
 [pkg.go.dev](https://pkg.go.dev/github.com/eko/qc) for `analysis`,
-`quality`, `quality/xpsnr`, `ladder`, `pipeline`, `nvidia` and
+`quality`, `quality/xpsnr`, `quality/hdr`, `ladder`, `pipeline`, `nvidia` and
 `vmaf/libvmaf`. To run everything with progress hooks, use
 `pipeline.Runner` as described in
 [docs/architecture.md](docs/architecture.md#library-usage).

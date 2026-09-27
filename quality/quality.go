@@ -114,6 +114,13 @@ type Options struct {
 	// against a 1080p primary, or the reverse) need a second pass on the
 	// same clips at their resolution.
 	Devices []string
+	// HDRMetric is how VMAF is scored on a PQ or HLG reference (default
+	// HDRMetricPQ). Such references also get the HDR metrics (wPSNR, ΔE
+	// ITP, see package quality/hdr) on the scored frames.
+	HDRMetric HDRMetric
+	// SkipHDRMetrics measures VMAF without the HDR metrics on an HDR
+	// reference, as the ladder's probes do: they only shape the curves.
+	SkipHDRMetrics bool
 	// Progress, when set, is called after each scored clip.
 	Progress func(Progress)
 }
@@ -344,7 +351,13 @@ type run struct {
 	// lists their series in report order.
 	extractors []vmaf.Extractor
 	xpsnr      bool
-	series     []series
+	// hdr measures the HDR metrics on the scored frames; toneMap decodes
+	// them tone mapped to SDR (HDRMetricToneMap), and hdrPass measures the
+	// HDR metrics in a second pass on the HDR frames then.
+	hdr     bool
+	toneMap bool
+	hdrPass bool
+	series  []series
 	// devices are the requested devices; passes groups the ones evaluated
 	// at another resolution, one extra pass per resolution.
 	devices []device
@@ -385,6 +398,10 @@ func (r *run) exact(
 	}
 
 	if err := r.devicePasses(ctx, results, 1, runtime.NumCPU()); err != nil {
+		return nil, err
+	}
+
+	if err := r.hdrMetricsPass(ctx, results, 1, runtime.NumCPU()); err != nil {
 		return nil, err
 	}
 
@@ -429,6 +446,10 @@ func (r *run) sampled(
 	}
 
 	if err := r.devicePasses(ctx, out.results, workers, threads); err != nil {
+		return nil, err
+	}
+
+	if err := r.hdrMetricsPass(ctx, out.results, workers, threads); err != nil {
 		return nil, err
 	}
 

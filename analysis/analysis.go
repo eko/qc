@@ -58,6 +58,11 @@ type Options struct {
 	Video     VideoOptions
 	// SkipVideo only runs stage 1 (no decoding).
 	SkipVideo bool
+	// DeferHDRMetadata leaves the HDR metadata of the first frame out of an
+	// inspection (SkipVideo): the dynamic range then relies on the
+	// container's signalling. Set it when a frame analysis of the same file
+	// follows: that analysis reads the first frame while it decodes.
+	DeferHDRMetadata bool
 	// Progress, when set, is called as stages advance. It must be fast.
 	Progress func(Progress)
 }
@@ -172,14 +177,15 @@ func (a *Analyzer) Analyze(
 
 	progress(Progress{Stage: StageProbe})
 
-	if err := a.inspect(ctx, path, opts, report, timings); err != nil {
+	deferred, err := a.inspect(ctx, path, opts.DeferHDRMetadata || !opts.SkipVideo, opts, report, timings)
+	if err != nil {
 		return nil, fmt.Errorf("analyze %s: %w", path, err)
 	}
 
 	if !opts.SkipVideo {
 		stop := timings.track("video")
 
-		if err := a.analyzeVideo(ctx, path, opts, report, progress); err != nil {
+		if err := a.analyzeWithHDR(ctx, path, opts, report, progress, deferred); err != nil {
 			return nil, fmt.Errorf("analyze %s: %w", path, err)
 		}
 
@@ -193,26 +199,66 @@ func (a *Analyzer) Analyze(
 	return report, nil
 }
 
-// inspect runs stage 1: probe and packet analysis, concurrently.
-func (a *Analyzer) inspect(
+// analyzeWithHDR runs stage 2, and when the inspection deferred it, reads
+// the HDR metadata of the first frame meanwhile.
+func (a *Analyzer) analyzeWithHDR(
 	ctx context.Context,
 	path string,
 	opts Options,
 	report *Report,
-	timings *timings,
+	progress func(Progress),
+	deferred bool,
 ) error {
+	if !deferred {
+		return a.analyzeVideo(ctx, path, opts, report, progress)
+	}
+
+	group, gctx := errgroup.WithContext(ctx)
+
+	var info *media.Info
+
+	group.Go(func() error {
+		return a.analyzeVideo(gctx, path, opts, report, progress)
+	})
+
+	group.Go(func() (err error) {
+		info, err = a.completeHDR(gctx, report.Info)
+
+		return err
+	})
+
+	if err := group.Wait(); err != nil {
+		return err
+	}
+
+	report.Info = info
+
+	return nil
+}
+
+// inspect runs stage 1: probe and packet analysis, concurrently. With
+// deferHDR, the probe may leave the first frame's HDR metadata for later:
+// deferred says it did.
+func (a *Analyzer) inspect(
+	ctx context.Context,
+	path string,
+	deferHDR bool,
+	opts Options,
+	report *Report,
+	timings *timings,
+) (deferred bool, err error) {
 	group, ctx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
 		defer timings.track("probe")()
 
-		info, err := a.prober.Probe(ctx, path)
+		info, later, err := a.probeInfo(ctx, path, deferHDR)
 		if err != nil {
 			// Prober implementations name the file: no extra prefix.
 			return err
 		}
 
-		report.Info = info
+		report.Info, deferred = info, later
 
 		return nil
 	})
@@ -239,15 +285,15 @@ func (a *Analyzer) inspect(
 	})
 
 	if err := group.Wait(); err != nil {
-		return err
+		return false, err
 	}
 
 	// A prober returning no information is treated as a file without video.
 	if report.Info == nil || len(report.Info.Video) == 0 {
-		return ErrNoVideo
+		return false, ErrNoVideo
 	}
 
-	return nil
+	return deferred, nil
 }
 
 // progress returns the progress callback, or a no-op when none is set.

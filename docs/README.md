@@ -10,6 +10,7 @@ is not exact comes with its uncertainty.
 | [Architecture](architecture.md) | Packages, data flow, concurrency, external tools, library usage |
 | [Technical analysis](analysis.md) | Probe, bitstream analysis without decoding, single-decode fan-out, SI/TI, shots, black/freeze, crop, luma levels |
 | [VMAF engine](vmaf.md) | libvmaf binding, stratified sampling with honest confidence intervals, decoding plans, 10-bit |
+| [HDR](hdr.md) | HDR10/PQ/HLG detection and signalling checks, MaxCLL/MaxFALL, wPSNR and ΔE ITP, VMAF on HDR, HDR ladders |
 | [Ladder engine](ladder.md) | Digest, probe encodes, rate-quality curves, envelope, rung selection, VBV, verification and calibration |
 | [Validation](validation.md) | How speed-ups are proven: replay simulation, exhaustive ladder optimum, measured results |
 | [CLI](cli.md) | Commands, flags, live dashboard, wizard, JSON and HTML reports |

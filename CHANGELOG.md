@@ -58,6 +58,23 @@ First public release: a Go library and the `qc` CLI.
     work.
   - Verified rungs checked for banding and for VMAF/XPSNR ranking
     disagreements.
+- **HDR** ([docs/hdr.md](docs/hdr.md)): HDR10, PQ and HLG detected from the
+  stream and its first frame (HDR10 metadata in SEI, HDR10+), Dolby Vision
+  and HDR10+ reported without processing their dynamic metadata; signalling
+  checks (BT.2020 primaries and matrix, 10 bits, narrow range, missing
+  mastering display or content light level). MaxCLL and MaxFALL measured
+  during the frame analysis (CTA-861.3, on a grid of 10-bit samples that
+  ffmpeg writes to a second pipe of the same decode, robust to 4:2:0 chroma
+  overshoots) and compared with the signalled
+  values, with the peak and average light of every frame charted. wPSNR
+  (JVET HDR test conditions) and ΔE ITP (ITU-R BT.2124, mean and 99th
+  percentile) measured in pure Go on the frames VMAF scores, with their
+  confidence intervals (`quality/hdr`). VMAF on HDR is labelled as not
+  HDR-calibrated, or scored on an SDR tone mapping with `--hdr-metric
+  tonemap`. HDR ladders encode in 10 bits and carry the colour description
+  and HDR10 metadata on every probe, rung and rendered command (x265,
+  SVT-AV1; colour tags for x264 and NVENC). The wizard asks the tone mapping
+  question for HDR sources.
 - **`qc run`**: analysis, VMAF against a reference (`-r`) and ladders for
   several codecs in one command and one report.
 - **Terminal UI**: a live dashboard with progress, ETA and panels showing
@@ -128,6 +145,20 @@ The packages of the first release, for Go programs that embed qc:
   rung's allocation shot by shot, `PerShot.PooledBitrate` prices it over the
   title, and `ladder.CalibrationTolerance` is the prediction gap beyond which
   a rung is calibrated.
+- **HDR**: `media.Color.IsHDR`, `media.VideoStream.MeasurableHDR`,
+  `media.MasteringDisplay` primaries and white point, `media.HDR.HDR10Plus`
+  and `media.DynamicRangeHDR10Plus`; `analysis.VideoReport.Light`
+  (`analyze/light`: MaxCLL, robust MaxCLL, MaxFALL) and the `peakNits`,
+  `robustPeakNits`, `averageNits` columns; `quality.Options.HDRMetric`
+  (`quality.HDRMetricPQ`, `HDRMetricToneMap`) and `SkipHDRMetrics`,
+  `quality.Result.HDR` (`quality.HDRReport`), the `quality.SeriesWPSNR*` and
+  `SeriesDeltaEITP*` series; package `quality/hdr`; `decode.Request.ToneMap`,
+  `frame.PoolOptions.SampleStep`, `frame.Pool.GridSize` and `SamplePlanes`;
+  `probe.FFprobe.ProbeStreams` and `ProbeHDR`, `analysis.HDRProber` and
+  `analysis.Options.DeferHDRMetadata` (the first frame's HDR metadata read
+  while decoding or measuring); `encode.Signal`, `encode.SignalOf` and
+  `encode.Params.Signal`; `ladder.Options.HDRMetric`, `ContentLight` and
+  `ladder.Result.HDR` (`ladder.HDRLadder`).
 - **GPUs**: `decode.WithHWAccel` (reported through `decode.HWAccelReporter`),
   `quality.Options.Backend`, `ladder.Options.Encoder` and `Backend`,
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before

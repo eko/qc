@@ -86,6 +86,7 @@ type QualityConfig struct {
 	Metrics      []string `mapstructure:"metrics"`
 	AV2CTC       bool     `mapstructure:"av2-ctc"`
 	Devices      []string `mapstructure:"devices"`
+	HDRMetric    string   `mapstructure:"hdr-metric"`
 
 	// precisionSet records that --precision was given (on the command
 	// line, through QC_PRECISION or in the configuration file), which a
@@ -194,6 +195,10 @@ func (c QualityConfig) validate() error {
 
 	if _, err := quality.ParseDevices(c.Devices); err != nil {
 		return fmt.Errorf("invalid --devices: %w", err)
+	}
+
+	if _, err := quality.ParseHDRMetric(c.HDRMetric); err != nil {
+		return fmt.Errorf("invalid --hdr-metric: %w", err)
 	}
 
 	return nil

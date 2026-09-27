@@ -21,10 +21,13 @@ type Result struct {
 	Digest        Digest           `json:"digest"`
 	Probing       ProbingReport    `json:"probing"`
 	// Grain describes AV1 film grain synthesis, when requested.
-	Grain  *GrainReport `json:"grain,omitempty"`
-	Probes []Probe      `json:"probes"`
-	Hull   []HullPoint  `json:"hull"`
-	Rungs  []Rung       `json:"rungs"`
+	Grain *GrainReport `json:"grain,omitempty"`
+	// HDR describes how the ladder of an HDR source keeps its signal; nil
+	// for SDR.
+	HDR    *HDRLadder  `json:"hdr,omitempty"`
+	Probes []Probe     `json:"probes"`
+	Hull   []HullPoint `json:"hull"`
+	Rungs  []Rung      `json:"rungs"`
 	// Shots are the shots of the title per-shot rungs allocate (PerShot).
 	Shots []Shot `json:"shots,omitempty"`
 	// ShotProbing is the cost of the per-shot rungs in exact probes.

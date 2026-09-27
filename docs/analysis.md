@@ -17,15 +17,24 @@ profiles, frame rates, bit depth and colour description. Attached pictures
 (NUT, raw streams) it is used as the average rate.
 
 **Dynamic range** is classified from stream side data and the transfer
-characteristic:
+characteristic. For PQ, HLG and Dolby Vision streams only, a second
+`ffprobe` call reads the side data of the first frame, where HDR10 metadata
+often is (HEVC SEI or AV1 metadata OBUs in MP4) and HDR10+ always is. When
+a frame analysis or a measurement follows, it runs meanwhile instead of
+before (see [hdr.md](hdr.md#1-detection-and-signalling)):
 
 | Signal | Classification |
 |---|---|
 | Dolby Vision configuration record | `DolbyVision` (profile, level, RPU/EL/BL flags, compatibility id) |
 | `arib-std-b67` transfer | `HLG` |
+| `smpte2084` transfer + ST 2094-40 dynamic metadata | `HDR10+` |
 | `smpte2084` transfer + mastering display metadata | `HDR10` (with MaxCLL/MaxFALL when present) |
 | `smpte2084` transfer only | `PQ` |
 | otherwise | `SDR` |
+
+The mastering display keeps its primaries and white point. HDR signalling
+checks (BT.2020 primaries and matrix, 10 bits, narrow range, HDR10
+metadata) are listed in [hdr.md](hdr.md#1-detection-and-signalling).
 
 ### Bitstream (`bitstream`)
 
@@ -60,7 +69,9 @@ flowchart LR
     reader --> q6[[queue]] --> crop
 ```
 
-The decoder pipes **8-bit luma only**. `extractplanes=y` copies the Y samples
+The decoder pipes **8-bit luma only** (for PQ and HLG videos, a small grid
+of 10-bit samples on a second pipe, see
+[light levels](#light-levels-analyzelight-hdr-only)). `extractplanes=y` copies the Y samples
 untouched (`format=gray` would stretch limited range 16–235 to 0–255 and break
 the black and crop detectors); sources with more than 8 bits are reduced to 8
 bits. Each frame also gets a **thumbnail**: the luma box-filtered by the
@@ -143,9 +154,25 @@ the share of samples outside the nominal range (below black or above white),
 per frame and summarised. A high out-of-range share on the worst frames is
 reported as a finding.
 
+### Light levels (`analyze/light`, HDR only)
+
+For PQ and HLG videos, the single decode has two outputs: the 8-bit luma
+the other analyzers read, exactly as for SDR, on stdout, and on a second
+pipe a grid of 10-bit Y′CbCr samples point-sampled by ffmpeg (one point per
+4×4 cell of pixels at 1080p, 8×8 at 2160p). A seventh analyzer measures
+per frame the peak, the 99.9th percentile and the average display light
+of max(R, G, B), in cd/m² (CTA-861.3): MaxCLL and MaxFALL, compared with
+the signalled values. Averages exclude the black borders the crop detector
+found. The method, its accuracy (MaxFALL within 0.4%, robust MaxCLL within
+0.5% of a full-resolution computation) and why MaxCLL is reported as a
+percentile on 4:2:0 video are in [hdr.md](hdr.md#2-light-levels-maxcll-maxfall).
+It adds a few percent to the frame analysis of an HDR title; SDR videos
+keep the luma-only decode.
+
 ## Report
 
 The JSON report (`schemaVersion` 1) holds the summaries, plus per-frame series
 stored as **columns** (`frames.pts`, `size`, `keyframe`, `si`, `ti`,
-`sceneScore`, `lumaMean`, `lumaMin`, `lumaMax`). Columns are compact and ready
+`sceneScore`, `lumaMean`, `lumaMin`, `lumaMax`, and for HDR `peakNits`,
+`robustPeakNits`, `averageNits`), the light levels in `video.light`. Columns are compact and ready
 to chart. All durations are in seconds.

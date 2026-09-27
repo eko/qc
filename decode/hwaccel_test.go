@@ -69,6 +69,7 @@ func TestHWAccelArgs(
 ) {
 	luma := frame.NewPool(320, 180, frame.PoolOptions{})
 	chroma10 := frame.NewPool(1920, 1080, frame.PoolOptions{Chroma: true, HighBitDepth: true})
+	pq := &ToneMap{Input: media.Color{Transfer: media.TransferPQ}}
 
 	testCases := []struct {
 		name string
@@ -102,6 +103,16 @@ func TestHWAccelArgs(
 			want: "-v error -nostdin -threads 0 -hwaccel cuda -hwaccel_output_format cuda -i in.mp4 " +
 				"-map 0:v:0 -fps_mode passthrough -an -sn -dn " +
 				"-vf scale_cuda=1920:1080:interp_algo=bicubic:format=yuv420p10le,hwdownload,format=yuv420p10le -f rawvideo -",
+		},
+		{
+			name: "cuda-scale tone maps on the CPU",
+			mode: HWAccelCUDAScale,
+			req:  Request{Path: "in.mp4", Pool: chroma10, SourceWidth: 1920, SourceHeight: 1080, ToneMap: pq},
+			want: "-v error -nostdin -threads 0 -hwaccel cuda -hwaccel_output_format cuda -i in.mp4 " +
+				"-map 0:v:0 -fps_mode passthrough -an -sn -dn " +
+				"-vf scale_cuda=1920:1080:interp_algo=bicubic:format=yuv420p10le,hwdownload,format=yuv420p10le," +
+				"scale=1920:1080:flags=bicubic:in_transfer=smpte2084:in_primaries=bt2020:in_color_matrix=bt2020nc:in_range=tv:" +
+				"out_transfer=bt709:out_primaries=bt709:out_color_matrix=bt709:out_range=tv:intent=perceptual -f rawvideo -",
 		},
 	}
 
@@ -261,4 +272,43 @@ func TestDecodeDoesNotFallBack(
 		require.ErrorIs(t, d.Decode(ctx, req, release), context.Canceled)
 		assert.Equal(t, HWAccelCUDA, d.modeFor(req))
 	})
+}
+
+func TestSampledArgs(
+	t *testing.T,
+) {
+	sampled := frame.NewPool(320, 180, frame.PoolOptions{SampleStep: 4})
+	outputs := " -map [luma] -fps_mode passthrough -an -sn -dn -frames:v 2 -f rawvideo -" +
+		" -map [grid] -fps_mode passthrough -an -sn -dn -frames:v 2 -f rawvideo pipe:3"
+	branches := "split=2[l][g];[l]extractplanes=y,scale=320:180:flags=bicubic,format=gray[luma];" +
+		"[g]scale=80:45:flags=neighbor,format=yuv444p10le[grid]"
+
+	testCases := []struct {
+		name string
+		mode HWAccel
+		req  Request
+		want string
+	}{
+		{
+			name: "cpu, with a selection",
+			req:  Request{Path: "in.mp4", Pool: sampled, MaxFrames: 2, Select: [][2]int{{0, 2}}},
+			want: "-v error -nostdin -threads 0 -i in.mp4 -filter_complex [0:v:0]select='between(n\\,0\\,1)'," +
+				branches + outputs,
+		},
+		{
+			name: "cuda-scale scales on the GPU first",
+			mode: HWAccelCUDAScale,
+			req:  Request{Path: "in.mp4", Pool: sampled, MaxFrames: 2},
+			want: "-v error -nostdin -threads 0 -hwaccel cuda -hwaccel_output_format cuda -i in.mp4 -filter_complex " +
+				"[0:v:0]scale_cuda=320:180:interp_algo=bicubic:format=yuv420p10le,hwdownload,format=yuv420p10le," +
+				branches + outputs,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := strings.Join(NewFFmpeg("ffmpeg", 0).sampledArgs(testCase.req, testCase.mode), " ")
+			assert.Equal(t, testCase.want, got)
+		})
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/eko/qc/analyze/crop"
 	"github.com/eko/qc/analyze/freeze"
 	"github.com/eko/qc/analyze/levels"
+	"github.com/eko/qc/analyze/light"
 	"github.com/eko/qc/analyze/scene"
 	"github.com/eko/qc/analyze/siti"
 	"github.com/eko/qc/bitstream"
@@ -40,6 +41,9 @@ type VideoReport struct {
 	Freeze        freeze.Result  `json:"freeze"`
 	Crop          crop.Result    `json:"crop"`
 	Complexity    ComplexityHint `json:"complexity"`
+	// Light holds the light levels of a PQ or HLG video (MaxCLL, MaxFALL),
+	// nil for SDR.
+	Light *light.Result `json:"light,omitempty"`
 }
 
 // ShotReport enriches a shot with its complexity and cost. Shots are the
@@ -70,6 +74,12 @@ type FrameSeries struct {
 	LumaMean   []float64        `json:"lumaMean"`
 	LumaMin    []float64        `json:"lumaMin"`
 	LumaMax    []float64        `json:"lumaMax"`
+	// PeakNits, RobustPeakNits and AverageNits are the brightest max(R,
+	// G, B) of each frame, its 99.9th percentile (light.RobustPercentile)
+	// and its average, in cd/m², for PQ and HLG videos only.
+	PeakNits       []float64 `json:"peakNits,omitempty"`
+	RobustPeakNits []float64 `json:"robustPeakNits,omitempty"`
+	AverageNits    []float64 `json:"averageNits,omitempty"`
 }
 
 // videoAnalyzers are the analyzers fed by the single decode of stage 2.
@@ -80,6 +90,8 @@ type videoAnalyzers struct {
 	black  *black.Analyzer
 	freeze *freeze.Analyzer
 	crop   *crop.Analyzer
+	// light measures the light levels of HDR videos (nil for SDR).
+	light *light.Analyzer
 }
 
 func newVideoAnalyzers(
@@ -88,7 +100,7 @@ func newVideoAnalyzers(
 ) videoAnalyzers {
 	lv := media.LevelsFor(video.Color.Range)
 
-	return videoAnalyzers{
+	v := videoAnalyzers{
 		siti:   siti.New(opts.Workers),
 		levels: levels.New(lv),
 		scene:  scene.New(opts.Scene),
@@ -96,10 +108,51 @@ func newVideoAnalyzers(
 		freeze: freeze.New(opts.Freeze),
 		crop:   crop.New(video.Width, video.Height, lv, opts.Crop),
 	}
+
+	if video.MeasurableHDR() {
+		v.light = light.New(video.Color)
+	}
+
+	return v
 }
 
 func (v videoAnalyzers) list() []analyze.Analyzer {
-	return []analyze.Analyzer{v.siti, v.levels, v.scene, v.black, v.freeze, v.crop}
+	list := []analyze.Analyzer{v.siti, v.levels, v.scene, v.black, v.freeze, v.crop}
+	if v.light != nil {
+		list = append(list, v.light)
+	}
+
+	return list
+}
+
+// framePool is the pool of the analysis decode: 8-bit luma with
+// thumbnails, and for HDR videos the grid of 10-bit samples the light
+// analyzer reads (the decoder then pipes whole 10-bit frames).
+func framePool(
+	video media.VideoStream,
+) *frame.Pool {
+	opts := frame.PoolOptions{ThumbMaxWidth: thumbMaxWidth}
+	if video.MeasurableHDR() {
+		opts.SampleStep = light.Step(video.Width, video.Height)
+	}
+
+	return frame.NewPool(video.Width, video.Height, opts)
+}
+
+// lightResult returns the light levels over the active picture (without
+// the black borders crop found), or nil for SDR.
+func (v videoAnalyzers) lightResult(
+	cropped crop.Result,
+	video media.VideoStream,
+) *light.Result {
+	if v.light == nil {
+		return nil
+	}
+
+	area := float64(video.Width * video.Height)
+	res := v.light.Result().Active(float64(cropped.Content.Width*cropped.Content.Height) / max(area, 1))
+
+	return &res
 }
 
 // analyzeVideo runs stage 2: it decodes the primary video once, fans the
@@ -119,7 +172,7 @@ func (a *Analyzer) analyzeVideo(
 		Path:         path,
 		SourceWidth:  video.Width,
 		SourceHeight: video.Height,
-		Pool:         frame.NewPool(video.Width, video.Height, frame.PoolOptions{ThumbMaxWidth: thumbMaxWidth}),
+		Pool:         framePool(video),
 		PTS:          bs.PTS,
 		FrameRate:    video.AvgFrameRate,
 		Codec:        video.Codec,
@@ -139,6 +192,7 @@ func (a *Analyzer) analyzeVideo(
 	sitiResult := analyzers.siti.Result()
 	levelsResult := analyzers.levels.Result()
 	sceneResult := analyzers.scene.Result(end)
+	cropResult := analyzers.crop.Result()
 
 	report.Video = &VideoReport{
 		FramesDecoded: decoded,
@@ -147,11 +201,13 @@ func (a *Analyzer) analyzeVideo(
 		Shots:         shotReports(sceneResult.Shots, sitiResult, bs),
 		Black:         analyzers.black.Result(end),
 		Freeze:        analyzers.freeze.Result(end),
-		Crop:          analyzers.crop.Result(),
+		Crop:          cropResult,
 		Complexity:    classify(sitiResult),
+		Light:         analyzers.lightResult(cropResult, video),
 	}
 
 	report.Frames = frameSeries(decoded, bs, sitiResult, sceneResult, levelsResult)
+	report.Frames.addLight(report.Video.Light)
 
 	return nil
 }
@@ -272,4 +328,17 @@ func frameSeries(
 	copy(series.Keyframe, bs.KeyFlags[:packets])
 
 	return series
+}
+
+// addLight adds the per-frame light levels of an HDR video, truncated like
+// the other columns.
+func (f *FrameSeries) addLight(
+	res *light.Result,
+) {
+	if res == nil {
+		return
+	}
+
+	n := min(len(f.PTS), len(res.Peak))
+	f.PeakNits, f.RobustPeakNits, f.AverageNits = res.Peak[:n], res.Robust[:n], res.Average[:n]
 }

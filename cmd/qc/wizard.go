@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/eko/qc/probe"
 	"github.com/eko/qc/quality"
 	"github.com/eko/qc/vmaf"
 )
@@ -70,6 +71,8 @@ type wizardAnswers struct {
 	HTML      string
 	// GPU is asked only when an NVIDIA GPU is usable (see wizardOffersGPU).
 	GPU bool
+	// HDRMetric is asked only for an HDR source: how VMAF scores it.
+	HDRMetric string
 
 	// Advanced ladder options, asked only when Advanced is set.
 	Advanced    bool
@@ -114,6 +117,10 @@ func (a wizardAnswers) runArgs() []string {
 
 	if !slices.Contains(a.Actions, actionAnalysis) {
 		args = append(args, "--skip-analysis")
+	}
+
+	if a.HDRMetric == string(quality.HDRMetricToneMap) && (slices.Contains(a.Actions, actionVMAF) || len(codecs) > 0) {
+		args = append(args, "--hdr-metric", a.HDRMetric)
 	}
 
 	if a.GPU {
@@ -386,7 +393,15 @@ func runWizard(
 		return err
 	}
 
-	answers, err := env.askWizard(offerGPU)
+	config, err := loadConfig(cmd)
+	if err != nil {
+		return err
+	}
+
+	answers, err := env.askWizard(wizardContext{
+		offerGPU:  offerGPU,
+		detectHDR: hdrDetector(cmd.Context(), config.Tools.FFprobe),
+	})
 	if errors.Is(err, huh.ErrUserAborted) {
 		return nil
 	}
@@ -430,13 +445,56 @@ func wizardOffersGPU(
 	return env.gpuAvailable(ctx, config.Tools.FFmpeg), nil
 }
 
-// askWizard runs the interactive form, with the GPU question when offerGPU.
+// wizardContext is what the wizard knows before asking: whether to offer
+// the GPU, and how to tell the dynamic range of the picked video.
+type wizardContext struct {
+	offerGPU bool
+	// detectHDR returns the dynamic range of an HDR video ("HDR10",
+	// "HLG"...), "" for SDR or when unknown; nil detects nothing.
+	detectHDR func(path string) string
+}
+
+// hdrDetector probes a video with ffprobe for its dynamic range, once per
+// path: the form re-evaluates its hidden pages on every key stroke.
+func hdrDetector(
+	ctx context.Context,
+	ffprobe string,
+) func(path string) string {
+	prober := probe.NewFFprobe(ffprobe)
+	seen := map[string]string{}
+
+	return func(path string) string {
+		if path == "" {
+			return ""
+		}
+
+		if dr, ok := seen[path]; ok {
+			return dr
+		}
+
+		probeCtx, cancel := context.WithTimeout(ctx, wizardProbeTimeout)
+		defer cancel()
+
+		dr := ""
+		if info, err := prober.Probe(probeCtx, path); err == nil {
+			if v, ok := info.PrimaryVideo(); ok && v.Color.IsHDR() {
+				dr = string(v.HDR.DynamicRange)
+			}
+		}
+
+		seen[path] = dr
+
+		return dr
+	}
+}
+
+// askWizard runs the interactive form.
 func askWizard(
-	offerGPU bool,
+	ctx wizardContext,
 ) (wizardAnswers, error) {
 	answers := newWizardAnswers()
 
-	form := huh.NewForm(answers.formGroups(offerGPU)...).WithTheme(wizardTheme())
+	form := huh.NewForm(answers.formGroups(ctx)...).WithTheme(wizardTheme())
 	if err := form.Run(); err != nil {
 		return wizardAnswers{}, fmt.Errorf("run form: %w", err)
 	}
@@ -460,6 +518,7 @@ func newWizardAnswers() *wizardAnswers {
 		BitDepth:  defaultBitDepth,
 		Probing:   defaultProbing,
 		FilmGrain: defaultFilmGrain,
+		HDRMetric: string(quality.HDRMetricPQ),
 	}
 }
 
@@ -467,7 +526,7 @@ func newWizardAnswers() *wizardAnswers {
 // answers into a, and hides itself according to the answers given before
 // it.
 func (a *wizardAnswers) formGroups(
-	offerGPU bool,
+	ctx wizardContext,
 ) []*huh.Group {
 	return []*huh.Group{
 		a.sourceGroup(),
@@ -477,13 +536,14 @@ func (a *wizardAnswers) formGroups(
 		a.shareGroup(),
 		a.perSceneGroup(),
 		a.metricsGroup(),
+		a.hdrGroup(ctx.detectHDR),
 		a.codecsGroup(),
 		a.shapeGroup(),
 		a.rungCountGroup(),
 		a.resolutionsGroup(),
 		a.encodingGroup(),
 		a.filmGrainGroup(),
-		a.gpuGroup(offerGPU),
+		a.gpuGroup(ctx.offerGPU),
 		a.htmlGroup(),
 	}
 }
@@ -629,6 +689,48 @@ func (a *wizardAnswers) metricsGroup() *huh.Group {
 			).
 			Value(&a.Devices),
 	).WithHideFunc(a.metricsHidden)
+}
+
+// hdrGroup asks how VMAF scores an HDR source, only when the picked source
+// (or reference) is HDR and something measures VMAF.
+func (a *wizardAnswers) hdrGroup(
+	detect func(path string) string,
+) *huh.Group {
+	var detected string
+
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			TitleFunc(func() string { return detected + " source: how should VMAF score it?" }, &a.Source).
+			Description("VMAF has no HDR model. HDR metrics (wPSNR, ΔE ITP) and light levels are measured either way.").
+			Options(
+				huh.NewOption("On the HDR signal · fast, ranks encodes, not HDR-calibrated", string(quality.HDRMetricPQ)),
+				huh.NewOption("On an SDR tone mapping · slower, what SDR screens show", string(quality.HDRMetricToneMap)),
+			).
+			Value(&a.HDRMetric),
+	).WithHideFunc(func() bool {
+		detected = a.hdrDetected(detect)
+
+		return detected == ""
+	})
+}
+
+// hdrDetected is the dynamic range of the HDR video VMAF would score (the
+// reference, else the source), "" when nothing measures VMAF, the videos
+// are SDR or nothing can tell.
+func (a *wizardAnswers) hdrDetected(
+	detect func(path string) string,
+) string {
+	if detect == nil || a.metricsHidden() {
+		return ""
+	}
+
+	if a.wants(actionVMAF) {
+		if dr := detect(a.Reference); dr != "" {
+			return dr
+		}
+	}
+
+	return detect(a.Source)
 }
 
 // codecsGroup asks for the ladder codecs, and whether to customise the

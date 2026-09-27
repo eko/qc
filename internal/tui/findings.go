@@ -93,6 +93,10 @@ func analysisLines(
 		return line("interlaced source (%s)", f.Text)
 	}
 
+	if text := hdrFindingText(f); text != "" {
+		return line("%s", text)
+	}
+
 	return nil
 }
 
@@ -170,6 +174,10 @@ func comparisonLine(
 		return findingLine(f.Level, "no visible banding: CAMBI ≤ %.0f on every scored frame", f.Limit)
 	case findings.SampledOnly:
 		return findingLine(f.Level, "min/p5 come from sampled frames only; use --exact for quality gates")
+	}
+
+	if text := hdrFindingText(f); text != "" {
+		return findingLine(f.Level, "%s", text)
 	}
 
 	return ""
@@ -283,6 +291,10 @@ func ladderLine(
 		lo := rungs[f.Other]
 		return findingLine(f.Level, "rungs %d (%dp) and %d (%dp): VMAF ranks %dp higher (%.1f vs %.1f) but XPSNR ranks it lower (%.2f vs %.2f dB)",
 			f.Index+1, r.Height, f.Other+1, lo.Height, r.Height, r.Measured.VMAF, lo.Measured.VMAF, xpsnr(r), xpsnr(lo))
+	}
+
+	if text := hdrFindingText(f); text != "" {
+		return findingLine(f.Level, "%s", text)
 	}
 
 	return ""

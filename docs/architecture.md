@@ -41,13 +41,16 @@ flowchart TB
     nvidia --> decode
     analysis --> probe
     analysis --> bitstream
-    analysis --> analyze["analyze/*<br/>siti, scene, black,<br/>freeze, crop, levels"]
+    analysis --> analyze["analyze/*<br/>siti, scene, black,<br/>freeze, crop, levels, light"]
+    analyze --> colorimetry["internal/colorimetry<br/>PQ, HLG, BT.2020, ICtCp"]
     analysis --> quality
     analysis --> decode
     quality --> vmaf["vmaf<br/>pure Go: models, backends, scoring port"]
     libvmaf["vmaf/libvmaf<br/>cgo libvmaf"] --> vmaf
     quality --> decode
     quality --> xpsnr["quality/xpsnr<br/>pure Go"]
+    quality --> hdrq["quality/hdr<br/>wPSNR, ΔE ITP, pure Go"]
+    hdrq --> colorimetry
     analyze --> segments["internal/segments"]
     analyze --> stats["internal/stats"]
     quality --> stats
@@ -66,26 +69,28 @@ so the service packages build without a C toolchain (`make nocgo`).
 
 | Package | Role |
 |---|---|
-| `media` | Domain types: stream info, HDR metadata, packets, `Duration` (JSON seconds), `Interval`, `Levels` |
-| `frame` | Reference-counted frames, pooled by geometry; luma, optional 4:2:0 chroma, optional thumbnail, 8 or 16-bit samples |
-| `probe` | Container and stream information through `ffprobe -show_format -show_streams` |
+| `media` | Domain types: stream info, HDR metadata (dynamic range, mastering display, content light level, Dolby Vision, HDR10+), packets, `Duration` (JSON seconds), `Interval`, `Levels` |
+| `frame` | Reference-counted frames, pooled by geometry; luma, optional 4:2:0 chroma, optional thumbnail, 8 or 16-bit samples, optional grid of 10-bit Y′CbCr samples (HDR light levels) |
+| `probe` | Container and stream information through `ffprobe -show_format -show_streams`, and the first frame's HDR side data for PQ, HLG and Dolby Vision streams |
 | `bitstream` | Packet-level analysis: bitrate series, sliding peak, frame sizes, GOP structure — no decoding |
 | `decode` | `Source` interface; ffmpeg implementation piping raw planes (seek, frame selection, scaling), optionally decoding with NVDEC (`WithHWAccel`, reported through `HWAccelReporter`) |
-| `analyze` | Fan-out runner and the per-frame analyzers (`siti`, `scene`, `black`, `freeze`, `crop`, `levels`) |
+| `analyze` | Fan-out runner and the per-frame analyzers (`siti`, `scene`, `black`, `freeze`, `crop`, `levels`, and `light` for HDR: MaxCLL, MaxFALL) |
 | `analyze/grain` | Pure film grain (noise) estimator behind `encode.FFmpeg.Noise` and the ladder's grain checks |
 | `analysis` | Orchestrates inspection and frame analysis (`Analyze`) and comparisons (`Compare`, through its `Meter`) into reports |
 | `vmaf` | Pure Go: model and device resolution, extractors, backend resolution, and the scoring contract (`Models`, `Scorer`) |
 | `vmaf/libvmaf` | cgo binding to libvmaf implementing that contract: several models and extra features (PSNR, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI) per context; CUDA feature extraction behind the `cuda` build tag (`CUDABuilt`, `InitCUDA`). `Engine` plugs it into `quality.Meter` |
 | `quality` | Quality measurement engine: stratified sampling, confidence intervals for VMAF and every extra metric, per-device VMAF, banding segments, decoding plans |
 | `quality/xpsnr` | Pure-Go XPSNR, matching ffmpeg's `xpsnr` filter |
+| `quality/hdr` | Pure-Go HDR metrics on decoded frames: wPSNR (JVET HDR CTC) and ΔE ITP (ITU-R BT.2124) |
 | `encode` | Codec settings, one encoder family each (x264, x265, SVT-AV1, NVENC) behind `Codec` and its features (`Codec.Supports`), ffmpeg encoding, digest extraction |
 | `ladder` | Per-title ladder engine: validation, then digest, grain, probe, selection, verification and per-shot stages |
 | `ladder/internal/shotalloc` | Pure per-shot math: shot rate-quality models, their prediction from shot features, equal-slope allocation |
 | `pipeline` | Chains every stage of a run and reports progress through hooks |
 | `nvidia` | GPU preflight: what an ffmpeg binary and the machine can do on an NVIDIA GPU (NVDEC, NVENC, device), checked before any work (`Check`) |
-| `internal/ffexec` | Runs ffmpeg and ffprobe: streamed stdout, bounded stderr tail, cancellation |
+| `internal/ffexec` | Runs ffmpeg and ffprobe: streamed stdout (and a second output pipe for two-output decodes), bounded stderr tail, cancellation |
 | `internal/stats` | Summaries, percentiles and confidence intervals shared by the analyzers and the sampler |
 | `internal/segments` | Merges per-frame flags into time segments (black, frozen) |
+| `internal/colorimetry` | BT.2100 colour science as lookup tables: PQ and HLG transfer functions, BT.2020 Y′CbCr, ICtCp, for the light analyzer and the HDR metrics |
 | `internal/linalg` | Small dense linear algebra (Gauss-Jordan solve and inverse, ridge regression) behind the curve fits and shot predictions |
 | `internal/findings` | The rules turning a report into typed findings (banding, rank conflicts, calibrated rungs, letterboxing...), shared by the terminal and HTML presenters, which word them |
 | `internal/tui` | Live dashboard (bubbletea), terminal charts, static terminal reports |
@@ -103,7 +108,7 @@ importers are not forced into a DI container.
 
 | Port | Consumer | Adapter |
 |---|---|---|
-| `probe.Prober` | `analysis` | `probe.FFprobe` |
+| `probe.Prober` (optionally `analysis.HDRProber`) | `analysis` | `probe.FFprobe` |
 | `bitstream.PacketReader` | `analysis` | `bitstream.FFprobeReader` |
 | `decode.Source` (optionally `decode.HWAccelReporter`) | `analysis`, `quality` | `decode.FFmpeg` |
 | `vmaf.Models`, `vmaf.Scorer` | `quality` | `vmaf/libvmaf` |
@@ -158,7 +163,10 @@ Only what consumers need crosses the pipe:
 
 - technical analyzers receive the **luma plane only** (`extractplanes=y`,
   which copies Y samples untouched — `format=gray` would stretch limited range
-  to full range), a third of a 4:2:0 frame;
+  to full range), a third of a 4:2:0 frame; for PQ and HLG videos, the same
+  decode also writes a sparse grid of 10-bit samples for the light analyzer
+  to a second pipe (file descriptor 3, `ffexec.StreamPair`)
+  ([hdr.md](hdr.md#2-light-levels-maxcll-maxfall));
 - VMAF receives full 4:2:0 frames, scaled by ffmpeg to the model resolution,
   in 8 or 10 bits.
 

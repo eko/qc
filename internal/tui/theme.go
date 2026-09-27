@@ -40,6 +40,8 @@ var (
 	section = lipgloss.NewStyle().Bold(true).Foreground(cyan)
 	key     = lipgloss.NewStyle().Foreground(subtle).Width(keyWidth)
 	card    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(subtle).Padding(0, 1)
+	// badge marks a property of the whole report (the HDR format).
+	badge = lipgloss.NewStyle().Bold(true).Foreground(magenta)
 )
 
 // seriesStyles colours the resolutions of rate-quality plots, highest first.

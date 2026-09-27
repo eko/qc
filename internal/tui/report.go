@@ -40,7 +40,7 @@ func RenderReport(
 
 	if report.Video != nil {
 		if report.Frames != nil {
-			blocks = append(blocks, complexitySection(report, width))
+			blocks = append(blocks, complexitySection(report, width), lightSection(report, width))
 		}
 
 		blocks = append(blocks,
@@ -74,7 +74,7 @@ func header(
 ) string {
 	dir, file := filepath.Split(report.Info.Path)
 
-	return title.Render(brand) + Subtle.Render("  ·  "+dir) + Bold.Render(file)
+	return title.Render(brand) + Subtle.Render("  ·  "+dir) + Bold.Render(file) + hdrBadge(report)
 }
 
 // cards shows the container and the video stream side by side.

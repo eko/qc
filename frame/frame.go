@@ -7,6 +7,7 @@ package frame
 import (
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/eko/qc/media"
 )
@@ -28,6 +29,14 @@ func (p *Plane) Row(
 	return p.Pix[y*p.Stride : y*p.Stride+p.Width*max(p.BytesPerSample, 1)]
 }
 
+// Uint16 sees a plane of 16-bit samples as a slice of samples, without
+// copying it: row y starts at y·Stride/2. Like the libvmaf binding and
+// quality/xpsnr, it relies on a little-endian host (arm64, amd64), where
+// the bytes of ffmpeg's little-endian rawvideo are the samples.
+func (p *Plane) Uint16() []uint16 {
+	return unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(p.Pix))), len(p.Pix)/2) //nolint:gosec // 16-bit samples stored little-endian, read on a little-endian host
+}
+
 // Frame is a decoded picture. Luma is the full-resolution luma plane; Cb and
 // Cr are the 4:2:0 chroma planes when the pool carries chroma. Thumb is a small
 // box-filtered copy of the luma computed once for cheap analyzers (scene cuts,
@@ -39,6 +48,10 @@ type Frame struct {
 	Cb    Plane
 	Cr    Plane
 	Thumb Plane
+	// Samples is a sparse grid of the decoded 10-bit Y′CbCr samples, when
+	// the pool keeps one (PoolOptions.SampleStep): the colour and light of
+	// an HDR frame, next to its 8-bit luma.
+	Samples Samples
 
 	refs atomic.Int32
 	pool *Pool
@@ -67,6 +80,22 @@ type PoolOptions struct {
 	// HighBitDepth stores samples on 16 bits (10-bit video); thumbnails
 	// are not available then.
 	HighBitDepth bool
+	// SampleStep, when positive, gives the frames of the pool, next to
+	// their 8-bit luma (the pixel analyzers'), a grid of 10-bit Y′CbCr
+	// samples (Samples) of one point per SampleStep×SampleStep cell
+	// (rounded up to an even step), for the light analyzer. Chroma and
+	// HighBitDepth are ignored then.
+	SampleStep int
+}
+
+// Samples holds the 10-bit Y′CbCr samples of a grid of points of a frame,
+// one per Step×Step cell of luma pixels: the pixel at the centre of the
+// cell (Step/2 right and down of its corner) and the chroma sample
+// covering it, as ffmpeg's neighbour scaler picks them. Planes store 16-bit
+// little-endian samples, the three at the grid's size.
+type Samples struct {
+	Step      int
+	Y, Cb, Cr Plane
 }
 
 // Pool recycles frames of a fixed geometry to avoid per-frame allocations.
@@ -87,6 +116,13 @@ func NewPool(
 		p.thumbFactor = max(1, (width+opts.ThumbMaxWidth-1)/opts.ThumbMaxWidth)
 	}
 
+	if opts.SampleStep > 0 {
+		// Grid points sit on chroma samples: the step is even.
+		opts.SampleStep += opts.SampleStep % 2
+		opts.Chroma, opts.HighBitDepth = false, false
+		p.opts = opts
+	}
+
 	bps := 1
 	if opts.HighBitDepth {
 		bps, p.thumbFactor = 2, 0
@@ -94,6 +130,13 @@ func NewPool(
 
 	p.frames.New = func() any {
 		f := &Frame{Luma: newPlane(width, height, bps), pool: p}
+
+		if step := opts.SampleStep; step > 0 {
+			grid := p.GridSize()
+			f.Samples = Samples{
+				Step: step, Y: newPlane(grid[0], grid[1], 2), Cb: newPlane(grid[0], grid[1], 2), Cr: newPlane(grid[0], grid[1], 2),
+			}
+		}
 
 		if opts.Chroma {
 			cw, ch := (width+1)/2, (height+1)/2
@@ -139,6 +182,31 @@ func (p *Pool) Planes(
 	}
 
 	return []*Plane{&f.Luma}
+}
+
+// SampleStep is the spacing of the sample grid of pooled frames, 0 when
+// they have none (see PoolOptions.SampleStep).
+func (p *Pool) SampleStep() int {
+	return p.opts.SampleStep
+}
+
+// GridSize is the width and height of the sample grid of pooled frames:
+// one point per cell of SampleStep pixels, partial cells included.
+func (p *Pool) GridSize() [2]int {
+	step := p.opts.SampleStep
+	if step == 0 {
+		return [2]int{}
+	}
+
+	return [2]int{(p.width + step - 1) / step, (p.height + step - 1) / step}
+}
+
+// SamplePlanes returns the planes of the sample grid of f in raw video
+// order (Y, Cb, Cr), as a sampling pool's decoder reads them.
+func (p *Pool) SamplePlanes(
+	f *Frame,
+) []*Plane {
+	return []*Plane{&f.Samples.Y, &f.Samples.Cb, &f.Samples.Cr}
 }
 
 // Width is the luma width of pooled frames.

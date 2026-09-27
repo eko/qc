@@ -1,10 +1,14 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eko/qc/internal/testutil"
+	"github.com/eko/qc/media"
 )
 
 func TestWizardFormGroups(
@@ -13,8 +17,8 @@ func TestWizardFormGroups(
 	answers := newWizardAnswers()
 
 	for _, offerGPU := range []bool{false, true} {
-		groups := answers.formGroups(offerGPU)
-		require.Len(t, groups, 15)
+		groups := answers.formGroups(wizardContext{offerGPU: offerGPU})
+		require.Len(t, groups, 16)
 
 		for i, group := range groups {
 			assert.NotNil(t, group, "group %d", i)
@@ -82,4 +86,48 @@ func TestWizardHiddenGroups(
 			})
 		})
 	}
+}
+
+func TestWizardHDRDetected(
+	t *testing.T,
+) {
+	detect := func(path string) string {
+		return map[string]string{"hdr.mov": "HDR10", "hlg.mov": "HLG"}[path]
+	}
+
+	testCases := []struct {
+		name    string
+		answers wizardAnswers
+		detect  func(string) string
+		want    string
+	}{
+		{name: "hdr ladder source", answers: wizardAnswers{Actions: []string{actionLadder}, Source: "hdr.mov"}, detect: detect, want: "HDR10"},
+		{name: "hdr reference", answers: wizardAnswers{Actions: []string{actionVMAF}, Source: "enc.mp4", Reference: "hlg.mov"}, detect: detect, want: "HLG"},
+		{name: "sdr", answers: wizardAnswers{Actions: []string{actionLadder}, Source: "sdr.mov"}, detect: detect},
+		{name: "nothing measures vmaf", answers: wizardAnswers{Actions: []string{actionAnalysis}, Source: "hdr.mov"}, detect: detect},
+		{name: "no detector", answers: wizardAnswers{Actions: []string{actionLadder}, Source: "hdr.mov"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, testCase.answers.hdrDetected(testCase.detect))
+		})
+	}
+}
+
+func TestHDRDetector(
+	t *testing.T,
+) {
+	clip := testutil.HDRClip(media.TransferHLG)
+	clip.Seconds = 0.2
+	hlg := testutil.Generate(t, clip)
+	sdr := testutil.Generate(t, testutil.Clip{Seconds: 0.2})
+
+	detect := hdrDetector(t.Context(), "ffprobe")
+
+	assert.Equal(t, "HLG", detect(hlg))
+	assert.Equal(t, "HLG", detect(hlg), "cached")
+	assert.Empty(t, detect(sdr))
+	assert.Empty(t, detect(""))
+	assert.Empty(t, detect(filepath.Join(t.TempDir(), "missing.mov")))
 }

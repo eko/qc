@@ -439,11 +439,157 @@ off) with synthetic temporal grain (ffmpeg `noise=alls=12:allf=t`, σ 5.8).
   `auto` leaves synthesis off on both. Real grainy content remains to be
   validated.
 
+## HDR
+
+Ground truth on a real HDR10 title: a 12 s excerpt (77.2–89.2 s) of Netflix's
+*Sol Levante* (CC BY 4.0), the 4K ProRes 4444 XQ HDR10 master (12-bit,
+BT.2020 PQ, graded on a 1 000 cd/m² P3 D65 display), plus the 1080p HDR10
+HEVC mezzanine made from it (x265 CRF 14, Main 10, the master's
+mastering display, MaxCLL/MaxFALL 1567/972 measured on the 4:4:4 master) and
+encodes of that mezzanine. The media stay out of the repository;
+`testutil.HDRClip` synthesises tagged PQ and HLG clips for the tests. The
+independent references are numpy scripts (float64, no lookup table,
+written from BT.2100, BT.2124, CTA-861.3 and the VTM sources). Apple M2 Max,
+ffmpeg 9.0.1, x265 4.3, SVT-AV1 4.2.
+
+### Light levels
+
+| Picture | Computation | MaxCLL strict | MaxCLL robust (p99.9) | MaxFALL |
+|---|---|---|---|---|
+| 4K 4:4:4 master | numpy, every pixel | 1 567 | — | 972.4 |
+| 1080p 4:4:4 downscale | numpy, every pixel | 1 557 | 1 472 | 971.8 |
+| 1080p 4:2:0 HEVC | numpy, every pixel, nearest chroma | 7 906 | 1 512 | 972.6 |
+| 1080p 4:2:0 HEVC | numpy, every pixel, bicubic chroma upsampling | 5 831 | — | 972.5 |
+| 1080p 4:2:0 HEVC | numpy, the grid's points (centre of each 4×4 cell) | 3 971 | 1 505 | 972.6 |
+| 1080p 4:2:0 HEVC | **qc** (grid step 4) | 3 971 | **1 508** | **972.6** |
+| 4K, decoded to 4:2:0 | numpy, every pixel | 5 934 | 1 475 | 973.1 |
+| 4K 4:4:4 master | numpy, the grid's points (centre of each 8×8 cell) | 1 503 | 1 465 | 971.9 |
+| 4K 4:4:4 master | **qc** (grid step 8, 4:4:4 chroma) | 1 499 | **1 469** | **975.7** |
+
+- The grid is ffmpeg's neighbour downscale of the decoded frame, on a
+  second output of the analysis decode: on a 4:2:0 source its points are
+  exactly numpy's (strict peak 3 971 both, MaxFALL 972.6 both; the robust
+  peak differs by the 10-bit PQ bins of qc's histogram, 0.2%).
+- MaxFALL: within 0.01% of the full computation at 1080p. On the 4K 4:4:4
+  master the grid keeps the source's full chroma (the numpy full
+  computation decodes to 4:2:0): 975.7, 0.3% above both the 4:2:0
+  computation and the master's 972.4.
+- The robust peak is within 0.3% (1080p) and 0.5% (4K) of the full
+  computation's 99.9th percentile, and within 4% and 6% of the master's
+  strict MaxCLL; the strict maximum of a 4:2:0 picture is 3–5× the
+  master's, because of chroma overshoots at saturated edges (see
+  [hdr.md](hdr.md#2-light-levels-maxcll-maxfall)). On 4:4:4 the strict
+  grid maximum (1 499) is back near the master's.
+- The first version piped whole 10-bit frames and sampled the grid in Go
+  on cell corners (numbers of that version: robust 1 522, MaxFALL 972.8 at
+  1080p): both grids agree with the full computation within the same
+  tolerances.
+- `TestFFmpegDecodeSampleGridPoints` decodes a frame whose samples code
+  their position and checks every grid point (luma at the cell centre,
+  the chroma sample covering it).
+- With the signalled 1567/972, qc reports the light levels as matching.
+- Unit tests: PQ at BT.2408 reference points (100 cd/m² = 0.508, 1 000 =
+  0.752), HLG 75% = 203 cd/m² on a 1 000 cd/m² display, letterboxed clip
+  (active share 0.75).
+
+### HDR metrics
+
+| Check | Result |
+|---|---|
+| wPSNR Y/Cb/Cr vs numpy (VTM formula), 12 frames of the CRF 20 encode | identical to the printed precision (10⁻⁴ dB) |
+| ΔE ITP mean vs numpy (float64 ICtCp, same points) | max difference 0.00017 |
+| ΔE ITP 99th percentile vs numpy | within 0.018 (histogram bins of 0.02) |
+| BT.2124 Annex 4 worked example | measured side ITP to 5·10⁻⁵; ΔE 2.363 from the printed ITP; the expected side's I is 3·10⁻⁴ above the printed 0.3554 (an independent Python evaluation agrees with qc) |
+| wPSNR by hand (uniform frames, 4-code error at luma 300 and 800) | 51.14 and 43.62 dB (`Example`) |
+| Identical frames | wPSNR capped at 100 dB, ΔE ITP 0 |
+| 8-bit frames vs the same 10-bit frames | identical wPSNR, ΔE within 10⁻³ |
+| Results vs number of threads | identical |
+| ΔE on every 2nd chroma sample vs every chroma sample, 48 frames | mean +0.49% / +0.20%, p99 +0.69% / +0.29% (CRF 20 1080p / CRF 32 720p) |
+| Inverse PQ table vs exact, 10⁻⁶–10⁴ cd/m² | < 3·10⁻⁶ PQ units |
+
+Metric behaviour on the mezzanine's encodes (exact, 288 frames, VMAF v1
+at 1080p):
+
+| Encode | Bitrate | VMAF on PQ | VMAF tone mapped | PSNR Y | wPSNR Y | XPSNR Y | ΔE ITP | ΔE ITP p99 |
+|---|---|---|---|---|---|---|---|---|
+| 1080p CRF 8 | 28.6 Mb/s | 99.64 | 99.53 | 54.21 | 53.60 | 48.75 | 2.34 | 9.92 |
+| 1080p CRF 20 | 7.8 Mb/s | 94.20 | 91.35 | 46.65 | 46.01 | 41.79 | 5.07 | 23.56 |
+| 720p CRF 24 | 2.7 Mb/s | 83.07 | 76.81 | 42.42 | 41.79 | 37.99 | 7.79 | 37.19 |
+| 720p CRF 32 | 1.1 Mb/s | 62.03 | 52.31 | 38.33 | 37.65 | 33.98 | 12.08 | 54.79 |
+
+Every metric is monotonic with the degradation and ranks the four encodes
+identically; tone-mapped VMAF sits 0.1–9.7 points below VMAF on PQ, more as
+quality drops. wPSNR sits 0.6 dB below PSNR on this bright content (errors
+in highlights weigh more). No subjective scores exist for these encodes:
+this checks consistency, not perceptual accuracy.
+
+### HDR ladders
+
+`qc run` on the 1080p HDR10 mezzanine with `--codecs hevc,av1` (5.5 min):
+10-bit rungs, the HDR findings, and the rendered commands of the 720p rungs
+run on the source and read back:
+
+| Check | HEVC (x265) | AV1 (SVT-AV1) |
+|---|---|---|
+| Colour description | bt2020 / smpte2084 / bt2020nc / tv | same |
+| Dynamic range read by qc | HDR10, MaxCLL 1567, MaxFALL 972 | same |
+| Mastering display | the source's (P3 D65, 0.0001–1000 cd/m²) | same |
+| HDR10 metadata in the bitstream | 7 SEI of each kind for 6 keyframes (+ extradata) | 6 metadata OBU pairs for 6 keyframes |
+
+`TestEncodeCarriesHDRSignal` checks the same on every CI run (HEVC and AV1
+HDR10, H.264 HLG), from an untagged raw input as the ladder's digest is.
+
+### Cost
+
+Paired runs: each iteration runs the build without HDR support and the
+current one back to back, alternating their order, so that load changes
+hit both; medians of the per-pair ratios, with their interquartile range.
+Wall time and the CPU of the process and its children (user + system).
+
+| Run | Pairs | Before | After | Wall | CPU |
+|---|---|---|---|---|---|
+| `qc analyze`, 1080p HDR10 HEVC, 12 s | 20 | 1.21 s | 1.26 s | +4.3% (+3.4..+6.6) | +5.7% |
+| `qc analyze`, same title looped to 2 min | 12 | 10.36 s | 10.94 s | +5.1% (+4.3..+7.0) | +4.8% |
+| `qc analyze`, 4K ProRes 4444 HDR10, 12 s | 5 | 8.32 s | 8.13 s | −1.0% (−2.4..+6.9) | +1.1% |
+| `qc analyze --fast`, 1080p HDR10 | 20 | 0.060 s | 0.125 s | +65 ms (the first-frame `ffprobe`, waited for) | |
+| `qc vmaf`, HDR10, exact 288 frames | 6 | 5.94 s | 6.33 s | +6.0% (+5.8..+9.8) | +7.3% |
+| `qc vmaf --hdr-metric tonemap`, same | 4 (hyperfine) | 5.36 s | 8.93 s | +67% | |
+| `qc analyze`, 1080p SDR H.264 | 20 | 1.041 s | 1.042 s | +0.3% (−0.2..+0.8) | +0.2% |
+| `qc vmaf`, 1080p SDR, exact | 6 | 4.27 s | 4.29 s | +0.2% (−2.4..+1.4) | −0.2% |
+| `qc ladder -c h264 --rungs 720,360`, SDR | 3 | 20.97 s | 21.53 s | −0.4% (−3.9..+8.9) | −0.5% |
+
+SDR reports are identical before and after (analysis, comparison scores
+and the SDR ladder, commands included).
+
+**Frame analysis: from +12% to +4%.** The first version piped whole
+10-bit 4:2:0 frames (6.2 MB per 1080p frame, 3× the luma) and sampled the
+grid in Go, and read the first frame's HDR metadata before the analysis:
++12% on the 12 s clip (+65 ms for the extra `ffprobe`, +6–7% on the frame
+analysis). The current one keeps the 8-bit luma pipe untouched and adds a
+0.78 MB grid on a second pipe, and reads the first frame's metadata while
+decoding. What remains is about 1.5 ms of CPU per frame (see
+[hdr.md](hdr.md#2-light-levels-maxcll-maxfall)); a second output costs
+ffmpeg +2.3 s of user and +1.7 s of system time over 2 880 frames, of
+which a larger pipe block size (`-blocksize`) saved nothing.
+
+Micro-benchmarks (one thread, `b.Loop()`): light analyzer 0.4 ms per
+1080p frame, HDR metrics 7.1 ms per frame pair.
+
+An HEVC HDR10 ladder (`--rungs 1080,720,540 --encode-bit-depth 10`, one
+run each) took 169 s before and 144 s after: the encodes and the HDR metrics
+of the verifications cost nothing visible next to the run-to-run variation
+of a ladder (calibration steps depend on the encodes, which now carry
+`hdr10-opt`).
+
 ## What is not validated yet
 
-- The corpus has only two real titles. It should grow to cover sport, real
-  film grain, 3D animation, HDR and screen content.
-- HDR (PQ/HLG): VMAF is not an HDR metric.
+- The corpus has only two real SDR titles and one HDR10 excerpt. It should
+  grow to cover sport, real film grain, 3D animation, HLG camera content and
+  screen content.
+- HDR: VMAF is not an HDR metric; wPSNR and ΔE ITP are checked against
+  their definitions, not against subjective scores; the tone mapping of
+  `--hdr-metric tonemap` is not validated perceptually; NVENC HDR10
+  metadata is not checked on a GPU.
 - XPSNR at high frame rates in sampled mode: the first frame of each clip
   lacks one frame of history for the second-order temporal activity
   (approximated, not measured yet).

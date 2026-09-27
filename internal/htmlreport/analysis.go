@@ -45,6 +45,10 @@ func analyzePage(
 		p.Sections = append(p.Sections, complexitySection(r.Video, r.Frames, bands))
 	}
 
+	if s, ok := lightSection(r, bands); ok {
+		p.Sections = append(p.Sections, s)
+	}
+
 	return p
 }
 
@@ -222,6 +226,10 @@ func analysisCards(
 			Label: "Shots", Value: strconv.Itoa(len(vr.Shots)),
 			Detail: fmt.Sprintf("SI %.0f · TI %.0f", vr.SITI.SISummary.Mean, vr.SITI.TISummary.Mean),
 		})
+	}
+
+	if c, ok := lightCard(r); ok {
+		cards = append(cards, c)
 	}
 
 	return cards

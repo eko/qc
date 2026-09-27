@@ -116,6 +116,12 @@ func (r *run) decodeSide(
 			req.Start = r.ref.Bitstream.PTS[w.seek]
 		}
 
+		if r.toneMap {
+			// Both sides are the reference's signal: the distorted file
+			// may lack tags (raw digests, some encoders).
+			req.ToneMap = &decode.ToneMap{Input: r.ref.Video.Color}
+		}
+
 		return r.meter.decoder.Decode(ctx, req, func(f *frame.Frame) error {
 			select {
 			case out <- f:
