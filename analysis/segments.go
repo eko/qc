@@ -33,9 +33,10 @@ func segmentBounds(
 
 // segmentRequests returns the decoding requests of the segments starting
 // at bounds, from base (the request decoding the whole video): segment k
-// seeks to its first frame and outputs one frame more than it holds, the
-// first frame of segment k+1 (see analyze.Forker); the last one decodes to
-// the end.
+// seeks to its first frame, from the first frame of the video on the
+// container's timeline (bs.Start), and outputs one frame more than it
+// holds, the first frame of segment k+1 (see analyze.Forker); the last one
+// decodes to the end.
 func segmentRequests(
 	base decode.Request,
 	bounds []int,
@@ -49,7 +50,7 @@ func segmentRequests(
 		req.FirstIndex, req.Threads, req.Segment = first, threads, true
 
 		if first > 0 {
-			req.Start = bs.PTS[first]
+			req.Start, req.Origin = bs.PTS[first], bs.Start
 		}
 
 		if k+1 < len(bounds) {

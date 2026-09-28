@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/eko/qc/audio/loudness"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/quality"
@@ -68,12 +69,19 @@ type OutputConfig struct {
 	Overlay    string `mapstructure:"overlay"`
 }
 
-// AnalysisConfig tunes the technical analysis (addAnalysisFlags).
+// AnalysisConfig tunes the technical analysis (addAnalysisFlags) and its
+// audio analysis (addAudioFlags).
 type AnalysisConfig struct {
-	Fast            bool          `mapstructure:"fast"`
-	BitrateInterval time.Duration `mapstructure:"bitrate-interval"`
-	PeakWindow      time.Duration `mapstructure:"peak-window"`
-	NoMotion        bool          `mapstructure:"no-motion"`
+	Fast             bool          `mapstructure:"fast"`
+	BitrateInterval  time.Duration `mapstructure:"bitrate-interval"`
+	PeakWindow       time.Duration `mapstructure:"peak-window"`
+	NoMotion         bool          `mapstructure:"no-motion"`
+	Audio            bool          `mapstructure:"audio"`
+	NoAudio          bool          `mapstructure:"no-audio"`
+	LoudnessTarget   string        `mapstructure:"loudness-target"`
+	AudioTracks      string        `mapstructure:"audio-tracks"`
+	SilenceThreshold float64       `mapstructure:"silence-threshold"`
+	SilenceDuration  time.Duration `mapstructure:"silence-duration"`
 }
 
 // QualityConfig tunes VMAF measurements (addQualityFlags): the model and
@@ -152,6 +160,7 @@ func (c Config) validate() error {
 	validators := []func() error{
 		c.Tools.validate,
 		c.Output.validate,
+		c.Analysis.validate,
 		c.Quality.validate,
 		c.Ladder.validate,
 		c.GPU.validate,
@@ -192,6 +201,28 @@ func parseLogLevel(
 func (c OutputConfig) validate() error {
 	if c.Format != "" && c.Format != formatText && c.Format != formatJSON {
 		return fmt.Errorf("%w %q (supported: text, json)", ErrInvalidFormat, c.Format)
+	}
+
+	return nil
+}
+
+// ErrInvalidSilenceThreshold is returned for a --silence-threshold that is
+// not below full scale.
+var ErrInvalidSilenceThreshold = errors.New("invalid --silence-threshold")
+
+// validate checks the audio settings: the loudness target, the tracks and
+// the silence threshold.
+func (c AnalysisConfig) validate() error {
+	if _, err := loudness.ParseTarget(c.LoudnessTarget); err != nil {
+		return fmt.Errorf("invalid --loudness-target: %w", err)
+	}
+
+	if _, _, err := parseAudioTracks(c.AudioTracks); err != nil {
+		return err
+	}
+
+	if c.SilenceThreshold > 0 {
+		return fmt.Errorf("%w %g: want a level in dBFS, below 0 (-60)", ErrInvalidSilenceThreshold, c.SilenceThreshold)
 	}
 
 	return nil

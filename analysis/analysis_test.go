@@ -184,3 +184,24 @@ func TestAnalyzerHDRLightLevels(
 	assert.Len(t, frames.AverageNits, len(frames.PTS))
 	assert.Equal(t, media.DynamicRangeHDR10, report.Info.Video[0].HDR.DynamicRange)
 }
+
+func TestAnalyzerAudioIntegration(
+	t *testing.T,
+) {
+	// A clip with a 440 Hz sine (ffmpeg's sine source: 1/8 of full scale,
+	// -18 dBFS) as AAC.
+	path := testutil.Generate(t, testutil.Clip{Seconds: 4, Audio: true})
+
+	report, err := newAnalyzer(nil).Analyze(t.Context(), path, analysis.Options{})
+	require.NoError(t, err)
+	require.NotNil(t, report.Audio)
+	require.Len(t, report.Audio.Tracks, 1)
+
+	track := report.Audio.Tracks[0]
+	assert.Equal(t, "mono", track.Layout)
+	assert.InDelta(t, -21, track.Loudness.Integrated, 1.5)
+	// AAC overshoots the -18 dBFS of the sine at its onset (-16 dBFS).
+	assert.InDelta(t, -17, track.Loudness.TruePeak, 1.5)
+	assert.Empty(t, track.Defects.Silence)
+	assert.Zero(t, track.Defects.Channels[0].ClippedSamples)
+}

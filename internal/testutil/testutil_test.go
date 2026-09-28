@@ -20,6 +20,7 @@ func TestGenerate(
 		{name: "fixed gop with filter", clip: Clip{GOP: 10, Filter: "hflip", Seconds: 1, Name: "x.mkv"}},
 		{name: "other codec", clip: Clip{Codec: "mpeg4", Seconds: 0.5, Args: []string{"-q:v", "5"}}},
 		{name: "with audio", clip: Clip{Seconds: 0.5, Audio: true}},
+		{name: "video starting after the audio", clip: Clip{Seconds: 0.5, Audio: true, VideoDelay: 0.2}},
 	}
 
 	for _, testCase := range testCases {

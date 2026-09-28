@@ -11,8 +11,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/audio/defect"
+	"github.com/eko/qc/audio/loudness"
 	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/media"
 	"github.com/eko/qc/quality"
 	"github.com/eko/qc/vmaf"
 )
@@ -39,6 +42,22 @@ func addAnalysisFlags(
 	flags.Duration("bitrate-interval", time.Second, "bucket size of the bitrate series")
 	flags.Duration("peak-window", time.Second, "sliding window of the peak bitrate")
 	flags.Bool("no-motion", false, "skip the camera motion analysis (pan, tilt, zoom, shake per shot)")
+	flags.Bool("audio", false, "analyse the audio even with --fast (it is decoded)")
+	addAudioFlags(cmd)
+}
+
+// addAudioFlags registers the flags of the audio analysis (loudness and
+// defects of the audio tracks, alongside the frame analysis).
+func addAudioFlags(
+	cmd *cobra.Command,
+) {
+	flags := cmd.Flags()
+	flags.Bool("no-audio", false, "skip the audio analysis (loudness, silence, clipping, phase)")
+	flags.String("loudness-target", loudness.TargetEBU,
+		"loudness target: ebu (-23 LUFS ±0.5, -1 dBTP), ebu-live (±1), atsc (-24 ±2, -2 dBTP), streaming (-16 ±1, -1 dBTP), streaming-14, or a loudness in LUFS (-16)")
+	flags.String("audio-tracks", audioTracksAll, "audio tracks analysed: all, default, or track numbers from 0 as ffmpeg's 0:a:N (0,2)")
+	flags.Float64("silence-threshold", -60, "audio silence threshold, dBFS")
+	flags.Duration("silence-duration", 2*time.Second, "shortest audio silence reported")
 }
 
 // addModelFlag registers --model and --model-dir, shared by VMAF
@@ -118,7 +137,64 @@ func analysisOptions(
 			PeakWindow: config.PeakWindow,
 		},
 		Video: analysis.VideoOptions{SkipMotion: config.NoMotion},
+		Audio: audioOptions(config),
 	}
+}
+
+// audioOptions maps the audio flags to library options.
+func audioOptions(
+	config AnalysisConfig,
+) analysis.AudioOptions {
+	// validate already rejected malformed values.
+	target, _ := loudness.ParseTarget(config.LoudnessTarget)
+	defaultTrack, tracks, _ := parseAudioTracks(config.AudioTracks)
+
+	return analysis.AudioOptions{
+		Skip:           config.NoAudio,
+		WithInspection: config.Audio,
+		DefaultTrack:   defaultTrack,
+		Tracks:         tracks,
+		Target:         target,
+		Defect: defect.Options{
+			SilenceThreshold: config.SilenceThreshold,
+			SilenceDuration:  media.Duration(config.SilenceDuration),
+		},
+	}
+}
+
+// Values of --audio-tracks naming a selection.
+const (
+	audioTracksAll     = "all"
+	audioTracksDefault = "default"
+)
+
+// ErrInvalidAudioTracks is returned for a malformed --audio-tracks value.
+var ErrInvalidAudioTracks = errors.New("invalid --audio-tracks")
+
+// parseAudioTracks reads --audio-tracks: "" or "all" (every track),
+// "default" (the default track), or audio track numbers from 0.
+func parseAudioTracks(
+	s string,
+) (bool, []int, error) {
+	switch s = strings.TrimSpace(strings.ToLower(s)); s {
+	case "", audioTracksAll:
+		return false, nil, nil
+	case audioTracksDefault:
+		return true, nil, nil
+	}
+
+	var tracks []int
+
+	for field := range strings.SplitSeq(s, ",") {
+		n, err := strconv.Atoi(strings.TrimSpace(field))
+		if err != nil || n < 0 {
+			return false, nil, fmt.Errorf("%w %q: want all, default or track numbers from 0 (0,2)", ErrInvalidAudioTracks, s)
+		}
+
+		tracks = append(tracks, n)
+	}
+
+	return false, tracks, nil
 }
 
 // qualityOptions maps the VMAF flags to library options.

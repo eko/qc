@@ -228,7 +228,8 @@ func (b *build) planShots(
 	curves []Curve,
 	digest Digest,
 ) (*shotPlan, error) {
-	report, err := b.engine.inspector.Analyze(ctx, b.source, analysis.Options{})
+	// The shots only: the audio has no part in the ladder.
+	report, err := b.engine.inspector.Analyze(ctx, b.source, analysis.Options{Audio: analysis.AudioOptions{Skip: true}})
 	if err != nil {
 		return nil, fmt.Errorf("ladder: per-shot: analyse %s: %w", b.source, err)
 	}

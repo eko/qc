@@ -18,6 +18,23 @@ First public release: a Go library and the `qc` CLI.
   bitstream without decoding (`--fast`, under a second). Then one decode
   fanned out to SI/TI (ITU-T P.910), shot detection, black and frozen
   segments, letterbox/pillarbox detection and luma levels.
+- **Audio quality control**, alongside the frame analysis and without
+  adding to its wall time: every audio track (`--audio-tracks`) decoded by
+  ffmpeg to float samples and measured in pure Go (packages `audio`,
+  `audio/loudness`, `audio/defect`): integrated loudness, loudness range,
+  true peak (4× oversampling) and momentary/short-term series per ITU-R
+  BS.1770-5 and EBU Tech 3341/3342, checked against `--loudness-target`
+  (`ebu`, `ebu-live`, `atsc`, `streaming`, `streaming-14` or a LUFS value);
+  silence of the mix and of each channel (`--silence-threshold`,
+  `--silence-duration`), leading and trailing silence, muted channels,
+  empty LFE or centre, clipping, DC offset, out-of-phase segments,
+  inverted polarity, mono as stereo, sample rate, bit depth, layout and
+  stream start offsets. Terminal, HTML (loudness, levels and phase charts
+  per track) and JSON reports, and a `loudness` item for annotated videos;
+  `--no-audio` leaves it out, `--fast --audio` adds it to an inspection.
+  Validated against the synthetic EBU conformance cases (all within
+  tolerance), ffmpeg's `ebur128` on real content (within 0.01 LU / dB) and
+  synthetic defects (`bench/audioval`, [docs/audio.md](docs/audio.md)).
 - **Camera motion** (`analyze/motion`, on by default, `--no-motion` to skip):
   the global motion of every frame estimated on the shared thumbnails
   (integral-projection predictor, block matching with a Lucas–Kanade
@@ -56,7 +73,8 @@ First public release: a Go library and the `qc` CLI.
   every analyzer (`analyze.Forker`, `analyze.RunSegments`) whose per-frame
   series are merged in order: the report is identical to a single pass, to
   the bit, and a segment that does not start where planned falls back to
-  one. NEON loops on arm64 for SI, TI, luma statistics and thumbnails
+  one. Segments seek on the container's timeline, so a video starting after
+  its audio (some concatenations) no longer falls back. NEON loops on arm64 for SI, TI, luma statistics and thumbnails
   (checked against the portable Go ones), and Unix sockets instead of pipes
   for the raw frames. 59 minutes of 1080p25 H.264 analysed in 62–71 s at
   26 Mbit/s (225 s before) and 49–52 s at 6 Mbit/s (230 s) on an M2 Max; the
@@ -77,6 +95,17 @@ First public release: a Go library and the `qc` CLI.
   whole AOM AV2 common test conditions set with `--av2-ctc`.
 - **VMAF per viewing device** (`--devices phone,tv,4k`), each scored with its
   VMAF v1 model on the same frames.
+- **Faster VMAF on macOS**: both videos are decoded by concurrent
+  VideoToolbox sessions (`--hwaccel auto`, the default), sweeps are split
+  into concurrent runs, and exact measurements are scored in segments split
+  at keyframes, three libvmaf contexts at once, with two warm-up frames
+  before each so that every frame scores as in a single pass. XPSNR has
+  NEON loops (3.8× faster at 1080p). Results are identical to a CPU run,
+  frame by frame. On an M2 Max: 26.5 → 18.6 s for the ±0.5 measurement of
+  a 10:36 title, 58.7 → 42.1 s for a 59-minute one (184 → 108 s at
+  `--sample 5%`), with a third of the CPU; exact measurements, bound by
+  libvmaf's CPU, 149 → 131 s on the 10:36 title and 897 → 704 s on the
+  59-minute one. See [vmaf.md](docs/vmaf.md#performance).
 - **Per-title ladders** (`qc ladder`) for H.264 (libx264), HEVC (libx265)
   and AV1 (SVT-AV1): probe encodes of a representative digest, rate-quality
   curves per resolution, their upper envelope, rungs one just-noticeable
@@ -204,6 +233,10 @@ The packages of the first release, for Go programs that embed qc:
   while decoding or measuring); `encode.Signal`, `encode.SignalOf` and
   `encode.Params.Signal`; `ladder.Options.HDRMetric`, `ContentLight` and
   `ladder.Result.HDR` (`ladder.HDRLadder`).
+- **Decoding**: `decode.Request.Origin` (seeks on the container's
+  timeline), `decode.SegmentHWAccelReporter` (the hardware mode of segment
+  decodes, reported in `quality.Result.HWAccel`), and the `segments` plan
+  of `quality.Result.Plans`.
 - **GPUs**: `decode.WithHWAccel` (reported through `decode.HWAccelReporter`),
   `quality.Options.Backend`, `ladder.Options.Encoder` and `Backend`,
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before

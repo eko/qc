@@ -140,6 +140,61 @@ func TestFFmpegDecodeFrames(
 	}
 }
 
+// TestFFmpegSeekVideoStartingLate seeks in a clip whose video starts
+// 0.2 s after its audio, i.e. after the container's timeline: seeking
+// from the video's first frame (Origin) lands on the planned frame, while
+// ffmpeg's default, counting from the container's start, lands 5 frames
+// early.
+func TestFFmpegSeekVideoStartingLate(
+	t *testing.T,
+) {
+	const (
+		delay = 0.2
+		first = 20
+		count = 3
+	)
+
+	path := testutil.Generate(t, testutil.Clip{Seconds: 2, GOP: 10, Audio: true, VideoDelay: delay})
+	pool := frame.NewPool(clipWidth, clipHeight, frame.PoolOptions{})
+	base := Request{Path: path, Pool: pool, SourceWidth: clipWidth, SourceHeight: clipHeight, FrameRate: clipRate}
+
+	lumas := func(req Request) [][]byte {
+		var out [][]byte
+
+		require.NoError(t, NewFFmpeg("ffmpeg", 0).Decode(t.Context(), req, func(f *frame.Frame) error {
+			defer f.Release()
+
+			out = append(out, bytes.Clone(f.Luma.Pix))
+
+			return nil
+		}))
+
+		return out
+	}
+
+	whole := lumas(base)
+	require.Greater(t, len(whole), first+count)
+
+	testCases := []struct {
+		name      string
+		origin    media.Duration
+		wantFirst int
+	}{
+		{name: "from the video's first frame", origin: media.Seconds(delay), wantFirst: first},
+		{name: "from the container's start", wantFirst: first - 5},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			req := base
+			req.Start, req.Origin = media.Seconds(float64(first)/25), testCase.origin
+			req.FirstIndex, req.MaxFrames = first, count
+
+			assert.Equal(t, whole[testCase.wantFirst:testCase.wantFirst+count], lumas(req))
+		})
+	}
+}
+
 func TestFFmpegDecodePixels(
 	t *testing.T,
 ) {

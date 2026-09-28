@@ -21,6 +21,7 @@
             "bit_rate": "5991180",
             "bits_per_raw_sample": "8",
             "nb_frames": "1798",
+            "start_time": "0.040000",
             "disposition": {"default": 1, "attached_pic": 0}
         },
         {
@@ -32,8 +33,36 @@
             "channels": 2,
             "channel_layout": "stereo",
             "bit_rate": "128000",
+            "sample_fmt": "fltp",
+            "bits_per_sample": 0,
+            "start_time": "0.000000",
+            "duration": "59.989333",
             "disposition": {"default": 1, "attached_pic": 0},
             "tags": {"language": "fra"}
+        },
+        {
+            "index": 2,
+            "codec_name": "pcm_s24le",
+            "codec_type": "audio",
+            "sample_rate": "44100",
+            "channels": 6,
+            "channel_layout": "5.1(side)",
+            "sample_fmt": "s32",
+            "bits_per_sample": 24,
+            "bits_per_raw_sample": "N/A",
+            "start_time": "0.500000",
+            "disposition": {"default": 0, "attached_pic": 0}
+        },
+        {
+            "index": 3,
+            "codec_name": "flac",
+            "codec_type": "audio",
+            "sample_rate": "48000",
+            "channels": 2,
+            "sample_fmt": "s32",
+            "bits_per_sample": 0,
+            "bits_per_raw_sample": "20",
+            "disposition": {"default": 0, "attached_pic": 0}
         }
     ],
     "format": {

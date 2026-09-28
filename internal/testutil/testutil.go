@@ -68,6 +68,10 @@ type Clip struct {
 	Args []string
 	// Audio adds a sine tone as an AAC audio stream.
 	Audio bool
+	// VideoDelay starts the video that many seconds after the audio (with
+	// Audio): the container's timeline then starts before the first frame
+	// of the video, as in some concatenations.
+	VideoDelay float64
 }
 
 // Generate encodes the clip into t.TempDir and returns its path. It skips
@@ -117,7 +121,32 @@ func Generate(
 	out, err := exec.CommandContext(t.Context(), "ffmpeg", args...).CombinedOutput()
 	require.NoError(t, err, string(out))
 
+	if c.VideoDelay > 0 {
+		return delayVideo(t, path, c.VideoDelay)
+	}
+
 	return path
+}
+
+// delayVideo remuxes path with its video shifted by delay seconds and its
+// other streams in place, and returns the new file.
+func delayVideo(
+	t testing.TB,
+	path string,
+	delay float64,
+) string {
+	t.Helper()
+
+	delayed := filepath.Join(t.TempDir(), filepath.Base(path))
+	args := []string{
+		"-v", "error", "-y", "-itsoffset", strconv.FormatFloat(delay, 'f', -1, 64), "-i", path, "-i", path,
+		"-map", "0:v", "-map", "1:a?", "-c", "copy", delayed,
+	}
+
+	out, err := exec.CommandContext(t.Context(), "ffmpeg", args...).CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	return delayed
 }
 
 func (c Clip) withDefaults() Clip {

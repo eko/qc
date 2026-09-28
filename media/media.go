@@ -97,8 +97,10 @@ type VideoStream struct {
 	Duration     Duration `json:"duration"`
 	FieldOrder   string   `json:"fieldOrder,omitempty"`
 	SampleAspect string   `json:"sampleAspectRatio,omitempty"`
-	Color        Color    `json:"color"`
-	HDR          HDR      `json:"hdr"`
+	// StartTime is the stream's start on the container's timeline.
+	StartTime Duration `json:"startTime,omitempty"`
+	Color     Color    `json:"color"`
+	HDR       HDR      `json:"hdr"`
 }
 
 // Color holds the signalled colour description of a stream.
@@ -178,6 +180,33 @@ type AudioStream struct {
 	ChannelLayout string `json:"channelLayout,omitempty"`
 	BitRate       int64  `json:"bitRate,omitempty"`
 	Language      string `json:"language,omitempty"`
+	// SampleFormat is the decoder's sample format (fltp, s16, s32p...).
+	SampleFormat string `json:"sampleFormat,omitempty"`
+	// BitDepth is the coded sample depth of PCM and lossless streams (0
+	// for lossy codecs, which have none).
+	BitDepth int `json:"bitDepth,omitempty"`
+	// StartTime is the stream's start on the container's timeline.
+	StartTime Duration `json:"startTime,omitempty"`
+	// Duration is the stream's duration, when the container tells.
+	Duration Duration `json:"duration,omitempty"`
+	// Default is true for the track players pick by default.
+	Default bool `json:"default,omitempty"`
+}
+
+// DefaultAudio returns the index in Audio of the default track: the first
+// flagged default, else the first track; -1 without audio.
+func (i *Info) DefaultAudio() int {
+	for n, a := range i.Audio {
+		if a.Default {
+			return n
+		}
+	}
+
+	if len(i.Audio) == 0 {
+		return -1
+	}
+
+	return 0
 }
 
 // Packet is a compressed access unit as stored in the container.

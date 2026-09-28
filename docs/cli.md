@@ -111,6 +111,7 @@ precision: 0.25
 metrics: [xpsnr, cambi]
 encode-bit-depth: 10
 fast: true            # analyze only: each command reads the keys it has
+loudness-target: atsc # analyze and run
 ```
 
 A value set in several places is taken, in order, from the command line,
@@ -127,8 +128,8 @@ file counts as given, like `--precision`, and conflicts with `--sample`.
 |---|---|
 | `-r, --reference file` | also measure the VMAF of the source against this reference |
 | `--codecs h264,hevc,av1` | ladders to build (default h264; empty to skip) |
-| `--skip-analysis` | skip the frame analysis |
-| plus the VMAF and ladder flags below | |
+| `--skip-analysis` | skip the frame analysis (and its audio analysis) |
+| plus the audio, VMAF and ladder flags below | |
 
 ### `analyze`
 
@@ -138,6 +139,21 @@ file counts as given, like `--precision`, and conflicts with `--sample`.
 | `--bitrate-interval` | 1s | bucket of the bitrate series |
 | `--peak-window` | 1s | sliding window of the peak bitrate |
 | `--no-motion` | off | skip the camera motion analysis ([analysis](analysis.md#camera-motion-analyzemotion)) |
+| `--audio` | off | analyse the audio even with `--fast` (it is then decoded) |
+| plus the audio flags below | | |
+
+### Audio (`analyze`, `run`)
+
+Loudness and defects of the audio tracks, decoded while the frames are
+([audio.md](audio.md)). Not with `--fast` unless `--audio`.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--no-audio` | off | skip the audio analysis |
+| `--loudness-target` | ebu | `ebu` (-23 LUFS ±0.5, ≤ -1 dBTP), `ebu-live` (±1), `atsc` (-24 LKFS ±2, ≤ -2 dBTP), `streaming` (-16 ±1, ≤ -1 dBTP), `streaming-14`, or a loudness in LUFS (`-16`: ±1 LU, ≤ -1 dBTP) |
+| `--audio-tracks` | all | `all`, `default` (the track flagged default, else the first), or audio track numbers from 0, as ffmpeg's `0:a:N` (`0,2`) |
+| `--silence-threshold` | -60 | level (dBFS) at or under which a 10 ms window is silent |
+| `--silence-duration` | 2s | shortest silence reported (leading and trailing silences are measured whatever their length) |
 
 ### VMAF (`vmaf`, `run`)
 
@@ -192,7 +208,7 @@ A copy of the video with the analysis burnt in: [overlay.md](overlay.md).
 | Flag | Default | Meaning |
 |---|---|---|
 | `--overlay file` | none | write the annotated copy (H.264; MP4, MOV or MKV); ffmpeg's `subtitles` filter (libass) is checked before any work, and the copy cannot overwrite the video it annotates |
-| `--overlay-items` | all | parts shown: `time`, `bitrate`, `shots`, `motion`, `siti`, `levels`, `hdr`, `flags`, `quality` (or `vmaf`), `timeline`; items without data are left out |
+| `--overlay-items` | all | parts shown: `time`, `bitrate`, `shots`, `motion`, `siti`, `levels`, `hdr`, `loudness` (or `audio`), `flags`, `quality` (or `vmaf`), `timeline`; items without data are left out |
 | `--overlay-height` | 0 (the source's) | height of the copy, even (`720` encodes faster, with the same layout) |
 | `--overlay-encoder` | auto | H.264 encoder of the copy: `auto` (VideoToolbox on macOS when it encodes a test frame, NVENC with `--gpu`, x264 otherwise), `x264`, `videotoolbox`, `nvenc`; an explicit hardware encoder is checked before any work ([performance](overlay.md#performance)) |
 | `--overlay-workers` | 0 (the encoder's) | segments of the copy rendered at once: 6 with VideoToolbox, 4 with NVENC, a single pass with x264; `1` renders in a single pass |
@@ -212,7 +228,7 @@ an ffmpeg built with it, as ffmpeg is on macOS
 | Flag | Default | Meaning |
 |---|---|---|
 | `--gpu` | off | use the GPU where available: `--hwaccel cuda`, `--encoder nvenc` for ladders, `--vmaf-backend auto`; flags set explicitly win. ffmpeg's NVIDIA support, the device and each NVENC encoder are checked before any work |
-| `--hwaccel` | auto | `auto`: on macOS, VideoToolbox decodes the concurrent segments of a frame analysis, the CPU everything else; elsewhere the CPU. `videotoolbox`: VideoToolbox for every decode it can do exactly (H.264 and HEVC in 4:2:0 8/10-bit); `none`: CPU; `cuda`: NVDEC decoding. All give frames identical to a CPU decode, but `cuda-scale`: NVDEC and GPU scaling (not bit-exact). Falls back to the CPU per file |
+| `--hwaccel` | auto | `auto`: on macOS, VideoToolbox decodes the concurrent segments of a frame analysis and the concurrent runs and segments of a VMAF measurement, the CPU everything else; elsewhere the CPU. `videotoolbox`: VideoToolbox for every decode it can do exactly (H.264 and HEVC in 4:2:0 8/10-bit); `none`: CPU; `cuda`: NVDEC decoding. All give frames identical to a CPU decode, but `cuda-scale`: NVDEC and GPU scaling (not bit-exact). Falls back to the CPU per file |
 | `--encoder` | cpu | `nvenc`: ladders with `h264_nvenc`, `hevc_nvenc`, `av1_nvenc` (CQ probes, same engine); not with `--per-shot` or AV1 `--film-grain` |
 | `--vmaf-backend` | cpu | `cuda`: VMAF features on the GPU (binaries built with `-tags cuda`; VMAF v0.6.1 family only, VMAF v1 has no CUDA features); `auto`: CUDA when possible, the CPU otherwise, with the reason in the report |
 
@@ -232,7 +248,9 @@ Paste the output of `qc version --check` in bug reports. See
 - **Terminal**: cards, a bitrate chart, SI/TI/luma/frame-size sparklines, a
   timeline of shots, black/frozen segments and keyframes, the hardest shots,
   findings. HDR videos get a format badge and a light level block (MaxCLL,
-  MaxFALL, peak and average light over time). For VMAF: a score gauge with its interval, and quality over time.
+  MaxFALL, peak and average light over time). Audio tracks get a line each
+  (loudness and true peak against the target, loudness range) with their
+  short-term loudness. For VMAF: a score gauge with its interval, and quality over time.
   For ladders: the rate-quality chart, the rung table (predicted vs measured)
   and findings.
 - **JSON** (`schemaVersion` 1): the full results. Durations are in seconds, and
@@ -245,7 +263,8 @@ Paste the output of `qc version --check` in bug reports. See
     VMAF ± CI, worst frame, rungs, banding) and a findings count linking to
     the findings, listed by severity (warning, note, passed).
   - **Charts** (bitrate, frame sizes with keyframes, SI/TI, luma, light
-    levels of HDR videos, VMAF, CAMBI, rate-quality): hovering shows the exact values at the pointer —
+    levels of HDR videos, loudness, channel levels and phase of each audio
+    track, VMAF, CAMBI, rate-quality): hovering shows the exact values at the pointer —
     time as hh:mm:ss.mmm and frame number, every series at that time, the
     other metrics of the same frame under VMAF, the black/frozen/banded
     segment under the cursor. Ladder points show bitrate, VMAF (± its

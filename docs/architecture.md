@@ -51,6 +51,9 @@ flowchart TB
     analyze --> colorimetry["internal/colorimetry<br/>PQ, HLG, BT.2020, ICtCp"]
     analysis --> quality
     analysis --> decode
+    analysis --> audio["audio<br/>track analysis: layouts, Analyzer"]
+    audio --> loudness["audio/loudness<br/>BS.1770, targets"]
+    audio --> defect["audio/defect<br/>silence, clipping, phase"]
     quality --> vmaf["vmaf<br/>pure Go: models, backends, scoring port"]
     libvmaf["vmaf/libvmaf<br/>cgo libvmaf"] --> vmaf
     quality --> decode
@@ -79,10 +82,13 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `frame` | Reference-counted frames, pooled by geometry; luma, optional 4:2:0 chroma, optional thumbnail, 8 or 16-bit samples, optional grid of 10-bit Y′CbCr samples (HDR light levels) |
 | `probe` | Container and stream information through `ffprobe -show_format -show_streams`, and the first frame's HDR side data for PQ, HLG and Dolby Vision streams |
 | `bitstream` | Packet-level analysis: bitrate series, sliding peak, frame sizes, GOP structure — no decoding |
-| `decode` | `Source` interface; ffmpeg implementation piping raw planes (seek, frame selection, scaling), optionally decoding with NVDEC or VideoToolbox (`WithHWAccel`, reported through `HWAccelReporter`; `SegmentDecoders` tells how many segments to decode at once) |
+| `decode` | `Source` interface; ffmpeg implementation piping raw planes (seek, frame selection, scaling), optionally decoding with NVDEC or VideoToolbox (`WithHWAccel`, reported through `HWAccelReporter` and `SegmentHWAccelReporter`; `SegmentDecoders` tells how many segments to decode at once); seeks on the container's timeline (`Request.Origin`); audio streams as 32-bit float samples (`DecodeAudio`) |
 | `analyze` | Runners (`Run`: one decode fanned out; `RunSegments`: concurrent segments fed to analyzer forks, `Forker`, merged with `Series`) and the per-frame analyzers (`siti`, `scene`, `black`, `freeze`, `crop`, `levels`, `motion` (camera motion per frame, camera work per shot), and `light` for HDR: MaxCLL, MaxFALL); `analyze/analyzetest` checks that forks give a sequential pass's results |
 | `analyze/grain` | Pure film grain (noise) estimator behind `encode.FFmpeg.Noise` and the ladder's grain checks |
-| `analysis` | Orchestrates inspection and frame analysis (`Analyze`) and comparisons (`Compare`, through its `Meter`) into reports |
+| `analysis` | Orchestrates inspection, frame analysis and audio analysis (`Analyze`, the audio tracks decoded concurrently with the video) and comparisons (`Compare`, through its `Meter`) into reports |
+| `audio` | The analysis of an audio track on planar float32 samples (`Analyzer`, `Track`): channel layouts and their BS.1770 weights, loudness and defects combined ([audio.md](audio.md)) |
+| `audio/loudness` | Pure Go ITU-R BS.1770-5 meter: K-weighting, gated integrated loudness, momentary and short-term series, loudness range (EBU Tech 3342), true peak (4× oversampling); delivery targets (EBU R 128, ATSC A/85, streaming) |
+| `audio/defect` | Pure Go defect detection: silence of the mix and of each channel, muted channels, clipping, DC offset, correlation and phase of channel pairs |
 | `vmaf` | Pure Go: model and device resolution, extractors, backend resolution, and the scoring contract (`Models`, `Scorer`) |
 | `vmaf/libvmaf` | cgo binding to libvmaf implementing that contract: several models and extra features (PSNR, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI) per context; CUDA feature extraction behind the `cuda` build tag (`CUDABuilt`, `InitCUDA`). `Engine` plugs it into `quality.Meter` |
 | `quality` | Quality measurement engine: stratified sampling, confidence intervals for VMAF and every extra metric, per-device VMAF, banding segments, decoding plans |
@@ -104,8 +110,9 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `internal/htmlreport` | Self-contained HTML reports, one typed entry point per report (`RenderAnalysis`, `RenderComparison`, `RenderLadder`, `RenderRun`) |
 | `internal/htmlreport/svg` | The charts of the HTML reports: static SVG readable without script, and their data for the page script (tooltips, zoom, legend toggles) |
 | `internal/testutil` | Test helpers: tiny synthetic clips generated with ffmpeg's lavfi sources, fake ffmpeg binaries |
+| `internal/audiotest` | Test signals: the conformance signals of EBU Tech 3341/3342 with their expected readings, programme-like audio, defects, float WAV files |
 | `cmd/qc` | The CLI and its composition root |
-| `bench/vmafsim`, `bench/ladderval`, `bench/motionval`, `bench/gpuval` | Validation tools (`motionval`: camera motion against synthetic moves of known speed; `gpuval`: the GPU validation kit) |
+| `bench/vmafsim`, `bench/ladderval`, `bench/motionval`, `bench/audioval`, `bench/gpuval` | Validation tools (`motionval`: camera motion against synthetic moves of known speed; `audioval`: the audio against the EBU conformance signals, synthetic defects and ffmpeg; `gpuval`: the GPU validation kit) |
 
 ### Ports
 
@@ -117,7 +124,7 @@ importers are not forced into a DI container.
 |---|---|---|
 | `probe.Prober` (optionally `analysis.HDRProber`) | `analysis` | `probe.FFprobe` |
 | `bitstream.PacketReader` | `analysis` | `bitstream.FFprobeReader` |
-| `decode.Source` (optionally `decode.HWAccelReporter`) | `analysis`, `quality` | `decode.FFmpeg` |
+| `decode.Source` (optionally `decode.HWAccelReporter`, and `analysis.AudioDecoder` for the audio) | `analysis`, `quality` | `decode.FFmpeg` |
 | `vmaf.Models`, `vmaf.Scorer` | `quality` | `vmaf/libvmaf` |
 | `quality.Engine` | `quality.Meter` | `libvmaf.Engine` |
 | `analysis.Meter` | `analysis.Analyzer.Compare` | `quality.Meter` |
@@ -194,7 +201,8 @@ does not allocate.
 ## Concurrency
 
 - Independent stages run concurrently with `errgroup` (probe and packet
-  reading, the two decoders of a comparison).
+  reading, the two decoders of a comparison, the frame analysis and the
+  decodes of the audio tracks).
 - Every producer/consumer link is a **bounded channel**: a slow consumer
   applies backpressure to the decoder instead of letting frames pile up in
   memory (a bug caught during development: an unbounded queue grew to 11 GB

@@ -211,7 +211,8 @@ func TestPlanRuns(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			r := fakeRun(300, 10, 9)
-			runs, cost := r.planRuns(r.newJobs(testCase.clips))
+			seekFrom, seekCost := r.seekPoints()
+			runs, cost := planRuns(r.newJobs(testCase.clips), seekFrom, seekCost)
 
 			windows := make([]window, len(runs))
 			for i, run := range runs {
@@ -375,6 +376,39 @@ func TestDispatcher(
 
 			assert.Equal(t, testCase.wantPairs, pairs, "pairs delivered, channel closed")
 		})
+	}
+}
+
+// TestDispatcherCancelledAfterClosing cancels a delivery to a clip once
+// another clip ended on the same frame: every pair channel is closed
+// exactly once.
+func TestDispatcherCancelledAfterClosing(
+	t *testing.T,
+) {
+	pool := frame.NewPool(8, 8, frame.PoolOptions{Chroma: true})
+	ending := &clipJob{warmFrom: 0, warmTo: 1, pairs: make(chan pair, 1)}
+	blocked := &clipJob{warmFrom: 0, warmTo: 6, pairs: make(chan pair)}
+	queue := make(chan *clipJob, 2)
+	d := &dispatcher{jobs: []*clipJob{ending, blocked}, queue: queue, slots: make(chan struct{}, 2)}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go func() {
+		<-queue
+		<-queue
+		// The first clip got its pair and is closed: cancel while the
+		// dispatcher waits on the second one.
+		(<-ending.pairs).release()
+		cancel()
+	}()
+
+	err := d.run(ctx, framesOn(pool, 3), framesOn(pool, 3))
+	require.ErrorIs(t, err, context.Canceled)
+
+	for _, job := range d.jobs {
+		_, open := <-job.pairs
+		assert.False(t, open, "pair channels are closed")
 	}
 }
 

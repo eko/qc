@@ -35,6 +35,7 @@ func (t *title) leftRows(
 	add(ItemSITI, f != nil && len(f.SI) > 0, row{height: rowHeight, text: t.sitiRow})
 	add(ItemLevels, f != nil && len(f.LumaMean) > 0, row{height: rowHeight, text: t.lumaRow})
 	add(ItemHDR, f != nil && len(f.PeakNits) > 0, row{height: rowHeight, text: t.lightRow})
+	add(ItemLoudness, t.loudness != nil, row{height: rowHeight, text: t.loudnessRow})
 
 	return rows
 }

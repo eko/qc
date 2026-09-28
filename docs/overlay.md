@@ -38,6 +38,7 @@ orange: the middle of the picture stays clear.
 | `siti` | frame panel | SI and TI of the frame (P.910) | frame analysis |
 | `levels` | frame panel | luma range and average (8-bit code values), the range in red when the frame leaves the nominal levels | frame analysis |
 | `hdr` | frame panel | peak and average light of the frame, cd/m² | PQ or HLG video |
+| `loudness` (or `audio`) | frame panel | short-term (3 s) and momentary (400 ms) loudness of the default track when the frame is shown, LUFS ([audio](audio.md)) | audio analysis |
 | `flags` | badges, top | `LETTERBOX`, `PILLARBOX`, `BLACK`, `FROZEN`, `BANDING` (CAMBI above 5, from a comparison), `OUT OF RANGE` (1% of the samples outside the nominal levels) | frame analysis or comparison |
 | `quality` (or `vmaf`) | quality panel | VMAF of the frame (green from 90, amber from 80, red below), up to four other metrics (XPSNR, PSNR, CAMBI…), how the frames were scored | comparison |
 | `timeline` | bottom strip | the lowest VMAF of each slice of the title (or the bitrate without a comparison), shot cuts as ticks, a playhead; the played part lights up | — |

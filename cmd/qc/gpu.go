@@ -43,7 +43,7 @@ func addGPUFlags(
 	flags.Bool("gpu", false, gpuFlagHelp)
 
 	if use&gpuDecode != 0 {
-		flags.String("hwaccel", "", "hardware decoding: auto (default: VideoToolbox for the segments of a frame analysis on macOS, CPU otherwise), "+
+		flags.String("hwaccel", "", "hardware decoding: auto (default: VideoToolbox for the concurrent decodes of a frame analysis or VMAF on macOS, CPU otherwise), "+
 			"none, videotoolbox, cuda (NVDEC) — all with identical frames — or cuda-scale (NVDEC + GPU scaling, not bit-exact)")
 	}
 

@@ -54,14 +54,17 @@ func TestSegmentBounds(
 func TestSegmentRequests(
 	t *testing.T,
 ) {
-	bs := &bitstream.Report{PTS: []media.Duration{0, media.Seconds(0.04), media.Seconds(0.08), media.Seconds(0.12)}}
+	bs := &bitstream.Report{
+		PTS:   []media.Duration{0, media.Seconds(0.04), media.Seconds(0.08), media.Seconds(0.12)},
+		Start: media.Seconds(0.04),
+	}
 	base := decode.Request{Path: "in.mp4", Codec: "h264"}
 
 	got := segmentRequests(base, []int{0, 2}, bs, 3)
 
 	assert.Equal(t, []decode.Request{
 		{Path: "in.mp4", Codec: "h264", Threads: 3, Segment: true, MaxFrames: 3},
-		{Path: "in.mp4", Codec: "h264", Threads: 3, Segment: true, FirstIndex: 2, Start: media.Seconds(0.08)},
+		{Path: "in.mp4", Codec: "h264", Threads: 3, Segment: true, FirstIndex: 2, Start: media.Seconds(0.08), Origin: media.Seconds(0.04)},
 	}, got)
 }
 

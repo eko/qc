@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/audio/loudness"
 	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/decode"
 	"github.com/eko/qc/probe"
@@ -176,5 +177,25 @@ func ExampleAnalyzer_Analyze_hdr() {
 
 	if h := cmp.VMAF.HDR; h != nil {
 		fmt.Println(h.Note)
+	}
+}
+
+// The audio of the analysis: every track's loudness checked against a
+// target, here ATSC A/85, and its defects.
+func ExampleAnalyzer_Analyze_audio() {
+	atsc, _ := loudness.ParseTarget(loudness.TargetATSC)
+
+	report, err := exampleAnalyzer().Analyze(context.Background(), "video.mp4", analysis.Options{
+		Audio: analysis.AudioOptions{Target: atsc},
+	})
+	if err != nil || report.Audio == nil {
+		fmt.Println(err)
+
+		return
+	}
+
+	for _, t := range report.Audio.Tracks {
+		fmt.Printf("#%d %.1f LKFS, LRA %.1f LU, true peak %.1f dBTP, on target: %v, silences: %d\n",
+			t.Stream, t.Loudness.Integrated, t.Loudness.Range, t.Loudness.TruePeak, t.Compliance.OK(), len(t.Defects.Silence))
 	}
 }

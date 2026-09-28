@@ -102,7 +102,7 @@ func TestHWAccelArgs(
 				Path: "in.mp4", Pool: luma, SourceWidth: 1280, SourceHeight: 720,
 				Start: media.Seconds(1), FrameRate: media.Rational{Num: 25, Den: 1}, Select: [][2]int{{0, 2}},
 			},
-			want: "-v error -nostdin -threads 0 -hwaccel cuda -hwaccel_output_format cuda -ss 0.980000 -i in.mp4 " +
+			want: "-v error -nostdin -threads 0 -hwaccel cuda -hwaccel_output_format cuda -seek_timestamp 1 -ss 0.980000 -i in.mp4 " +
 				"-map 0:v:0 -fps_mode passthrough -an -sn -dn " +
 				`-vf scale_cuda=320:180:interp_algo=bicubic:format=yuv420p,hwdownload,format=yuv420p,select='between(n\,0\,1)',extractplanes=y ` +
 				"-f rawvideo -",

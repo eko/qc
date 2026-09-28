@@ -56,6 +56,9 @@ type Progress struct {
 type Options struct {
 	Bitstream bitstream.Options
 	Video     VideoOptions
+	// Audio configures the audio analysis, which runs with the frame
+	// analysis (and not with SkipVideo unless Audio.WithInspection).
+	Audio AudioOptions
 	// SkipVideo only runs stage 1 (no decoding).
 	SkipVideo bool
 	// DeferHDRMetadata leaves the HDR metadata of the first frame out of an
@@ -75,7 +78,9 @@ type Report struct {
 	Bitstream     *bitstream.Report `json:"bitstream,omitempty"`
 	Video         *VideoReport      `json:"video,omitempty"`
 	Frames        *FrameSeries      `json:"frames,omitempty"`
-	Timings       map[string]string `json:"timings"`
+	// Audio is the audio analysis (nil when skipped or without audio).
+	Audio   *AudioReport      `json:"audio,omitempty"`
+	Timings map[string]string `json:"timings"`
 }
 
 // ShotCuts returns the shot cuts found by the frame analysis: the start of
@@ -97,7 +102,7 @@ func (r *Report) ShotCuts() []media.Duration {
 // alone gives.
 func (r *Report) inspection() *Report {
 	out := *r
-	out.Video, out.Frames = nil, nil
+	out.Video, out.Frames, out.Audio = nil, nil, nil
 
 	return &out
 }
@@ -182,14 +187,8 @@ func (a *Analyzer) Analyze(
 		return nil, fmt.Errorf("analyze %s: %w", path, err)
 	}
 
-	if !opts.SkipVideo {
-		stop := timings.track("video")
-
-		if err := a.analyzeWithHDR(ctx, path, opts, report, progress, deferred); err != nil {
-			return nil, fmt.Errorf("analyze %s: %w", path, err)
-		}
-
-		stop()
+	if err := a.decodeStreams(ctx, path, opts, report, progress, deferred, timings); err != nil {
+		return nil, fmt.Errorf("analyze %s: %w", path, err)
 	}
 
 	report.Timings = timings.snapshot()
@@ -197,6 +196,57 @@ func (a *Analyzer) Analyze(
 	a.logger.Debug("analysis done", "path", path, "timings", report.Timings)
 
 	return report, nil
+}
+
+// decodeStreams runs what decodes the file, concurrently: the frame
+// analysis (stage 2, unless SkipVideo) and the audio analysis (when the
+// options ask for it). The audio costs little next to the video: it runs
+// meanwhile, on a core of its own per track.
+func (a *Analyzer) decodeStreams(
+	ctx context.Context,
+	path string,
+	opts Options,
+	report *Report,
+	progress func(Progress),
+	deferred bool,
+	timings *timings,
+) error {
+	group, gctx := errgroup.WithContext(ctx)
+	// The frame analysis replaces report.Info once it completed the HDR
+	// metadata: the audio reads the inspection's.
+	info := report.Info
+
+	if !opts.SkipVideo {
+		group.Go(func() error {
+			stop := timings.track("video")
+			if err := a.analyzeWithHDR(gctx, path, opts, report, progress, deferred); err != nil {
+				return err
+			}
+
+			stop()
+
+			return nil
+		})
+	}
+
+	if opts.wantsAudio() {
+		group.Go(func() error {
+			stop := timings.track("audio")
+
+			audioReport, err := a.analyzeAudio(gctx, path, info, opts.Audio)
+			if err != nil || audioReport == nil {
+				return err
+			}
+
+			report.Audio = audioReport
+
+			stop()
+
+			return nil
+		})
+	}
+
+	return group.Wait()
 }
 
 // analyzeWithHDR runs stage 2, and when the inspection deferred it, reads

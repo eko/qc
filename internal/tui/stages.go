@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/audio/loudness"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/pipeline"
@@ -41,7 +42,7 @@ func InspectionSummary(
 	v, _ := report.Info.PrimaryVideo()
 
 	return fmt.Sprintf("%s · %d×%d · %.3g fps · %s", v.Codec, v.Width, v.Height, v.AvgFrameRate.Float(),
-		report.Info.Duration.Std().Round(time.Second))
+		report.Info.Duration.Std().Round(time.Second)) + loudnessSummary(report)
 }
 
 // analysisSummary counts the shots and gives the mean complexity.
@@ -50,7 +51,24 @@ func analysisSummary(
 ) string {
 	v := report.Video
 
-	return fmt.Sprintf("%d shots · SI %.0f · TI %.0f", len(v.Shots), v.SITI.SISummary.Mean, v.SITI.TISummary.Mean)
+	return fmt.Sprintf("%d shots · SI %.0f · TI %.0f", len(v.Shots), v.SITI.SISummary.Mean, v.SITI.TISummary.Mean) + loudnessSummary(report)
+}
+
+// loudnessSummary is the integrated loudness of the first audio track
+// analysed, or "".
+func loudnessSummary(
+	report *analysis.Report,
+) string {
+	if report.Audio == nil || len(report.Audio.Tracks) == 0 {
+		return ""
+	}
+
+	l := report.Audio.Tracks[0].Loudness
+	if l.Integrated <= loudness.Floor {
+		return " · silent audio"
+	}
+
+	return fmt.Sprintf(" · %.1f LUFS", l.Integrated)
 }
 
 // vmafSummary is the score with its precision, and where it ran.

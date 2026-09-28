@@ -36,8 +36,15 @@ type Request struct {
 	// SourceWidth and SourceHeight are the coded dimensions of the video.
 	SourceWidth  int
 	SourceHeight int
-	// Start seeks to the frame presented at Start (0 = beginning).
+	// Start seeks to the frame presented at Start (0 = beginning), relative
+	// to the first frame of the video.
 	Start media.Duration
+	// Origin is the presentation time of the first frame of the video on
+	// the container's timeline (bitstream.Report.Start), which ffmpeg seeks
+	// on: a seek goes to Origin+Start. Without it, ffmpeg would count Start
+	// from the container's start, that of its earliest stream, and land
+	// one frame or more early in a video starting after its audio.
+	Origin media.Duration
 	// FirstIndex is the index in the video of the first decoded frame (the
 	// frame presented at Start). Returned frames are numbered from it.
 	FirstIndex int
@@ -63,9 +70,9 @@ type Request struct {
 	// VideoToolbox only decodes the formats it outputs as they are.
 	PixelFormat string
 	// Segment marks the decode as one of several concurrent decodes of
-	// segments of a video: HWAccelAuto then decodes with VideoToolbox,
-	// whose concurrent sessions add up while a single one is slower than
-	// the CPU.
+	// parts of a video: HWAccelAuto then decodes with VideoToolbox, whose
+	// concurrent sessions add up while a single one is slower than the
+	// CPU.
 	Segment bool
 	// ToneMap, when set, converts HDR frames to SDR while scaling (pools
 	// with chroma only, see ToneMap).
@@ -181,9 +188,11 @@ func (d *FFmpeg) inputArgs(
 
 	if req.Start > 0 {
 		// Seek half a frame early so the frame presented at Start is the
-		// first one kept by ffmpeg's accurate seeking.
-		seek := req.Start.Seconds() - frameDuration(req.FrameRate)/2
-		args = append(args, "-ss", strconv.FormatFloat(max(seek, 0), 'f', seekDecimals, 64))
+		// first one kept by ffmpeg's accurate seeking, on the container's
+		// timeline (-seek_timestamp) rather than from its start.
+		origin := req.Origin.Seconds()
+		seek := max(origin+req.Start.Seconds()-frameDuration(req.FrameRate)/2, origin)
+		args = append(args, "-seek_timestamp", "1", "-ss", strconv.FormatFloat(seek, 'f', seekDecimals, 64))
 	}
 
 	return args

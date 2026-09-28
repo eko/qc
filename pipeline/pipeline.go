@@ -298,8 +298,10 @@ func (r *Runner) inspect(
 	aopts := opts.Analysis
 	aopts.SkipVideo = true
 	// The frame analysis that follows reads the first frame's HDR metadata
-	// while it decodes: the inspection need not wait for it.
+	// while it decodes, and analyses the audio: the inspection need not
+	// wait for the first, nor do the second.
 	aopts.DeferHDRMetadata = !opts.SkipAnalysis
+	aopts.Audio.WithInspection = opts.Analysis.Audio.WithInspection && opts.SkipAnalysis
 
 	report, err := r.analyzer.Analyze(ctx, opts.Source, aopts)
 	if err != nil {

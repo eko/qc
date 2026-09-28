@@ -124,6 +124,8 @@ func (r *run) devicePasses(
 			bitDepth: r.bitDepth,
 			backend:  r.backend,
 			plans:    map[string]int{},
+			decoders: r.decoders,
+			segments: r.segments,
 		}
 		sub.opts.Progress = nil
 
@@ -190,6 +192,7 @@ func (r *run) hdrMetricsPass(
 	sub := &run{
 		meter: r.meter, ref: r.ref, dist: r.dist, spec: r.spec, opts: r.opts,
 		n: r.n, bitDepth: r.bitDepth, backend: r.backend, plans: map[string]int{}, hdr: true,
+		decoders: r.decoders, segments: r.segments,
 	}
 	sub.opts.Progress = nil
 

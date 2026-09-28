@@ -69,19 +69,38 @@ func TestMeasureCUDAWithoutBuild(
 func TestHWAccelReported(
 	t *testing.T,
 ) {
+	h264 := fakeInput("in.mp4", 10, 5)
+	h264.Video.Codec, h264.Video.PixelFormat = "h264", "yuv420p"
+	prores := fakeInput("in.mov", 10, 5)
+	prores.Video.Codec, prores.Video.PixelFormat = "prores", "yuv422p10le"
+
 	testCases := []struct {
-		name    string
-		decoder decode.Source
-		want    string
+		name     string
+		decoder  decode.Source
+		decoders int
+		inputs   []Input
+		want     string
 	}{
 		{name: "cpu decoder", decoder: decode.NewFFmpeg("ffmpeg", 0), want: ""},
 		{name: "nvdec", decoder: decode.NewFFmpeg("ffmpeg", 0, decode.WithHWAccel(decode.HWAccelCUDA)), want: "cuda"},
 		{name: "decoder without modes", decoder: decodeFunc(nil), want: ""},
+		{
+			name: "segments decoded with videotoolbox", decoder: decode.NewFFmpeg("ffmpeg", 0, decode.WithHWAccel(decode.HWAccelVideoToolbox)),
+			decoders: 12, inputs: []Input{prores, h264}, want: "videotoolbox",
+		},
+		{
+			name: "explicit videotoolbox, codecs it does not decode", decoder: decode.NewFFmpeg("ffmpeg", 0, decode.WithHWAccel(decode.HWAccelVideoToolbox)),
+			decoders: 12, inputs: []Input{prores}, want: "videotoolbox",
+		},
+		{
+			name: "automatic mode without segments", decoder: decode.NewFFmpeg("ffmpeg", 0, decode.WithHWAccel(decode.HWAccelAuto)),
+			decoders: 1, inputs: []Input{h264}, want: "",
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.want, hwAccel(testCase.decoder))
+			assert.Equal(t, testCase.want, hwAccel(testCase.decoder, testCase.decoders, testCase.inputs...))
 		})
 	}
 }

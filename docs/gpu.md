@@ -53,7 +53,7 @@ card, and the JSON report carries `vmaf.backend`, `vmaf.backendNote`,
 | Flag | Values | Meaning |
 |---|---|---|
 | `--gpu` | | Use the GPU where available: `--hwaccel cuda`, `--encoder nvenc` (when ladders are built), `--overlay-encoder nvenc` (with `--overlay`), `--vmaf-backend auto`. Flags set explicitly win. |
-| `--hwaccel` | `auto` (default), `none`, `videotoolbox`, `cuda`, `cuda-scale` | Hardware decoding ([details](#decoding-nvdec)). `auto` never picks NVDEC: it is VideoToolbox for the segments of a frame analysis on macOS ([analysis.md](analysis.md#segments-and-hardware-decoding)), the CPU otherwise |
+| `--hwaccel` | `auto` (default), `none`, `videotoolbox`, `cuda`, `cuda-scale` | Hardware decoding ([details](#decoding-nvdec)). `auto` never picks NVDEC: it is VideoToolbox for the segments of a frame analysis ([analysis.md](analysis.md#segments-and-hardware-decoding)) and the concurrent decodes of VMAF ([vmaf.md](vmaf.md#hardware-decoding)) on macOS, the CPU otherwise |
 | `--encoder` | `cpu` (default), `nvenc` | Ladder encoders, for every codec of the run |
 | `--vmaf-backend` | `cpu` (default), `cuda`, `auto` | VMAF feature extraction. `cuda` fails for models without CUDA features; `auto` falls back to the CPU |
 

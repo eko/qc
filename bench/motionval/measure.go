@@ -46,12 +46,14 @@ func measure(
 	path string,
 	c clip,
 ) (outcome, error) {
-	raw, err := analyze(ctx, path, analysis.Options{Video: analysis.VideoOptions{Motion: motion.Options{Smooth: 1}}})
+	noAudio := analysis.AudioOptions{Skip: true}
+
+	raw, err := analyze(ctx, path, analysis.Options{Video: analysis.VideoOptions{Motion: motion.Options{Smooth: 1}}, Audio: noAudio})
 	if err != nil {
 		return outcome{}, err
 	}
 
-	def, err := analyze(ctx, path, analysis.Options{})
+	def, err := analyze(ctx, path, analysis.Options{Audio: noAudio})
 	if err != nil {
 		return outcome{}, err
 	}

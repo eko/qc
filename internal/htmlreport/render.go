@@ -34,6 +34,7 @@ var (
 	aqua   = palette[2]
 	amber  = palette[3]
 	green  = palette[5]
+	red    = palette[7]
 )
 
 const (

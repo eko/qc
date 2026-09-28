@@ -269,6 +269,7 @@ func parseVideo(
 		Duration:     seconds(s.Duration),
 		FieldOrder:   s.FieldOrder,
 		SampleAspect: s.SampleAspectRatio,
+		StartTime:    seconds(s.StartTime),
 		Color: media.Color{
 			Range:     s.ColorRange,
 			Space:     s.ColorSpace,
@@ -378,7 +379,25 @@ func parseAudio(
 		ChannelLayout: s.ChannelLayout,
 		BitRate:       integer(s.BitRate),
 		Language:      s.Tags.Language,
+		SampleFormat:  s.SampleFmt,
+		BitDepth:      audioBitDepth(s),
+		StartTime:     seconds(s.StartTime),
+		Duration:      seconds(s.Duration),
+		Default:       s.Disposition.Default == 1,
 	}
+}
+
+// audioBitDepth is the coded depth of a PCM or lossless stream: ffprobe
+// gives it as bits_per_raw_sample (FLAC, ALAC, 24-bit PCM in 32-bit
+// words) or bits_per_sample (PCM); lossy codecs have neither (0).
+func audioBitDepth(
+	s ffprobeStream,
+) int {
+	if depth := integer(s.BitsPerRawSample); depth > 0 {
+		return int(depth)
+	}
+
+	return s.BitsPerSample
 }
 
 // defaultBitDepth is the depth of every pixel format missing from
@@ -477,6 +496,9 @@ type ffprobeStream struct {
 	BitRate           string `json:"bit_rate"`
 	NbFrames          string `json:"nb_frames"`
 	BitsPerRawSample  string `json:"bits_per_raw_sample"`
+	BitsPerSample     int    `json:"bits_per_sample"`
+	SampleFmt         string `json:"sample_fmt"`
+	StartTime         string `json:"start_time"`
 	ColorRange        string `json:"color_range"`
 	ColorSpace        string `json:"color_space"`
 	ColorTransfer     string `json:"color_transfer"`
@@ -486,6 +508,7 @@ type ffprobeStream struct {
 	ChannelLayout     string `json:"channel_layout"`
 	Disposition       struct {
 		AttachedPic int `json:"attached_pic"`
+		Default     int `json:"default"`
 	} `json:"disposition"`
 	Tags struct {
 		Language string `json:"language"`

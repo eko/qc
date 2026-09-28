@@ -646,3 +646,33 @@ func TestRunInspectionDefersHDRMetadata(
 		})
 	}
 }
+
+func TestRunInspectionAudio(
+	t *testing.T,
+) {
+	// The audio asked with an inspection runs once: in the frame analysis
+	// when one follows, in the inspection otherwise.
+	audio := analysis.Options{Audio: analysis.AudioOptions{WithInspection: true}}
+
+	testCases := []struct {
+		name string
+		opts Options
+		want bool
+	}{
+		{name: "a frame analysis follows", opts: Options{Source: "a.mov", Analysis: audio}},
+		{name: "inspection only", opts: Options{Source: "a.mov", SkipAnalysis: true, Reference: "ref.mov", Analysis: audio}, want: true},
+		{name: "not asked", opts: Options{Source: "a.mov", SkipAnalysis: true, Reference: "ref.mov"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			analyzer := &fakeAnalyzer{}
+
+			_, err := NewRunner(analyzer, &fakeLadders{}).Run(t.Context(), testCase.opts, Hooks{})
+			require.NoError(t, err)
+
+			require.NotEmpty(t, analyzer.analyzed)
+			assert.Equal(t, testCase.want, analyzer.analyzed[0].Audio.WithInspection)
+		})
+	}
+}

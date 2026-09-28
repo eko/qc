@@ -137,6 +137,10 @@ func analysisFinding(
 		return w, true
 	}
 
+	if w, ok := audioFinding(f, r); ok {
+		return w, true
+	}
+
 	return hdrFinding(f)
 }
 

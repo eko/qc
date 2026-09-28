@@ -156,7 +156,7 @@ func TestParseItems(
 	}{
 		{name: "none", names: nil, want: nil},
 		{name: "blank", names: []string{" ", ""}, want: nil},
-		{name: "names and aliases", names: []string{"Time", " vmaf", "luma", "light", "time"}, want: []Item{ItemTime, ItemQuality, ItemLevels, ItemHDR}},
+		{name: "names and aliases", names: []string{"Time", " vmaf", "luma", "light", "time", "audio"}, want: []Item{ItemTime, ItemQuality, ItemLevels, ItemHDR, ItemLoudness}},
 		{name: "unknown", names: []string{"time", "weather"}, wantErr: ErrUnknownItem},
 	}
 
@@ -180,7 +180,7 @@ func TestItems(
 	t *testing.T,
 ) {
 	items := Items()
-	require.Len(t, items, 10)
+	require.Len(t, items, 11)
 
 	items[0] = "changed"
 	assert.Equal(t, ItemTime, Items()[0], "a copy")

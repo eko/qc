@@ -47,6 +47,9 @@ const (
 	ItemLevels Item = "levels"
 	// ItemHDR is the peak and average light level of an HDR frame.
 	ItemHDR Item = "hdr"
+	// ItemLoudness is the short-term and momentary loudness of the audio
+	// (the default track) when the frame is shown.
+	ItemLoudness Item = "loudness"
 	// ItemFlags are badges for black, frozen, banded and out-of-range
 	// frames, and letterboxing.
 	ItemFlags Item = "flags"
@@ -59,11 +62,11 @@ const (
 // allItems lists every item, in display order.
 var allItems = []Item{
 	ItemTime, ItemBitrate, ItemShots, ItemMotion, ItemSITI,
-	ItemLevels, ItemHDR, ItemFlags, ItemQuality, ItemTimeline,
+	ItemLevels, ItemHDR, ItemLoudness, ItemFlags, ItemQuality, ItemTimeline,
 }
 
 // itemAliases are other names accepted by ParseItems.
-var itemAliases = map[string]Item{"vmaf": ItemQuality, "light": ItemHDR, "luma": ItemLevels}
+var itemAliases = map[string]Item{"vmaf": ItemQuality, "light": ItemHDR, "luma": ItemLevels, "audio": ItemLoudness}
 
 // ErrUnknownItem is returned by ParseItems for an unknown item name.
 var ErrUnknownItem = errors.New("unknown overlay item")

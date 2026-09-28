@@ -18,6 +18,12 @@ reliability you ask for allows.
   black and frozen segments, letterbox/pillarbox, luma levels and camera
   motion (each shot static, pan, tilt, zoom, tracking or handheld, with a
   shake measure).
+- **Audio QC at no extra wall time**: every audio track measured while the
+  video decodes: loudness per ITU-R BS.1770-5 (integrated, range, true
+  peak, EBU Tech 3341/3342 conformant, within 0.01 LU of ffmpeg's
+  `ebur128`) against EBU R 128, ATSC A/85 or a streaming target; silence,
+  muted channels, clipping, DC offset and phase problems
+  ([audio](docs/audio.md)).
 - **VMAF with a confidence interval**: short clips sampled across shots until
   the 95% interval is narrower than your target. The intervals really cover
   the truth 95% of the time, measured by replaying thousands of runs.
@@ -82,6 +88,7 @@ qc run source.mov --codecs h264,av1 --html report.html    # analysis + ladders
 qc run encode.mp4 -r source.mov                           # + VMAF against the source
 
 qc analyze video.mp4 [--fast]                             # technical analysis (--fast: no decoding)
+qc analyze video.mp4 --loudness-target atsc               # audio checked against ATSC A/85 (default: EBU R 128)
 qc vmaf reference.mov distorted.mp4 [--exact]             # VMAF ± 95% CI, or every frame
 qc vmaf reference.mov distorted.mp4 --sample 5%           # fixed budget (or 2/scene), one pass, CI reported
 qc vmaf reference.mov distorted.mp4 --exact --overlay annotated.mp4   # + a copy with per-frame VMAF burnt in
@@ -99,7 +106,8 @@ Apple M2 Max, real 1080p25 H.264 sources:
 | Task | Exact / exhaustive | qc |
 |---|---|---|
 | Frame analysis of a 59 min title (every frame: SI/TI, shots, black, freeze, crop, levels, camera motion) | 225 s (one CPU decode) | 62–71 s at 26 Mbit/s, 49–52 s at 6 Mbit/s, same report to the bit (VideoToolbox segments, [details](docs/analysis.md#performance)) |
-| VMAF of a 10:36 title (x264 720p rendition) | 147 s | ~30 s at ±0.5 (real 95% CI coverage: 94.5%) |
+| VMAF of a 10:36 title (x264 720p rendition) | 149 s (131 s with VideoToolbox decoding) | 18.6 s at ±0.5 (26.5 s with CPU decoding; real 95% CI coverage: 94.5%) |
+| VMAF of a 59 min title | 897 s (704 s with VideoToolbox decoding) | 42.1 s at ±0.5, 108 s at `--sample 5%` (58.7 / 184 s with CPU decoding) |
 | H.264 ladder of a 10:36 title | ≈ 2 h (dense grid on the full title) | 1 min 39 s, every rung verified |
 | H.264 ladder of a 1 min title vs the exhaustive optimum | 13 min | 2 min, −0.04 VMAF / −0.7% bitrate from the optimum |
 
@@ -114,6 +122,7 @@ content: [docs/validation.md](docs/validation.md).
 - [Technical analysis](docs/analysis.md)
 - [VMAF engine](docs/vmaf.md)
 - [HDR](docs/hdr.md): detection, light levels, HDR metrics, HDR ladders
+- [Audio](docs/audio.md): loudness (BS.1770, EBU R 128, ATSC A/85) and defects
 - [Ladder engine](docs/ladder.md)
 - [Validation](docs/validation.md)
 - [CLI](docs/cli.md)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/internal/htmlreport"
 	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/pipeline"
@@ -34,6 +35,7 @@ func newRunCommand(
 	addQualityFlags(cmd)
 	addLadderFlags(cmd)
 	addOverlayFlags(cmd)
+	addAudioFlags(cmd)
 	addGPUFlags(cmd, gpuDecode|gpuEncode|gpuVMAF)
 
 	flags := cmd.Flags()
@@ -86,6 +88,7 @@ func runOptions(
 		Reference:    config.Run.Reference,
 		SkipAnalysis: config.Run.SkipAnalysis,
 		Codecs:       config.Run.Codecs,
+		Analysis:     analysis.Options{Audio: audioOptions(config.Analysis)},
 		Quality:      qualityOptions(config),
 		Ladder:       ladderOptions(config),
 		Overlay:      overlayOpts,

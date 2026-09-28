@@ -302,15 +302,65 @@ Inside a pass, a dispatcher zips the reference and distorted frame streams and
 hands each pair to every clip whose warm range contains it (consecutive clips
 may share warm-up frames). A clip is queued to a libvmaf worker when its first
 frame arrives. At most 2 × workers clips are in flight, and each has a buffer
-of 8 pairs, which keeps memory bounded (an exact run is a single clip spanning
-the whole video).
+of 8 pairs, which keeps memory bounded (an exact run on the CPU is a single
+clip spanning the whole video).
+
+### Hardware decoding
+
+On macOS (`--hwaccel auto`, the default, or `videotoolbox`), both videos
+are decoded by VideoToolbox when it decodes them exactly (H.264 and HEVC,
+4:2:0, 8 or 10 bits): a session uses almost no CPU, which libvmaf gets
+instead, and concurrent sessions add up while a single one decodes slower
+than ffmpeg's CPU decoder (~200 fps for a 1080p title at 25 Mbit/s against
+~600). Every decode of a measurement is therefore one of several at once:
+
+- **Seek runs** decode both sides in VideoToolbox sessions, one run per
+  two CPUs at once (six on an M2 Max). The sessions (`decode.WithVideoToolboxSessions`, one per CPU:
+  twelve on an M2 Max) are shared by both sides; a decode finding them all
+  busy runs on the CPU, with identical frames.
+- **A sweep** is split into runs of consecutive clips covering equal parts
+  of the video, three per worker and at least 500 frames each, decoded
+  concurrently from the keyframe before them like seek runs. Only the clip
+  frames are piped, as in the sweep.
+- **Exact measurements** are scored in **segments**: the video is split at
+  keyframes of the distorted stream (three segments per worker, at least
+  500 frames each), three segments are scored at once, each on its own
+  libvmaf context with a third of the CPUs as threads, and their per-frame
+  values are joined in order (plan `segments` in the report). Each segment
+  has two warm-up frames before it and one after, dropped: motion (VMAF)
+  compares a frame with its predecessor and its successor, XPSNR with one
+  predecessor below 32 fps and two above. Every frame then scores exactly
+  as in a single pass.
+
+The frames are those of a CPU decode: H.264 and HEVC decoding is bit-exact
+by specification, and the downloaded NV12/P010 frames go through the same
+bicubic scale filter (hashes compared: 1080p pass-through and 720p to 1080p
+and 2160p at 8 bits, 8-bit sources scored at 10 bits, 10-bit HEVC at 1080p
+and 720p to 1080p, PQ tone mapped to SDR). Measurements are identical to a
+CPU run, frame by frame and series by series (see
+[validation](validation.md#exactness)), and the report gives
+`hwaccel: "videotoolbox"`. Other codecs, other systems and `--hwaccel none`
+keep the CPU plans: one sweep, and a single libvmaf context using every CPU
+for an exact measurement.
+
+Runs and segments seek to the timestamp of their first frame on each
+video's container timeline (its first frame's timestamp plus the frame's,
+`decode.Request.Origin`): ffmpeg would otherwise count from the container's
+start, and a video starting after its audio would have every run start one
+frame early.
 
 ## 4. Results
 
+`qc vmaf` with the default metrics (`xpsnr,cambi,psnr`) on an otherwise idle
+M2 Max, VideoToolbox decoding (the default on macOS) and the CPU
+(`--hwaccel none`, the only decoder elsewhere, and qc before VideoToolbox
+decoding):
+
 | Content | Exact | Sampled (±0.5) | Frames scored | Real CI coverage |
 |---|---|---|---|---|
-| Drama, 1 min, 1080p25 → x264 720p | 12.6 s | 8.3 s | 36% | 95.7% |
-| Cartoon, 10:36, 1080p25 → x264 720p | 147 s | ~30 s | 5–6% | 94.5% |
+| Drama, 1 min, 1080p25 → x264 720p | 13.0 s (CPU: 14.1 s) | 7.2 s (8.5 s) | 36% | 95.7% |
+| Cartoon, 10:36, 1080p25 → x264 720p | 131 s (149 s) | 18.6 s (26.5 s) | 5% | 94.5% |
+| 59 min (the cartoon six times), 26 → 6 Mbit/s x264 1080p | 704 s (897 s) | 42.1 s (58.7 s) | 1% | — |
 
 Short titles gain little: guaranteeing ±0.5 needs about a third of their
 clips. Long titles are where sampling shines, because the needed number of
@@ -347,6 +397,77 @@ figures of the table above, but the comparison between modes holds.
   loop for a similar interval. It pays off when every scene must be seen, and
   2/scene then halves the interval for almost nothing more.
 
+### Performance
+
+Where the time goes, per 1080p frame pair, on an M2 Max (8 performance and
+4 efficiency cores), `vmaf_v1.0.16_3d0h`, x264 720p rendition of a 1080p
+H.264 title at 25 Mbit/s:
+
+| Step | CPU | Notes |
+|---|---|---|
+| libvmaf, VMAF v1 | 61 ms on one core | `speed_chroma` 25.5 ms (42%), ADM 21 ms (35%), CAMBI 13 ms (22%), motion 1 ms; no NEON code but ADM's wavelet and motion |
+| libvmaf, 12 threads | 75 ms (efficiency cores count double) | **147 fps at most**: every thread works on its own frame, scaling is near-perfect |
+| PSNR (libvmaf) | 1.4 ms | |
+| XPSNR (Go) | 5.5 ms → 1.5 ms | NEON row loops, identical integers; 5.7 → 1.7 ms at 10 bits. Above 2048×1152 its 2×2 downsampled activity keeps the portable loops (2160p: 28 → 23.5 ms) |
+| Reference decode, CPU | 13.3 ms | ~600 fps with every core |
+| Reference decode, VideoToolbox | 3.2 ms | download and conversion; ~200 fps per session |
+| Distorted decode + bicubic 720p → 1080p, CPU / VideoToolbox | 5.0 / 3.0 ms | the scale stays on the CPU (bit-exactness) |
+
+- **Exact measurements are bound by libvmaf's CPU.** Before, the whole
+  measurement cost ~100 ms of CPU per frame, 107 fps; decoding with
+  VideoToolbox and XPSNR in NEON bring it to ~88 ms, 121 fps (cartoon: 149 →
+  131 s), 82% of libvmaf's own ceiling. The 59-minute title gains more,
+  897 → 704 s: its 26 Mbit/s reference costs more to decode, and its 1080p
+  rendition needs no upscaling. The rest is XPSNR, ffmpeg's
+  download and scaling, and the tail of the last segments. Going several
+  times faster would take cheaper VMAF features, i.e. NEON code in
+  libvmaf's `speed_chroma` (its `vif_filter1d` float filter is the hottest
+  loop of the whole measurement), ADM and CAMBI.
+- **Sampled measurements are bound by decoding.** A seek run decodes from
+  the keyframe before the GOP preceding its first clip (open GOPs): on the
+  cartoon, the ±0.5 measurement decodes ~26 000 frames on both sides to
+  score 822. On the CPU they cost two thirds of its 294 s of CPU; with
+  VideoToolbox the CPU drops to 129 s and the media engine sets the pace:
+  twelve sessions decode ~1 050 fps of short 1080p runs, ~1 900 of 720p.
+  26.5 → 18.6 s on the cartoon, 58.7 → 42.1 s at ±0.5 and 184 → 108 s at
+  5% on the 59-minute title.
+
+| Content | Mode | CPU decoding | VideoToolbox | CPU time |
+|---|---|---|---|---|
+| Drama 1 min | exact | 14.1 s | 13.0 s | 157 → 133 s |
+| Drama 1 min | ±0.5 | 8.5 s | 7.2 s | 93 → 70 s |
+| Drama 1 min | 5% | 3.0 s | 2.5 s | 29 → 12 s |
+| Cartoon 10:36 | exact | 149 s | 131 s | 1 616 → 1 399 s |
+| Cartoon 10:36 | ±0.5 | 26.5 s | 18.6 s | 294 → 129 s |
+| Cartoon 10:36 | 5% | 26.5 s | 18.6 s | 294 → 127 s |
+| Cartoon 10:36 | 2/scene | 42.1 s | 28.9 s | 469 → 276 s |
+| 59 min | exact | 897 s | 704 s | 9 072 → 7 572 s |
+| 59 min | ±0.5 | 58.7 s | 42.1 s | 613 → 190 s |
+| 59 min | 1% | 56.7 s | 39.0 s | 572 → 180 s |
+| 59 min | 5% | 184 s | 108 s | 1 907 → 718 s |
+
+Every measurement of the table is identical to the CPU one: same clips,
+same per-frame values of every series, same means and intervals.
+
+Levers measured that did not pay, or not enough to keep:
+
+- Segments scored two, three or four at once, and four to six libvmaf
+  threads per segment: within the noise (±3%) at 1080p. Three at once keep
+  enough sessions per side when decoding is slower than scoring (a 4K
+  reference scored with the 1080p model: 17.1 s on the CPU, 15.4 s with a
+  single session per side, 14.4 s in segments).
+- More seek runs at once (eight to sixteen), more VideoToolbox sessions
+  (24, 32), or the distorted side on the CPU to leave the media engine to
+  the reference: 0 to 8% on the cartoon, within the noise.
+- Seeking four frames before a run instead of into the GOP before it
+  decodes a third fewer frames but is no faster (more, shorter runs), and
+  it is wrong: after a non-IDR keyframe of a broadcast H.264 stream, the
+  decoder drops frames whose references precede it, and a clip scored the
+  wrong frames.
+- A pool of libvmaf pictures instead of one allocation per frame: no
+  measurable change (macOS reuses the memory).
+- Unix sockets instead of pipes were already in place for every decode.
+
 ## 5. Other metrics and devices
 
 VMAF is one opinion. The frames it decodes, scaled to the evaluation
@@ -357,7 +478,7 @@ without decoding anything again.
 | `--metrics` | Series reported | Computed by | CPU per 1080p frame (share of VMAF v1) |
 |---|---|---|---|
 | `cambi` | `cambi` | libvmaf, **the extractor VMAF v1 already runs** | 0 (shared) |
-| `xpsnr` | `xpsnr_y`, `xpsnr_u`, `xpsnr_v` | Go port of ffmpeg's `vf_xpsnr.c` | 6 ms (10%) |
+| `xpsnr` | `xpsnr_y`, `xpsnr_u`, `xpsnr_v` | Go port of ffmpeg's `vf_xpsnr.c` (NEON loops on arm64) | 1.5 ms (2%) |
 | `psnr` | `psnr_y`, `psnr_cb`, `psnr_cr`, `psnr_yuv` | libvmaf `psnr` | 1.4 ms (2%) |
 | `ssim` | `ssim` | libvmaf `float_ssim` | 15 ms (25%) |
 | `psnr-hvs` | `psnr_hvs` | libvmaf `psnr_hvs` | 48 ms (75%) |
@@ -369,10 +490,11 @@ without decoding anything again.
 
 Costs are single-thread CPU time on an M2 Max, 8-bit frames, next to VMAF v1
 (`vmaf_v1.0.16_3d0h`: 63 ms per frame). The default is `xpsnr,cambi,psnr`:
-about 12% of VMAF's CPU, +5% for a whole sampled measurement of the drama
-title (decoding included), and no measurable change of its wall time since
-libvmaf's workers stay the bottleneck. PSNR-HVS, MS-SSIM and CIEDE2000 have
-no SIMD code on Apple Silicon: they are opt-in (`--av2-ctc`).
+about 5% of VMAF's CPU (12% before XPSNR's NEON loops), and no measurable
+change of the wall time of a sampled measurement since libvmaf's workers
+stay the bottleneck. PSNR-HVS, MS-SSIM and
+CIEDE2000 have no SIMD code on Apple Silicon: they are opt-in
+(`--av2-ctc`).
 
 ### Same clips, same estimator
 

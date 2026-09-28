@@ -182,8 +182,17 @@ func TestArgs(
 				Path: "in.mp4", Pool: pool, SourceWidth: 320, SourceHeight: 180,
 				Start: media.Seconds(2), FrameRate: ntsc, MaxFrames: 10, Threads: 2,
 			},
-			want: "-v error -nostdin -threads 2 -ss 1.983317 -i in.mp4 -map 0:v:0 -fps_mode passthrough " +
+			want: "-v error -nostdin -threads 2 -seek_timestamp 1 -ss 1.983317 -i in.mp4 -map 0:v:0 -fps_mode passthrough " +
 				"-an -sn -dn -vf extractplanes=y,scale=320:180:flags=bicubic,format=gray -frames:v 10 -f rawvideo -",
+		},
+		{
+			name: "seek on the container's timeline",
+			req: Request{
+				Path: "in.mp4", Pool: pool, SourceWidth: 320, SourceHeight: 180,
+				Start: media.Seconds(2), Origin: media.Seconds(1.4), FrameRate: ntsc,
+			},
+			want: "-v error -nostdin -threads 0 -seek_timestamp 1 -ss 3.383317 -i in.mp4 -map 0:v:0 -fps_mode passthrough " +
+				"-an -sn -dn -vf extractplanes=y,scale=320:180:flags=bicubic,format=gray -f rawvideo -",
 		},
 		{
 			name: "chroma pools keep their filter graph",
@@ -192,13 +201,13 @@ func TestArgs(
 				"-vf scale=320:180:flags=bicubic,format=yuv420p -f rawvideo -",
 		},
 		{
-			name:    "seek never goes negative",
+			name:    "seek never goes before the first frame",
 			threads: 3,
 			req: Request{
 				Path: "in.mp4", Pool: pool, SourceWidth: 320, SourceHeight: 180,
 				Start: media.Seconds(0.001), FrameRate: ntsc,
 			},
-			want: "-v error -nostdin -threads 3 -ss 0.000000 -i in.mp4 -map 0:v:0 -fps_mode passthrough " +
+			want: "-v error -nostdin -threads 3 -seek_timestamp 1 -ss 0.000000 -i in.mp4 -map 0:v:0 -fps_mode passthrough " +
 				"-an -sn -dn -vf extractplanes=y,scale=320:180:flags=bicubic,format=gray -f rawvideo -",
 		},
 	}

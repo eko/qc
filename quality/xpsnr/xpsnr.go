@@ -394,32 +394,46 @@ func lumaBlock[T sample](
 }
 
 // highpass is the sum of absolute 3×3 high-pass responses over the samples
-// [x0, x1) × [y0, y1), at full resolution. The kernel (12 at the centre, −2
-// on the cross, −1 on the diagonals) is rewritten with sliding column sums,
-// 14·c − (l + r) − (v_l + 2·v_c + v_r) with v the vertical 3-sums, which is
-// the same integer and loads three samples per position instead of nine.
+// [x0, x1) × [y0, y1), at full resolution, row by row (see highpassRow).
 func highpass[T sample](
 	o view[T],
 	x0, y0, x1, y1 int,
 ) uint64 {
 	n := x1 - x0
+	rowSum := rowKernel(highpassRow[T], highpassRow8, highpassRow16)
 
 	var sum uint64
 
 	for y := y0; y < y1; y++ {
 		cur := o.row(y, x0-1, n+2)
-		up := o.row(y-1, x0-1, n+2)[:len(cur)]
-		dn := o.row(y+1, x0-1, n+2)[:len(cur)]
+		sum += rowSum(o.row(y-1, x0-1, n+2), cur, o.row(y+1, x0-1, n+2))
+	}
 
-		cl, cc := int(cur[0]), int(cur[1])
-		vl, vc := int(up[0])+cl+int(dn[0]), int(up[1])+cc+int(dn[1])
+	return sum
+}
 
-		for i := 2; i < len(cur); i++ {
-			cr := int(cur[i])
-			vr := int(up[i]) + cr + int(dn[i])
-			sum += abs(14*cc - cl - cr - vl - 2*vc - vr)
-			cl, cc, vl, vc = cc, cr, vc, vr
-		}
+// highpassRow is the sum of absolute 3×3 high-pass responses of the
+// samples of cur but its first and last, whose neighbours they are, with
+// up and down the rows above and below. The kernel (12 at the centre, −2
+// on the cross, −1 on the diagonals) is rewritten with sliding column
+// sums, 14·c − (l + r) − (v_l + 2·v_c + v_r) with v the vertical 3-sums,
+// which is the same integer and loads three samples per position instead
+// of nine.
+func highpassRow[T sample](
+	up, cur, down []T,
+) uint64 {
+	up, down = up[:len(cur)], down[:len(cur)]
+
+	cl, cc := int(cur[0]), int(cur[1])
+	vl, vc := int(up[0])+cl+int(down[0]), int(up[1])+cc+int(down[1])
+
+	var sum uint64
+
+	for i := 2; i < len(cur); i++ {
+		cr := int(cur[i])
+		vr := int(up[i]) + cr + int(down[i])
+		sum += abs(14*cc - cl - cr - vl - 2*vc - vr)
+		cl, cc, vl, vc = cc, cr, vc, vr
 	}
 
 	return sum
@@ -467,6 +481,9 @@ func temporalFull[T sample](
 	o view[T],
 	x0, y0, bw, bh int,
 ) uint64 {
+	first := rowKernel(firstOrderRow[T], firstOrderRow8, firstOrderRow16)
+	second := rowKernel(secondOrderRow[T], secondOrderRow8, secondOrderRow16)
+
 	var sum uint64
 
 	for y := y0; y < y0+bh; y++ {
@@ -474,21 +491,48 @@ func temporalFull[T sample](
 		start := y*m.width + x0
 		p1 := m.prev1[start : start+bw]
 
-		if !m.secondOrder {
-			for i, v := range cur {
-				sum += gamma * abs(int(v)-int(p1[i]))
-				p1[i] = int16(v)
-			}
-
-			continue
+		if m.secondOrder {
+			sum += second(cur, p1, m.prev2[start:start+bw])
+		} else {
+			sum += first(cur, p1)
 		}
+	}
 
-		p2 := m.prev2[start : start+bw]
-		for i, v := range cur {
-			sum += gamma * abs(int(v)-2*int(p1[i])+int(p2[i]))
-			p2[i] = p1[i]
-			p1[i] = int16(v)
-		}
+	return gamma * sum
+}
+
+// firstOrderRow is the sum of absolute differences between the samples of
+// cur and their history p1, which becomes cur.
+func firstOrderRow[T sample](
+	cur []T,
+	p1 []int16,
+) uint64 {
+	p1 = p1[:len(cur)]
+
+	var sum uint64
+
+	for i, v := range cur {
+		sum += abs(int(v) - int(p1[i]))
+		p1[i] = int16(v)
+	}
+
+	return sum
+}
+
+// secondOrderRow is the sum of absolute second-order differences of the
+// samples of cur with their history p1 and p2, which shifts to cur and p1.
+func secondOrderRow[T sample](
+	cur []T,
+	p1, p2 []int16,
+) uint64 {
+	p1, p2 = p1[:len(cur)], p2[:len(cur)]
+
+	var sum uint64
+
+	for i, v := range cur {
+		sum += abs(int(v) - 2*int(p1[i]) + int(p2[i]))
+		p2[i] = p1[i]
+		p1[i] = int16(v)
 	}
 
 	return sum
@@ -575,22 +619,46 @@ func sse[T sample](
 	ref, dist view[T],
 	x, y, w, h int,
 ) uint64 {
+	rowSum := rowKernel(sseRow[T], sseRow8, sseRow16)
+
 	var sum uint64
 
 	for row := y; row < y+h; row++ {
-		a, b := ref.row(row, x, w), dist.row(row, x, w)
-		b = b[:len(a)]
-
-		var line int
-		for i, v := range a {
-			d := int(v) - int(b[i])
-			line += d * d
-		}
-
-		sum += uint64(line)
+		sum += rowSum(ref.row(row, x, w), dist.row(row, x, w))
 	}
 
 	return sum
+}
+
+// sseRow is the sum of squared differences of two rows of samples.
+func sseRow[T sample](
+	a, b []T,
+) uint64 {
+	b = b[:len(a)]
+
+	var line int
+	for i, v := range a {
+		d := int(v) - int(b[i])
+		line += d * d
+	}
+
+	return uint64(line)
+}
+
+// rowKernel returns the row loop of fast (vectorised on arm64: one for
+// 8-bit samples, one for 16-bit ones) that has the type of portable, i.e.
+// that of T's samples. Both compute the same integers.
+func rowKernel[F any](
+	portable F,
+	fast ...any,
+) F {
+	for _, candidate := range fast {
+		if f, ok := candidate.(F); ok {
+			return f
+		}
+	}
+
+	return portable
 }
 
 // views returns the three planes of f seen through see.

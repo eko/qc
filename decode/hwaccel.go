@@ -35,11 +35,12 @@ const (
 	// almost no CPU, and concurrent sessions add up: it pays when a video
 	// is decoded in concurrent segments (Request.Segment).
 	HWAccelVideoToolbox HWAccel = "videotoolbox"
-	// HWAccelAuto uses the platform's exact hardware decoder where it is
-	// the fastest: on macOS, VideoToolbox for the concurrent segments of a
-	// frame analysis (Request.Segment), the CPU for every other decode.
-	// Elsewhere it is the CPU (NVDEC needs an explicit cuda mode, which the
-	// GPU preflight checks).
+	// HWAccelAuto uses the platform's exact hardware decoder where it pays:
+	// on macOS, VideoToolbox for concurrent decodes (Request.Segment: the
+	// segments of a frame analysis, the runs and segments of a VMAF
+	// measurement), the CPU for every other decode. Elsewhere it is the
+	// CPU (NVDEC needs an explicit cuda mode, which the GPU preflight
+	// checks).
 	HWAccelAuto HWAccel = "auto"
 )
 
@@ -202,12 +203,32 @@ var _ SegmentDecoders = (*FFmpeg)(nil)
 func (d *FFmpeg) SegmentDecoders(
 	req Request,
 ) int {
-	req.Segment = true
-	if d.modeFor(req) != HWAccelVideoToolbox {
+	if d.SegmentHWAccel(req) != HWAccelVideoToolbox {
 		return 1
 	}
 
 	return d.vtSessions()
+}
+
+// SegmentHWAccelReporter is implemented by sources whose segment decodes
+// (Request.Segment) may use another hardware decoding mode than their
+// other decodes (*FFmpeg with HWAccelAuto): measurements decoding segments
+// report it.
+type SegmentHWAccelReporter interface {
+	SegmentHWAccel(req Request) HWAccel
+}
+
+var _ SegmentHWAccelReporter = (*FFmpeg)(nil)
+
+// SegmentHWAccel returns the mode the segments of the video of req start
+// decoding in, before any fallback: with HWAccelAuto, VideoToolbox on
+// macOS for the codecs and formats it decodes exactly.
+func (d *FFmpeg) SegmentHWAccel(
+	req Request,
+) HWAccel {
+	req.Segment = true
+
+	return d.modeFor(req)
 }
 
 // vtSessions is how many decodes may use VideoToolbox at once.

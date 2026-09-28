@@ -113,10 +113,22 @@ func backendName(
 	return backend.String()
 }
 
-// hwAccel is the hardware decoding mode of decoders that report one.
+// hwAccel is the hardware decoding mode of decoders that report one: that
+// of the segment decodes of either input when the measurement decoded in
+// segments (decoders above 1), the decoder's own otherwise.
 func hwAccel(
 	decoder decode.Source,
+	decoders int,
+	inputs ...Input,
 ) string {
+	if sr, ok := decoder.(decode.SegmentHWAccelReporter); ok && decoders > 1 {
+		for _, in := range inputs {
+			if mode := sr.SegmentHWAccel(in.request()); mode != decode.HWAccelNone {
+				return mode.String()
+			}
+		}
+	}
+
 	if hw, ok := decoder.(decode.HWAccelReporter); ok && hw.HWAccel() != decode.HWAccelNone {
 		return hw.HWAccel().String()
 	}
@@ -141,7 +153,7 @@ func (r *run) result(
 		FramesDecoded: r.decoded,
 		Backend:       backendName(r.backend.Backend),
 		BackendNote:   r.backend.Reason,
-		HWAccel:       hwAccel(r.meter.decoder),
+		HWAccel:       hwAccel(r.meter.decoder, r.decoders, r.ref, r.dist),
 		HDR:           hdrReport(r.ref.Video, r.opts.HDRMetric),
 	}
 

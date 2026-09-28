@@ -53,6 +53,8 @@ func analyzePage(
 		p.Sections = append(p.Sections, s)
 	}
 
+	p.Sections = append(p.Sections, audioSections(r)...)
+
 	return p
 }
 
@@ -237,6 +239,10 @@ func analysisCards(
 	}
 
 	if c, ok := motionCard(r); ok {
+		cards = append(cards, c)
+	}
+
+	if c, ok := audioCard(r); ok {
 		cards = append(cards, c)
 	}
 

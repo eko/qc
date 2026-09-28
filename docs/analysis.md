@@ -7,7 +7,9 @@
 2. **Frame analysis**: the video is decoded once, every frame going to
    seven analyzers (eight for HDR): in a single pass fanned out to the
    analyzers, or, with hardware decoding, in concurrent segments
-   ([segments](#segments-and-hardware-decoding)).
+   ([segments](#segments-and-hardware-decoding)). Meanwhile, every audio
+   track is decoded and measured: loudness against a target and defects
+   ([audio](audio.md)).
 
 ## 1. Inspection
 
@@ -127,10 +129,19 @@ VideoToolbox (`--hwaccel auto`, the default):
   shots, black and frozen segments, crop and light levels are computed from
   the merged series exactly as from a single pass: **the report is the
   same, to the bit**.
+- **Seeks.** A segment seeks to the timestamp of its first frame on the
+  container's timeline: the timestamp of the video's first frame
+  (`bitstream.Report.Start`) plus the frame's, with `-seek_timestamp 1`.
+  Without it, ffmpeg counts `-ss` from the start of the container, that of
+  its earliest stream: in a video starting after its audio (a
+  concatenation whose first video frame is at 0.04 s and audio at 0), every
+  segment started one frame early, and the analysis of a 59-minute title
+  fell back to a single pass (244 s instead of 65 s).
 - **Checks.** A segment yielding fewer frames than planned, or not starting
   with the frame the previous one ended with (CRC32 of the luma), means a
   seek did not land where planned (unusual timestamps): the analysis then
-  starts over in one pass, with a warning.
+  starts over in one pass, with a warning (`segmented frame analysis
+  failed, analysing in one pass`, shown at the default log level).
 - **Exactness of the decoder.** VideoToolbox only decodes H.264 and HEVC,
   whose decoding is bit-exact by specification and which every Apple silicon
   Mac decodes in hardware, in the 4:2:0 8 or 10-bit formats it outputs as
@@ -139,8 +150,10 @@ VideoToolbox (`--hwaccel auto`, the default):
   after an exact conversion to planar 10-bit). The frames are identical to
   a CPU decode (frame hashes checked on 8-bit H.264 and 10-bit HEVC).
   Other codecs, and a VideoToolbox failure before the first frame, decode on
-  the CPU. The other decodes (VMAF, ladders) stay on the CPU with `auto`:
-  a single VideoToolbox session is slower than ffmpeg's CPU decoder.
+  the CPU. VMAF measurements decode with VideoToolbox too, in concurrent
+  runs ([vmaf.md](vmaf.md#hardware-decoding)); the other decodes (ladders)
+  stay on the CPU with `auto`: a single VideoToolbox session is slower than
+  ffmpeg's CPU decoder.
 
 An analyzer that cannot be forked keeps the analysis in a single pass.
 Without VideoToolbox (other systems, `--hwaccel none`, other codecs) the
@@ -408,6 +421,17 @@ not split mix two framings. Tracking versus pan or zoom is a best-effort
 parallax heuristic, and shake measured on animation reflects the virtual
 camera.
 
+## 3. Audio
+
+While the frames are analysed, each audio track is decoded by an ffmpeg of
+its own to 32-bit float samples and measured in pure Go: integrated
+loudness, loudness range, true peak and momentary/short-term series (ITU-R
+BS.1770-5, EBU Tech 3341/3342) checked against a target (`ebu`, `atsc`,
+`streaming`... `--loudness-target`), and silence, muted channels,
+clipping, DC offset and phase. It adds no wall time; `--no-audio` leaves it
+out, `--fast --audio` adds it to an inspection. Definitions, thresholds,
+validation and cost: [audio.md](audio.md).
+
 ## Report
 
 The JSON report (`schemaVersion` 1) holds the summaries, plus per-frame series
@@ -418,8 +442,10 @@ stored as **columns** (`frames.pts`, `size`, `keyframe`, `si`, `ti`,
 `motionConfidence`), the light levels in `video.light`, the camera work
 summary in `video.motion` and each shot's in `video.shots[].camera`
 (`class`, `direction`, `shaky`, `confidence`, mean `pan`, `tilt`, `zoom`,
-`roll`, `moving` share, `shake`, `parallax`). Columns are compact and ready
-to chart. All durations are in seconds.
+`roll`, `moving` share, `shake`, `parallax`), and the audio in `audio`
+(the target and one entry per track: loudness, its series every 100 ms,
+compliance, defects; see [audio.md](audio.md#report)). Columns are compact
+and ready to chart. All durations are in seconds.
 
 To check these values on the picture, `--overlay annotated.mp4` writes a
 copy of the video with each frame's values burnt in (timecode, bitrate,

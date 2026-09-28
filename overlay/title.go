@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/audio"
 	"github.com/eko/qc/media"
 	"github.com/eko/qc/quality"
 )
@@ -41,6 +42,9 @@ type title struct {
 	// frames that were not scored.
 	score   []int
 	quality *quality.Result
+	// loudness is the audio track of the loudness row (nil without
+	// audio).
+	loudness *audio.Track
 }
 
 // newTitle reshapes in; it fails without a frame timeline.
@@ -77,6 +81,7 @@ func newTitle(
 		t.levels = t.video.Levels.Levels
 	}
 
+	t.loudness = loudnessTrack(in)
 	t.bitrate = slidingBitrate(t.pts, t.sizes)
 	t.shot = t.shotIndexes()
 	t.score = t.scoreIndexes()

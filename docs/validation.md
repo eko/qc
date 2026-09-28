@@ -18,6 +18,12 @@ own content.
 | Same, 300 frames at 10 bits (FFV1 reference, SVT-AV1 10-bit rendition) | max 2.3·10⁻⁶ dB per frame; pooled identical (34.4220 / 38.6963 / 38.7574) |
 | Every series of a sampled run (XPSNR, CAMBI, PSNR, device VMAF) vs the exact run, 539 scored frames | difference 0 on every frame |
 | Phone VMAF scored next to the TV model vs scored alone | identical per frame (`TestPhoneDeviceMatchesItsModel`) |
+| Exact VMAF in segments with VideoToolbox decoding vs a single CPU pass, every series (VMAF v1, XPSNR, CAMBI, PSNR): drama 1 501 frames, cartoon 15 903 frames, 4K reference with the 1080p model 1 501 frames, 59 min 88 500 frames | identical on every frame; mean, harmonic mean and metric estimates identical |
+| Segments vs a single pass on synthetic open-GOP clips at 25 and 50 fps (`TestSegmentsBitExact`, in CI) | identical; with one warm-up frame instead of two, XPSNR differs at 50 fps (second-order activity) |
+| Sampled measurements with VideoToolbox vs CPU decoding, fixed seed: drama ±0.5 and 5%, cartoon ±0.5, 5% and 2/scene, 59 min ±0.5, 1% and 5% | same clips, identical per-frame values, means and intervals |
+| VideoToolbox decoding and bicubic scaling vs the CPU (`framemd5`): 8-bit H.264 at 1080p, 720p → 1080p and 2160p, 8-bit scored at 10 bits; 10-bit HEVC at 1080p and 720p → 1080p; PQ tone mapped to SDR | identical frames |
+| XPSNR NEON row loops vs the portable Go loops (`TestRowKernels`, random rows up to 65 573 samples) and vs ffmpeg (`TestMatchesFFmpeg`) | identical integers; per-frame XPSNR of `qc vmaf --exact` unchanged |
+| Frame analysis in segments of a video starting after its audio (`TestAnalyzeSegmentsVideoStartingLate`; a 59 min concatenation whose video starts at 0.04 s and audio at 0) | same report as a single pass, no fallback (65 s instead of 244 s) |
 
 ## VMAF sampling: replay simulation (`bench/vmafsim`)
 
@@ -681,6 +687,103 @@ analysis and 75.5 s without, a difference well inside the run-to-run noise.
 The direct measure above is the reliable one; a quiet-machine A/B remains
 to be done.
 
+## Audio
+
+`go run ./bench/audioval -aac [file ...]` checks the audio analysis
+([audio.md](audio.md)) three ways. Apple M2 Max, ffmpeg 9.0.1.
+
+### EBU conformance signals
+
+The cases of EBU Tech 3341 (v4) and 3342 (v4) that the specifications
+describe as synthetic signals, synthesised from their tables at 48 kHz
+(`internal/audiotest`) and measured by `loudness.Meter` — also in CI
+(`TestConformance`) — and, for reference, by ffmpeg's `ebur128` filter on
+the same samples written as float WAV:
+
+| Case | Signal | Reading | Expected | qc | ffmpeg `ebur128` |
+|---|---|---|---|---|---|
+| 3341-1 | stereo 1 kHz, -23 dBFS, 20 s | M / S / I | -23 ±0.1 | -22.99 / -22.99 / -22.99 | I -23.00 |
+| 3341-2 | stereo 1 kHz, -33 dBFS, 20 s | M / S / I | -33 ±0.1 | -32.99 / -32.99 / -32.99 | I -33.00 |
+| 3341-3 | -36 / -23 / -36 dBFS, 10 / 60 / 10 s | I | -23 ±0.1 | -23.01 | -23.02 |
+| 3341-4 | -72 / -36 / -23 / -36 / -72 dBFS | I | -23 ±0.1 | -23.01 | -23.02 |
+| 3341-5 | -26 / -20 / -26 dBFS, 20 / 20.1 / 20 s | I | -23 ±0.1 | -22.98 | -22.98 |
+| 3341-6 | 5.0: L, R -28, C -24, Ls, Rs -30 dBFS | I | -23 ±0.1 | -23.02 | -23.02 |
+| 3341-9 | 1.34 s at -20 / 1.66 s at -30 dBFS, ×5 | S (every complete window) | -23 ±0.1 | -22.99 (worst) | – |
+| 3341-12 | 0.18 s at -20 / 0.22 s at -30 dBFS, ×25 | M (every complete window) | -23 ±0.1 | -22.96 (worst) | – |
+| 3341-15 | sine fs/4, 0° | TP | -6 +0.2/−0.4 dBTP | -6.00 | -6.00 |
+| 3341-16 | sine fs/4, 45° | TP | -6 +0.2/−0.4 | -5.96 | -6.00 |
+| 3341-17 | sine fs/6, 60° | TP | -6 +0.2/−0.4 | -6.30 | -6.00 |
+| 3341-18 | sine fs/8, 67.5° | TP | -6 +0.2/−0.4 | -6.01 | -6.00 |
+| 3341-19 | sine fs/4, 45°, samples at 0 dBFS | TP | +3 +0.2/−0.4 | +3.04 | +3.00 |
+| 3342-1 | 20 s at -20, then -30 dBFS | LRA | 10 ±1 LU | 10.00 | 10.00 |
+| 3342-2 | -20, then -15 dBFS | LRA | 5 ±1 | 5.00 | 5.00 |
+| 3342-3 | -40, then -20 dBFS | LRA | 20 ±1 | 20.00 | 20.00 |
+| 3342-4 | -50, -35, -20, -35, -50 dBFS | LRA | 15 ±1 | 15.00 | 15.00 |
+
+Every reading is within the specification's tolerance. The true-peak
+signals are faded in and out over 20 ms: an abrupt onset at a non-zero
+phase is not band-limited, and the interpolator rings up to 0.7 dB above
+the waveform's peak on it (-5.30 dBTP at fs/8), where the specification
+describes a steady sine. The interpolator's passband ripple (±0.1 dB)
+explains -6.30 at fs/6; ffmpeg upsamples to 192 kHz with its resampler
+instead. Not synthesised: Tech 3341 cases 7, 8 (programme excerpts), 10,
+11, 13, 14 (sets of files) and 20 to 23 (recorded true-peak signals), Tech
+3342 cases 5 and 6 (programme excerpts).
+
+### Real content: ffmpeg `ebur128` and `loudnorm`
+
+Every audio track of the corpus (AAC-LC stereo 48 kHz), measured by qc and
+by ffmpeg's `ebur128` (readings of its last frame, three decimals) and
+`loudnorm` (first pass):
+
+| Title | Track | qc I / LRA / TP | `ebur128` | max Δ | `loudnorm` | max Δ |
+|---|---|---|---|---|---|---|
+| Cartoon 10:36 | 1 | -23.07 / 5.15 / -6.46 | -23.08 / 5.15 / -6.47 | 0.01 | -23.10 / 5.20 / -6.48 | 0.05 |
+| Cartoon 10:36 | 2, 3 (silent, peak -87.2 dBFS) | silent / 0 / -87.20 | -70 (gate) / 0 / – | – | – / 0 / -87.20 | 0 |
+| Drama 1 min | 1 | -19.90 / 9.40 / -4.69 | -19.91 / 9.40 / -4.70 | 0.01 | -19.80 / 8.70 / -4.70 | 0.70 |
+| Cartoon ×6, 59 min | 1 | -23.07 / 5.19 / -6.46 | -23.07 / 5.19 / -6.47 | 0.01 | -23.10 / 5.20 / -6.48 | 0.03 |
+
+qc agrees with `ebur128` within 0.01 LU and 0.01 dB on every track.
+`loudnorm` measures its own way (its loudness range differs by 0.7 LU on
+the one-minute drama). On clips of a few seconds, `ebur128`'s loudness
+range also counts the short-term windows reaching before the start (2.68
+against 2.28 LU on a 5 s clip): qc, like libebur128, only complete ones.
+
+Time for the whole audio analysis of the three tracks at once (qc,
+decoding included) against one track through each filter: 1.5 s against
+3.7–3.9 s (`ebur128`) and 20–28 s (`loudnorm`) for 10:36; 7.6–8.0 s
+against 19.5–20.9 s and 109–164 s for 59 minutes.
+
+### Synthetic defects
+
+A 60 s programme-like stereo signal (pink-ish noise and partials under a
+syllabic envelope, -23 LUFS, channels correlated at 0.62) with one defect
+each, written as float WAV and, with `-aac`, encoded to AAC-LC 256 kb/s,
+then decoded by ffmpeg and analysed as `qc analyze` does:
+
+| Case | Inserted | PCM | AAC 256k |
+|---|---|---|---|
+| clean | nothing | nothing found | nothing found |
+| silence | both channels 20.0–23.0 s | 20.000–23.000 s | 20.010–23.000 s |
+| edges | 0–2.5 s and 57–60 s | leading 2.500 s, trailing 3.000 s | 2.490 s, 2.990 s |
+| muted | FR zero | FR muted | FR muted |
+| dropout | FL zero 30.0–34.0 s | FL silent 30.000–34.000 s | 30.010–34.000 s |
+| clipping | ×8 and hard-clipped 40.0–40.5 s | 410 / 383 samples in 70 / 68 runs, 40.006–40.371 s | 20 / 8 samples in 5 / 2 runs, 40.013–40.299 s |
+| phase | FR inverted 10.0–20.0 s | out of phase 10.000–20.000 s | 10.000–20.000 s |
+| polarity | FR inverted throughout | correlation -0.62, inverted | -0.62, inverted |
+| mono | FR = FL | difference -120 dB, identical | -47.4 dB, identical |
+| dc | +0.01 on FL | FL 0.0101, FR 0.0001 | 0.0100, 0.0002 |
+| lfe | 5.1 without LFE | LFE muted (and only it) | LFE muted |
+
+Every defect is found at its place, and nothing is found in the clean
+signal nor, beyond what was inserted, in the others. Clipping survives AAC
+only partly: the codec turns flat runs into overshooting waves (see
+[limitations](audio.md#limitations)). On the real corpus, the audio
+findings are the two silent tracks of the cartoon (under -87 dBFS), its
+3.1 s trailing silence, and the drama's loudness (-19.9 LUFS, 3.1 LU above
+EBU R 128, as ffmpeg measures it too): no clipping, phase, DC, silence or
+channel finding on the programmes.
+
 ## What is not validated yet
 
 - Camera motion: the real-content check is a visual review of stills by
@@ -693,6 +796,9 @@ to be done.
   their definitions, not against subjective scores; the tone mapping of
   `--hdr-metric tonemap` is not validated perceptually; NVENC HDR10
   metadata is not checked on a GPU.
+- Audio: the EBU cases that are programme or recorded files, surround
+  and 7.1 content from real programmes, and dialogue-gated loudness (not
+  implemented).
 - XPSNR at high frame rates in sampled mode: the first frame of each clip
   lacks one frame of history for the second-order temporal activity
   (approximated, not measured yet).

@@ -93,6 +93,10 @@ func analysisLines(
 		return line("interlaced source (%s)", f.Text)
 	}
 
+	if lines := audioLines(f, report); lines != nil {
+		return lines
+	}
+
 	if text := motionFindingText(f); text != "" {
 		return line("%s", text)
 	}

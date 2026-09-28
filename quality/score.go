@@ -18,9 +18,11 @@ import (
 //     parallel. Frames between runs are never decoded.
 //
 // Sparse clips on long videos favour runs, dense clips a single sweep; the
-// plan with fewer decoded frames wins. Every clip gets one warm-up frame on
-// each side so temporal features see real neighbours. Results are returned in
-// the order of clips.
+// plan with fewer decoded frames wins. With hardware decoding, a sweep is
+// split into concurrent runs, and the segments of an exact measurement are
+// each decoded by their own run (see plan). Every clip gets warm-up frames
+// on each side so temporal features see real neighbours. Results are
+// returned in the order of clips.
 func (r *run) score(
 	ctx context.Context,
 	clips []clip,
@@ -37,12 +39,10 @@ func (r *run) score(
 		r.report(cr, round)
 	}
 
-	plan := planSweep
-	runs, seekFrames := r.planRuns(jobs)
+	plan, runs := r.plan(jobs, workers)
 
 	var err error
-	if len(runs) >= 2 && float64(seekFrames) <= seekAdvantage*2*float64(r.n) {
-		plan = planSeek
+	if runs != nil {
 		err = r.seekRuns(ctx, runs, workers, threads, collect)
 	} else {
 		err = r.sweep(ctx, jobs, window{to: r.n}, workers, threads, collect)
@@ -213,6 +213,8 @@ func (r *run) push(
 			meter.measure(p, pairs == 0 && job.warmFrom > 0)
 		}
 
+		// Warm-up frames are not counted as scored.
+		scored := job.scores(p.ref.Index)
 		p.release()
 
 		if err != nil {
@@ -221,8 +223,11 @@ func (r *run) push(
 			return pairs, err
 		}
 
+		if scored {
+			r.pairScored()
+		}
+
 		pairs++
-		r.pairScored()
 	}
 
 	return pairs, nil

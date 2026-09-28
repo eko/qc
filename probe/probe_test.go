@@ -38,9 +38,18 @@ func TestParse(
 				assert.Equal(t, media.Rational{Num: 30000, Den: 1001}, video.AvgFrameRate)
 				assert.Equal(t, media.DynamicRangeSDR, video.HDR.DynamicRange)
 
-				require.Len(t, info.Audio, 1)
-				assert.Equal(t, 48000, info.Audio[0].SampleRate)
-				assert.Equal(t, "fra", info.Audio[0].Language)
+				assert.Equal(t, media.Seconds(0.04), video.StartTime)
+
+				require.Len(t, info.Audio, 3)
+				assert.Equal(t, media.AudioStream{
+					Index: 1, Codec: "aac", Profile: "LC", SampleRate: 48000, Channels: 2, ChannelLayout: "stereo",
+					BitRate: 128000, Language: "fra", SampleFormat: "fltp", Duration: media.Seconds(59.989333), Default: true,
+				}, info.Audio[0])
+				assert.Equal(t, 24, info.Audio[1].BitDepth, "PCM: bits_per_sample")
+				assert.Equal(t, media.Seconds(0.5), info.Audio[1].StartTime)
+				assert.False(t, info.Audio[1].Default)
+				assert.Equal(t, 20, info.Audio[2].BitDepth, "lossless: bits_per_raw_sample")
+				assert.Equal(t, 0, info.DefaultAudio())
 			},
 		},
 		{

@@ -49,7 +49,7 @@ func RenderReport(
 		)
 	}
 
-	blocks = append(blocks, findingsBlock(reportFindings(report)), footer(report, jsonPath))
+	blocks = append(blocks, audioSection(report, width), findingsBlock(reportFindings(report)), footer(report, jsonPath))
 
 	return writeBlocks(w, blocks)
 }
@@ -251,7 +251,7 @@ func footer(
 	report *analysis.Report,
 	jsonPath string,
 ) string {
-	line := timingsLine(stageTimings(report.Timings, "probe", "bitstream", "video"))
+	line := timingsLine(stageTimings(report.Timings, "probe", "bitstream", "video", "audio"))
 	if v := report.Video; v != nil {
 		line += Subtle.Render(fmt.Sprintf(" · %d frames decoded", v.FramesDecoded))
 	}

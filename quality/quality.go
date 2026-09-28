@@ -243,6 +243,7 @@ func (m *Meter) newRun(
 		n:        n,
 		bitDepth: scoringDepth(opts.BitDepth, ref.Video, dist.Video),
 		plans:    map[string]int{},
+		decoders: segmentDecoders(m.decoder, ref, dist),
 	}
 
 	if err := r.configureMetrics(); err != nil {
@@ -369,6 +370,11 @@ type run struct {
 	bitDepth int
 	// backend is where libvmaf extracts the model features.
 	backend vmaf.BackendChoice
+	// decoders is how many decodes are worth running at once (see
+	// segmentDecoders); segments is set while an exact measurement is
+	// scored in segments (see exactPlan).
+	decoders int
+	segments bool
 
 	mu      sync.Mutex
 	scored  int
@@ -380,8 +386,9 @@ type run struct {
 	live bool
 }
 
-// exact scores every frame as a single clip spanning the whole video, on one
-// libvmaf context using every CPU.
+// exact scores every frame: as a single clip spanning the whole video, on
+// one libvmaf context using every CPU, or in concurrent segments with
+// hardware decoding (see exactPlan), merged into that clip.
 func (r *run) exact(
 	ctx context.Context,
 ) (*Result, error) {
@@ -392,27 +399,30 @@ func (r *run) exact(
 	r.scored, r.live = 0, true
 	r.mu.Unlock()
 
-	results, err := r.score(ctx, []clip{{stratum: st, from: 0, to: r.n}}, 1, runtime.NumCPU(), 0)
+	clips, workers, threads := r.exactPlan(st)
+
+	results, err := r.score(ctx, clips, workers, threads, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := r.devicePasses(ctx, results, 1, runtime.NumCPU()); err != nil {
+	if err := r.devicePasses(ctx, results, workers, threads); err != nil {
 		return nil, err
 	}
 
-	if err := r.hdrMetricsPass(ctx, results, 1, runtime.NumCPU()); err != nil {
+	if err := r.hdrMetricsPass(ctx, results, workers, threads); err != nil {
 		return nil, err
 	}
 
-	scores := results[0].scores
+	whole := mergeSegments(results)
+	scores := whole.scores
 	st.addClip(stats.Mean(scores), len(scores))
-	res := r.result([]*stratum{st}, results, ModeExact)
+	res := r.result([]*stratum{st}, []clipResult{whole}, ModeExact)
 	res.Mean = stats.Mean(scores)
 	res.Low, res.High = res.Mean, res.Mean
 	res.HarmonicMean = harmonicMean(scores)
 	res.Rounds = 1
-	r.addMetrics(res, []*stratum{st}, results)
+	r.addMetrics(res, []*stratum{st}, []clipResult{whole})
 
 	return res, nil
 }

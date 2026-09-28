@@ -100,19 +100,16 @@ func (r *run) decodeSide(
 	return func() error {
 		defer close(out)
 
-		req := decode.Request{
-			Path:         in.Path,
-			Pool:         pool,
-			SourceWidth:  in.Video.Width,
-			SourceHeight: in.Video.Height,
-			Select:       selection,
-			FrameRate:    in.Video.AvgFrameRate,
-			Codec:        in.Video.Codec,
-			FirstIndex:   w.seek,
-			MaxFrames:    outputFrames(w, selection),
-		}
+		req := in.request()
+		req.Pool, req.Select = pool, selection
+		req.FirstIndex, req.MaxFrames = w.seek, outputFrames(w, selection)
+		// With several decoders, every decode is one of concurrent ones:
+		// hardware sessions add up, and free the CPU for libvmaf.
+		req.Segment = r.decoders > 1
 
 		if w.seek > 0 {
+			// Frames are identified by the reference's timestamps on both
+			// sides, each seeking on its own container's timeline.
 			req.Start = r.ref.Bitstream.PTS[w.seek]
 		}
 
@@ -132,6 +129,20 @@ func (r *run) decodeSide(
 				return fmt.Errorf("decode %s: %w", in.Path, ctx.Err())
 			}
 		})
+	}
+}
+
+// request is the decoding request of the whole video of in, before the
+// frames, pool and selection of a pass are set.
+func (in Input) request() decode.Request {
+	return decode.Request{
+		Path:         in.Path,
+		SourceWidth:  in.Video.Width,
+		SourceHeight: in.Video.Height,
+		FrameRate:    in.Video.AvgFrameRate,
+		Codec:        in.Video.Codec,
+		PixelFormat:  in.Video.PixelFormat,
+		Origin:       in.Bitstream.Start,
 	}
 }
 
@@ -205,9 +216,13 @@ func (d *dispatcher) dispatch(
 
 	kept := d.active[:0]
 
-	for _, job := range d.active {
+	for i, job := range d.active {
 		if index >= job.warmFrom && index < job.warmTo {
 			if err := deliver(ctx, job, ref, dist); err != nil {
+				// The jobs closed so far are out: closeAll closes the
+				// others once.
+				d.active = append(kept, d.active[i:]...)
+
 				return err
 			}
 		}

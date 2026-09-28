@@ -6,6 +6,9 @@ import "slices"
 const (
 	planSweep = "sweep"
 	planSeek  = "seek"
+	// planSegments scores every frame in concurrent segments (see
+	// exactPlan).
+	planSegments = "segments"
 )
 
 const (
@@ -36,6 +39,14 @@ type clipJob struct {
 	idx int
 }
 
+// scores reports whether the frame at index is scored, i.e. not one of the
+// warm-up frames of the job.
+func (j *clipJob) scores(
+	index int,
+) bool {
+	return index >= j.clip.from && index < j.clip.to
+}
+
 // window is a frame range decoded by one pass, [from, to). A seek pass
 // starts decoding at seek (≤ from): frames in between are decoded and
 // dropped.
@@ -57,8 +68,10 @@ func (r *run) newJobs(
 ) []*clipJob {
 	jobs := make([]*clipJob, len(clips))
 
+	lead := r.warmUp()
+
 	for i, c := range clips {
-		from, to := max(0, c.from-warmUpFrames), min(r.n, c.to+warmUpFrames)
+		from, to := max(0, c.from-lead), min(r.n, c.to+warmUpFrames)
 		jobs[i] = &clipJob{
 			clip:     c,
 			warmFrom: from,
@@ -73,30 +86,70 @@ func (r *run) newJobs(
 	return jobs
 }
 
-// planRuns groups jobs (sorted) into runs: a clip joins the previous run when
-// decoding through the gap costs less than seeking again from a keyframe. It
-// returns the runs and the frames the seek plan would decode on both sides.
-func (r *run) planRuns(
+// plan picks how jobs (sorted) are decoded: exact segments each decoded by
+// its own run, seek runs when they decode fewer frames than a sweep, or a
+// sweep, split into concurrent runs of about equal length when decodes
+// are hardware sessions. It returns the plan and its runs, none for a
+// single sweep of the whole video.
+func (r *run) plan(
 	jobs []*clipJob,
-) ([]seekRun, int) {
+	workers int,
+) (string, []seekRun) {
+	seekFrom, seekCost := r.seekPoints()
+
+	if r.segments {
+		runs := make([]seekRun, len(jobs))
+		for i, job := range jobs {
+			runs[i] = seekRun{window: window{from: job.warmFrom, to: job.warmTo, seek: seekFrom(job.warmFrom)}, jobs: []*clipJob{job}}
+		}
+
+		return planSegments, runs
+	}
+
+	runs, seekFrames := planRuns(jobs, seekFrom, seekCost)
+	if len(runs) >= 2 && float64(seekFrames) <= seekAdvantage*2*float64(r.n) {
+		return planSeek, runs
+	}
+
+	if count := min(workers*runsPerWorker, r.n/minRunFrames); r.decoders > 1 && count > 1 {
+		if runs := r.sweepRuns(jobs, count, seekFrom); len(runs) > 1 {
+			return planSweep, runs
+		}
+	}
+
+	return planSweep, nil
+}
+
+// seekPoints returns, for a run starting at frame i, the first frame it
+// outputs (ffmpeg then decodes from the keyframe before it) and the frames
+// decoded before reaching i on both sides.
+func (r *run) seekPoints() (seekFrom, seekCost func(i int) int) {
 	refKeys := framesAt(r.ref.Bitstream.PTS, r.ref.Bitstream.Keyframes)
 	distKeys := framesAt(r.ref.Bitstream.PTS, r.dist.Bitstream.Keyframes)
 
 	// With open GOPs, frames just before a keyframe in display order are
 	// decoded after it and reference the previous GOP: a run must start
-	// decoding one GOP earlier. seekFrom is the first frame a run starting
-	// at i outputs; ffmpeg then decodes from the keyframe before it.
-	seekFrom := func(i int) int {
+	// decoding one GOP earlier.
+	seekFrom = func(i int) int {
 		return max(0, min(keyBefore(refKeys, i), keyBefore(distKeys, i))-reorderMargin)
 	}
 
-	// seekCost is the frames decoded before reaching frame i on both sides.
-	seekCost := func(i int) int {
+	seekCost = func(i int) int {
 		s := seekFrom(i)
 
 		return i - keyBefore(refKeys, s) + i - keyBefore(distKeys, s) + 2*runStartCost
 	}
 
+	return seekFrom, seekCost
+}
+
+// planRuns groups jobs (sorted) into runs: a clip joins the previous run when
+// decoding through the gap costs less than seeking again from a keyframe. It
+// returns the runs and the frames the seek plan would decode on both sides.
+func planRuns(
+	jobs []*clipJob,
+	seekFrom, seekCost func(i int) int,
+) ([]seekRun, int) {
 	var runs []seekRun
 
 	for _, job := range jobs {
@@ -121,6 +174,33 @@ func (r *run) planRuns(
 	}
 
 	return runs, total
+}
+
+// sweepRuns splits a sweep of jobs (sorted) into runs of consecutive jobs
+// covering about equal parts of the video, up to count of them. Each run
+// is decoded on its own from the keyframe before it (see seekPoints), and
+// only the frames of its jobs are piped, as in the sweep.
+func (r *run) sweepRuns(
+	jobs []*clipJob,
+	count int,
+	seekFrom func(i int) int,
+) []seekRun {
+	var runs []seekRun
+
+	last := -1
+
+	for _, job := range jobs {
+		if part := job.warmFrom * count / r.n; part != last {
+			last = part
+			runs = append(runs, seekRun{window: window{from: job.warmFrom, to: job.warmTo, seek: seekFrom(job.warmFrom)}})
+		}
+
+		run := &runs[len(runs)-1]
+		run.to = max(run.to, job.warmTo)
+		run.jobs = append(run.jobs, job)
+	}
+
+	return runs
 }
 
 // keyBefore returns the last keyframe index not after i (0 when none).

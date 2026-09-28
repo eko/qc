@@ -53,6 +53,8 @@ bitrate-interval: 2s
 max-bitrate: 6000000
 # keys of other commands are left to them
 fast: true
+loudness-target: atsc
+silence-duration: 5s
 `)
 	toml := writeConfigFile(t, "qc.toml", `
 precision = 0.3
@@ -87,6 +89,8 @@ max-bitrate = 4000000
 			check: func(t *testing.T, config Config) {
 				assert.True(t, config.Analysis.Fast)
 				assert.Equal(t, 2*time.Second, config.Analysis.BitrateInterval)
+				assert.Equal(t, "atsc", config.Analysis.LoudnessTarget)
+				assert.Equal(t, 5*time.Second, config.Analysis.SilenceDuration)
 				assert.Empty(t, config.Run.Codecs, "analyze has no --codecs")
 			},
 		},

@@ -117,3 +117,24 @@ func TestLevelsFor(
 		})
 	}
 }
+
+func TestDefaultAudio(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name  string
+		audio []AudioStream
+		want  int
+	}{
+		{name: "no audio", want: -1},
+		{name: "no default flag: the first", audio: []AudioStream{{Index: 1}, {Index: 2}}, want: 0},
+		{name: "flagged", audio: []AudioStream{{Index: 1}, {Index: 2, Default: true}}, want: 1},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			info := Info{Audio: testCase.audio}
+			assert.Equal(t, testCase.want, info.DefaultAudio())
+		})
+	}
+}
