@@ -136,7 +136,8 @@ VideoToolbox (`--hwaccel auto`, the default):
   its earliest stream: in a video starting after its audio (a
   concatenation whose first video frame is at 0.04 s and audio at 0), every
   segment started one frame early, and the analysis of a 59-minute title
-  fell back to a single pass (244 s instead of 65 s).
+  fell back to a single pass (244 s instead of 65 s). A container starting
+  before 0 (AAC priming kept by Matroska) would land early the same way.
 - **Checks.** A segment yielding fewer frames than planned, or not starting
   with the frame the previous one ended with (CRC32 of the luma), means a
   seek did not land where planned (unusual timestamps): the analysis then

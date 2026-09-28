@@ -229,7 +229,10 @@ func (e *Engine) Build(
 	}
 	defer cleanup()
 
-	run := &build{engine: e, codec: codec, opts: opts, source: source, workDir: dir, video: video}
+	run := &build{
+		engine: e, codec: codec, opts: opts, source: source, workDir: dir,
+		video: video, origin: videoOrigin(res.Source, video),
+	}
 	if res.HDR != nil {
 		run.signal = res.HDR.Signal
 	}

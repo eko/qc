@@ -35,6 +35,13 @@ are used whole.
   measured at 10 bits.
 - `concat` loses the frame rate, so timestamps are rebuilt at the source rate
   (`setpts=N/(rate·TB)`, `-r rate`).
+- Segments are times of the video, from its first frame. Each one is seeked
+  with an absolute seek from the video's first frame (the bitstream's first
+  presentation time, `-seek_timestamp 1 -ss origin+t`): ffmpeg counts a
+  plain `-ss` from the container's start, that of its earliest stream, and
+  in a video starting after its audio, or a container starting before 0
+  (AAC priming kept by Matroska), every segment would start early by the
+  difference.
 
 On a 10-minute cartoon, a digest covering 6.3% of the title predicted each
 rung's full-title VMAF within 0.86 points on average (see
@@ -309,7 +316,10 @@ flowchart LR
   chunk lands on the source keyframe before it, which in a long-GOP source
   need not be a clean random access point, and the H.264 decoder then drops
   frames whose references it lacks (see
-  [validation](validation.md#per-shot-rungs-ladderval--per-shot--shot-optimum)). The command of a per-shot rung is a short shell script.
+  [validation](validation.md#per-shot-rungs-ladderval--per-shot--shot-optimum)). The
+  chunks of the title (the rung's command) are seeked from the video's first
+  frame with absolute seeks, like the digest's segments, so a video starting
+  after its audio or a container starting before 0 gets every frame once. The command of a per-shot rung is a short shell script.
 - **Verification**: the digest is encoded chunk by chunk with the pieces'
   CRFs and the rung's VBV cap, and measured. The gain reported is the bitrate
   saved against the per-title rung **at equal VMAF**, the VMAF difference

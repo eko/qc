@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -57,9 +58,9 @@ func TestDigestArgs(
 
 			assert.Equal(t, "out.nut", args[len(args)-1])
 			assert.Equal(t, []string{
-				"-ss", "1.000000", "-t", "2.000000", "-i", "in.mov",
-				"-ss", "10.500000", "-t", "2.000000", "-i", "in.mov",
-			}, args[4:16])
+				"-seek_timestamp", "1", "-ss", "1.000000", "-t", "2.000000", "-i", "in.mov",
+				"-seek_timestamp", "1", "-ss", "10.500000", "-t", "2.000000", "-i", "in.mov",
+			}, args[4:20])
 
 			format := pixelFormat(testCase.bitDepth)
 			assert.Contains(t, args,
@@ -331,6 +332,33 @@ func TestEncodeCarriesHDRSignal(
 				assert.InDelta(t, 1000, video.HDR.MasteringDisplay.MaxLuminance, 1e-6)
 				assert.InDelta(t, 0.265, video.HDR.MasteringDisplay.Green.X, 1e-4)
 			}
+		})
+	}
+}
+
+// TestDigestTimeline cuts digests from sources whose video's first frame
+// is not the start of the container's timeline: their segments, times of
+// the video, hold the source frames they cover.
+func TestDigestTimeline(
+	t *testing.T,
+) {
+	for name, source := range timelineSources(t) {
+		t.Run(name, func(t *testing.T) {
+			whole := frameMarkers(t, source.path)
+			require.Len(t, whole, source.frames)
+
+			// Two segments of a fifth of the clip, from its start and from
+			// its middle.
+			fifth, half := source.frames/5, source.frames/2
+			at := func(frame int) media.Duration { return media.Seconds(float64(frame) / source.rate.Float()) }
+
+			dst := filepath.Join(t.TempDir(), "digest.nut")
+			require.NoError(t, NewFFmpeg("ffmpeg").Digest(t.Context(), DigestSpec{
+				Source: source.path, Destination: dst, Rate: source.rate, BitDepth: 8, Origin: source.origin,
+				Segments: []media.Interval{{Start: 0, End: at(fifth)}, {Start: at(half), End: at(half + fifth)}},
+			}))
+
+			assertSourceFrames(t, slices.Concat(whole[:fifth], whole[half:half+fifth]), dst, 1/source.rate.Float())
 		})
 	}
 }

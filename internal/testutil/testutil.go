@@ -72,6 +72,11 @@ type Clip struct {
 	// Audio): the container's timeline then starts before the first frame
 	// of the video, as in some concatenations.
 	VideoDelay float64
+	// AudioLead starts the audio that many seconds before the video, which
+	// stays at 0 (with Audio): the container's timeline then starts before
+	// 0, as with an audio track keeping its encoder priming. The clip is
+	// remuxed to Matroska, which keeps negative timestamps.
+	AudioLead float64
 }
 
 // Generate encodes the clip into t.TempDir and returns its path. It skips
@@ -125,7 +130,33 @@ func Generate(
 		return delayVideo(t, path, c.VideoDelay)
 	}
 
+	if c.AudioLead > 0 {
+		return leadAudio(t, path, c.AudioLead)
+	}
+
 	return path
+}
+
+// leadAudio remuxes path to Matroska with its audio shifted lead seconds
+// earlier, before the start of the timeline, and returns the new file.
+func leadAudio(
+	t testing.TB,
+	path string,
+	lead float64,
+) string {
+	t.Helper()
+
+	base := filepath.Base(path)
+	led := filepath.Join(t.TempDir(), strings.TrimSuffix(base, filepath.Ext(base))+".mkv")
+	args := []string{
+		"-v", "error", "-y", "-i", path, "-itsoffset", strconv.FormatFloat(-lead, 'f', -1, 64), "-i", path,
+		"-map", "0:v", "-map", "1:a", "-c", "copy", "-avoid_negative_ts", "disabled", led,
+	}
+
+	out, err := exec.CommandContext(t.Context(), "ffmpeg", args...).CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	return led
 }
 
 // delayVideo remuxes path with its video shifted by delay seconds and its

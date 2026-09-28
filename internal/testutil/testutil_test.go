@@ -21,6 +21,7 @@ func TestGenerate(
 		{name: "other codec", clip: Clip{Codec: "mpeg4", Seconds: 0.5, Args: []string{"-q:v", "5"}}},
 		{name: "with audio", clip: Clip{Seconds: 0.5, Audio: true}},
 		{name: "video starting after the audio", clip: Clip{Seconds: 0.5, Audio: true, VideoDelay: 0.2}},
+		{name: "audio starting before the timeline", clip: Clip{Seconds: 0.5, Audio: true, AudioLead: 0.05}},
 	}
 
 	for _, testCase := range testCases {

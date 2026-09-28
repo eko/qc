@@ -7,7 +7,6 @@ import (
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/analyze/grain"
 	"github.com/eko/qc/encode"
-	"github.com/eko/qc/media"
 )
 
 // The engine's ports: each is the narrow part of an adapter the engine
@@ -41,8 +40,8 @@ type Encoder interface {
 	EncodeChunks(
 		ctx context.Context,
 		codec encode.Codec,
-		src, dst string,
-		rate media.Rational,
+		src encode.ChunkSource,
+		dst string,
 		chunks []encode.Chunk,
 		p encode.Params,
 	) error

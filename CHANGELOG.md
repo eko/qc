@@ -180,6 +180,22 @@ First public release: a Go library and the `qc` CLI.
   libx264, libx265, SVT-AV1 and dav1d; a Homebrew formula for the
   `eko/tap` tap; `go install` with version information.
 
+### Fixed
+
+- **Ladders of a video whose first frame is not the container's start**: a
+  video starting after its audio (some concatenations: the first video
+  frame at 0.04 s, the audio at 0), or a container starting before 0 (a
+  Matroska file keeping its AAC priming at −21 ms). ffmpeg counts `-ss`
+  from the container's start, and the digest's segments and the chunks of
+  per-shot rungs were planned on the video's own timeline, so each one
+  started early by the offset (a frame or more at 50 fps). The digest
+  missed its segments' first frames (misplacing the shots' pieces), and the
+  per-shot commands (and `bench/ladderval`'s chunked encodes of the title)
+  duplicated frames at every chunk join. Every seek is now absolute
+  (`-seek_timestamp 1 -ss origin+t`, from the video's first frame), as
+  decoding's already were: the per-shot commands all carry
+  `-seek_timestamp 1`.
+
 ### Library API
 
 The packages of the first release, for Go programs that embed qc:
@@ -204,7 +220,10 @@ The packages of the first release, for Go programs that embed qc:
   (`vmaf.DefaultModelDirs()`, `vmaf.Devices()`, `quality.Metrics()`,
   `quality.AV2CTCMetrics()`, `ladder.DefaultHeights()`).
 - **Encoding**: `encode.FFmpeg` encodes and extracts digests
-  (`FFmpeg.Digest(ctx, encode.DigestSpec)`); codecs are looked up with
+  (`FFmpeg.Digest(ctx, encode.DigestSpec)`, whose `Origin` is the time of
+  the video's first frame on the container's timeline) and encodes chunk
+  by chunk (`FFmpeg.EncodeChunks` and `Codec.ChunkCommandLine`, reading an
+  `encode.ChunkSource`: path, frame rate and origin); codecs are looked up with
   `encode.Lookup` and `encode.LookupFor(name, encode.HardwareNVENC)`, and
   say what their encoder supports (`Codec.Supports`); noise measurements
   are `grain.Stats` (package `analyze/grain`).

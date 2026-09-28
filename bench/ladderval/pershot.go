@@ -56,6 +56,12 @@ func newFrameMeasure(
 	source := fast.Source.Info.Path
 	video, _ := fast.Source.Info.PrimaryVideo()
 	gop := int(math.Round(2 * video.AvgFrameRate.Float()))
+	// The chunks are seeked from the video's first frame, which may come
+	// after the container's start (a video starting after its audio).
+	chunkSource := encode.ChunkSource{Path: source, Rate: video.AvgFrameRate, Origin: video.StartTime}
+	if bs := fast.Source.Bitstream; bs != nil {
+		chunkSource.Origin = bs.Start
+	}
 
 	return func(p encode.Params, chunks []encode.Chunk) (frames, error) {
 		p.Preset, p.GOP = fast.Preset, gop
@@ -64,7 +70,7 @@ func newFrameMeasure(
 		if chunks == nil {
 			err = enc.Encode(ctx, codec, source, out, p)
 		} else {
-			err = enc.EncodeChunks(ctx, codec, source, out, video.AvgFrameRate, chunks, p)
+			err = enc.EncodeChunks(ctx, codec, chunkSource, out, chunks, p)
 		}
 
 		if err != nil {

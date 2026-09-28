@@ -106,6 +106,8 @@ type fakeLab struct {
 	encodes map[string]encode.Params
 	// chunks holds the chunks of chunked encodes, by output path.
 	chunks map[string][]encode.Chunk
+	// chunkSources holds the sources of chunked encodes.
+	chunkSources []encode.ChunkSource
 	// frames is the digest's frame count.
 	frames int
 	// grain is the noise standard deviation of the source at its height.
@@ -317,12 +319,12 @@ func sourceReport(
 func (l *fakeLab) EncodeChunks(
 	ctx context.Context,
 	codec encode.Codec,
-	src, dst string,
-	_ media.Rational,
+	src encode.ChunkSource,
+	dst string,
 	chunks []encode.Chunk,
 	p encode.Params,
 ) error {
-	if err := l.Encode(ctx, codec, src, dst, p); err != nil {
+	if err := l.Encode(ctx, codec, src.Path, dst, p); err != nil {
 		return err
 	}
 
@@ -330,6 +332,7 @@ func (l *fakeLab) EncodeChunks(
 	defer l.mu.Unlock()
 
 	l.chunks[dst] = chunks
+	l.chunkSources = append(l.chunkSources, src)
 
 	return nil
 }

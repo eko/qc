@@ -25,30 +25,46 @@ func TestChunkArgs(
 	testCases := []struct {
 		name      string
 		chunk     Chunk
+		origin    media.Duration
 		wantSeek  []string
 		wantScale string
 	}{
 		{
 			name: "first chunk starts at zero", chunk: Chunk{Start: 0, Frames: 50, CRF: 22},
-			wantSeek: []string{"-ss", "0.000000", "-i", "in.mov", "-frames:v"}, wantScale: "scale=640:360:",
+			wantSeek: []string{"-seek_timestamp", "1", "-ss", "0.000000", "-i", "in.mov", "-frames:v"}, wantScale: "scale=640:360:",
 		},
 		{
 			name: "early chunk: preroll from the start", chunk: Chunk{Start: 25, Frames: 25, CRF: 26.5},
-			wantSeek: []string{"-ss", "0.000000", "-i", "in.mov", "-ss", "0.980000", "-frames:v"}, wantScale: "scale=640:360:",
+			wantSeek: []string{"-seek_timestamp", "1", "-ss", "0.000000", "-i", "in.mov", "-ss", "0.980000", "-frames:v"}, wantScale: "scale=640:360:",
 		},
 		{
 			name: "decode from a preroll earlier, drop to half a frame early", chunk: Chunk{Start: 150, Frames: 25, CRF: 26.5},
-			wantSeek: []string{"-ss", "3.980000", "-i", "in.mov", "-ss", "2.000000", "-frames:v"}, wantScale: "scale=640:360:",
+			wantSeek: []string{"-seek_timestamp", "1", "-ss", "3.980000", "-i", "in.mov", "-ss", "2.000000", "-frames:v"}, wantScale: "scale=640:360:",
 		},
 		{
 			name: "own resolution", chunk: Chunk{Start: 0, Frames: 50, CRF: 22, Width: 1280, Height: 720},
-			wantSeek: []string{"-ss", "0.000000", "-i", "in.mov", "-frames:v"}, wantScale: "scale=1280:720:",
+			wantSeek: []string{"-seek_timestamp", "1", "-ss", "0.000000", "-i", "in.mov", "-frames:v"}, wantScale: "scale=1280:720:",
+		},
+		{
+			name: "video starting late: first chunk from its first frame", chunk: Chunk{Start: 0, Frames: 50, CRF: 22}, origin: media.Seconds(0.2),
+			wantSeek:  []string{"-seek_timestamp", "1", "-ss", "0.000000", "-i", "in.mov", "-ss", "0.180000", "-frames:v"},
+			wantScale: "scale=640:360:",
+		},
+		{
+			name: "video starting late: absolute seek", chunk: Chunk{Start: 150, Frames: 25, CRF: 26.5}, origin: media.Seconds(0.2),
+			wantSeek:  []string{"-seek_timestamp", "1", "-ss", "4.180000", "-i", "in.mov", "-ss", "2.000000", "-frames:v"},
+			wantScale: "scale=640:360:",
+		},
+		{
+			name: "video starting before the timeline", chunk: Chunk{Start: 0, Frames: 50, CRF: 22}, origin: media.Seconds(-0.1),
+			wantSeek:  []string{"-seek_timestamp", "1", "-ss", "-0.100000", "-i", "in.mov", "-frames:v"},
+			wantScale: "scale=640:360:",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			args := codecs["h264"].chunkArgs("in.mov", "out.part001.mp4", rate25, testCase.chunk, Params{Width: 640, Height: 360, CRF: 99, GOP: 50})
+			args := codecs["h264"].chunkArgs(ChunkSource{Path: "in.mov", Rate: rate25, Origin: testCase.origin}, "out.part001.mp4", testCase.chunk, Params{Width: 640, Height: 360, CRF: 99, GOP: 50})
 
 			assert.Equal(t, testCase.wantSeek, args[:len(testCase.wantSeek)])
 			assert.Equal(t, "out.part001.mp4", args[len(args)-1])
@@ -66,11 +82,11 @@ func TestChunkCommandLine(
 	t *testing.T,
 ) {
 	chunks := []Chunk{{Start: 0, Frames: 50, CRF: 24}, {Start: 50, Frames: 100, CRF: 27}}
-	script := codecs["av1"].ChunkCommandLine("my source.mov", "01-1080p.mp4", rate25, chunks, Params{Width: 1920, Height: 1080, GOP: 50})
+	script := codecs["av1"].ChunkCommandLine(ChunkSource{Path: "my source.mov", Rate: rate25}, "01-1080p.mp4", chunks, Params{Width: 1920, Height: 1080, GOP: 50})
 
 	lines := strings.Split(script, " && \\\n")
 	require.Len(t, lines, 5)
-	assert.True(t, strings.HasPrefix(lines[0], "ffmpeg -ss 0.000000 -i 'my source.mov' -frames:v 50 "), lines[0])
+	assert.True(t, strings.HasPrefix(lines[0], "ffmpeg -seek_timestamp 1 -ss 0.000000 -i 'my source.mov' -frames:v 50 "), lines[0])
 	assert.Contains(t, lines[0], "-crf 24")
 	assert.True(t, strings.HasSuffix(lines[0], " 01-1080p.part001.mp4"))
 	assert.Contains(t, lines[1], "-ss 1.980000")
@@ -115,7 +131,7 @@ func TestEncodeChunksErrors(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			dst := filepath.Join(t.TempDir(), "out.mp4")
-			err := NewFFmpeg(testCase.bin).EncodeChunks(t.Context(), codecs["h264"], "in.mov", dst, rate25, testCase.chunks, Params{Width: 64, Height: 36})
+			err := NewFFmpeg(testCase.bin).EncodeChunks(t.Context(), codecs["h264"], ChunkSource{Path: "in.mov", Rate: rate25}, dst, testCase.chunks, Params{Width: 64, Height: 36})
 			require.ErrorIs(t, err, testCase.wantErr)
 			assert.Contains(t, err.Error(), testCase.wantMsg)
 		})
@@ -157,7 +173,7 @@ func TestEncodeChunksIntegration(
 				testCase.prepare(t, dst)
 			}
 
-			err := NewFFmpeg("ffmpeg").EncodeChunks(context.Background(), codecs["h264"], src, dst, rate25, testCase.chunks,
+			err := NewFFmpeg("ffmpeg").EncodeChunks(context.Background(), codecs["h264"], ChunkSource{Path: src, Rate: rate25}, dst, testCase.chunks,
 				Params{Width: 320, Height: 180, Preset: "ultrafast", GOP: 50})
 			if testCase.wantErr != "" {
 				require.ErrorContains(t, err, testCase.wantErr)
@@ -204,7 +220,7 @@ func TestEncodeChunksResolutions(
 		t.Run(testCase.name, func(t *testing.T) {
 			dst := filepath.Join(t.TempDir(), "out.mp4")
 
-			require.NoError(t, NewFFmpeg("ffmpeg").EncodeChunks(t.Context(), codecs[testCase.codec], src, dst, rate25, chunks,
+			require.NoError(t, NewFFmpeg("ffmpeg").EncodeChunks(t.Context(), codecs[testCase.codec], ChunkSource{Path: src, Rate: rate25}, dst, chunks,
 				Params{Preset: testCase.preset, GOP: 25}))
 
 			// Every frame decodes cleanly at its chunk's size.
@@ -230,7 +246,7 @@ func TestJoinTransportError(
 	dst := filepath.Join(t.TempDir(), "out.mp4")
 	require.NoError(t, os.Mkdir(filepath.Join(filepath.Dir(dst), "out.part001.mp4.ts"), 0o700))
 
-	err := NewFFmpeg("ffmpeg").EncodeChunks(t.Context(), codecs["hevc"], src, dst, rate25,
+	err := NewFFmpeg("ffmpeg").EncodeChunks(t.Context(), codecs["hevc"], ChunkSource{Path: src, Rate: rate25}, dst,
 		[]Chunk{{Start: 0, Frames: 25, CRF: 30, Width: 320, Height: 180}, {Start: 25, Frames: 25, CRF: 30, Width: 160, Height: 90}},
 		Params{Preset: "ultrafast", GOP: 25})
 	require.ErrorContains(t, err, "join chunks")
@@ -265,8 +281,163 @@ func TestChunkCommandLineTransport(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			lines := strings.Split(codecs[testCase.codec].ChunkCommandLine("s.mov", "p.mp4", rate25, testCase.chunks, Params{GOP: 50}), " && \\\n")
+			lines := strings.Split(codecs[testCase.codec].ChunkCommandLine(ChunkSource{Path: "s.mov", Rate: rate25}, "p.mp4", testCase.chunks, Params{GOP: 50}), " && \\\n")
 			assert.Subset(t, lines, testCase.want)
 		})
+	}
+}
+
+// timelineSource is a clip whose video's first frame is not the start of
+// its container's timeline, frame n being a flat grey of its own level:
+// decoded frames tell which source frame they are.
+type timelineSource struct {
+	path string
+	rate media.Rational
+	// origin is the presentation time of the video's first frame.
+	origin media.Duration
+	// frames is the clip's frame count.
+	frames int
+}
+
+// timelineSources are the clips of timelineSource: a 25 fps video starting
+// 0.2 s (5 frames) after its audio, and a 50 fps video at 0 whose audio
+// starts 42 ms (2 frames) before it (Matroska keeping the AAC priming of
+// 21 ms, shifted 21 ms more), where a seek from the container's start
+// lands early. 50 fps is the fastest rate whose frame times Matroska's
+// millisecond timestamps hold exactly: at 60 fps they alternate between
+// 16 and 17 ms, and a chunk's first frame, half a frame after its output
+// seek, is rounded to either frame of the encoder's time base.
+func timelineSources(
+	t *testing.T,
+) map[string]timelineSource {
+	t.Helper()
+
+	late := testutil.Generate(t, testutil.Clip{
+		Source: "color", Width: 64, Height: 36, Seconds: 4, GOP: 10, Audio: true, VideoDelay: 0.2,
+		Filter: "geq=lum='16+2*N':cb=128:cr=128",
+	})
+	early := testutil.Generate(t, testutil.Clip{
+		Source: "color", Width: 64, Height: 36, Rate: 50, Seconds: 2, GOP: 10, Audio: true, AudioLead: 0.021,
+		Filter: "geq=lum='16+2*N':cb=128:cr=128",
+	})
+
+	out, err := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=start_time", "-of", "csv=p=0", early).Output()
+	require.NoError(t, err)
+
+	start, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	require.NoError(t, err)
+	require.Negative(t, start, "the container starts before the video")
+
+	return map[string]timelineSource{
+		"video starting after its audio": {path: late, rate: rate25, origin: media.Seconds(0.2), frames: 100},
+		"container starting before 0":    {path: early, rate: media.Rational{Num: 50, Den: 1}, frames: 100},
+	}
+}
+
+// frameMarkers decodes every frame of the video of path, as stored (no
+// frame duplicated to fill the timeline), to its mean grey level.
+func frameMarkers(
+	t *testing.T,
+	path string,
+) []byte {
+	t.Helper()
+
+	out, err := exec.Command("ffmpeg", "-v", "error", "-nostdin", "-i", path, "-map", "0:v:0", "-fps_mode", "passthrough",
+		"-vf", "scale=1:1:flags=area,format=gray", "-f", "rawvideo", "-").Output()
+	require.NoError(t, err)
+
+	return out
+}
+
+// frameTimes returns the presentation times of the video frames of path,
+// in seconds.
+func frameTimes(
+	t *testing.T,
+	path string,
+) []float64 {
+	t.Helper()
+
+	out, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "frame=pts_time",
+		"-of", "csv=p=0", path).Output()
+	require.NoError(t, err)
+
+	fields := strings.Fields(strings.ReplaceAll(string(out), ",", " "))
+	times := make([]float64, len(fields))
+
+	for i, field := range fields {
+		times[i], err = strconv.ParseFloat(field, 64)
+		require.NoError(t, err)
+	}
+
+	return times
+}
+
+// assertSourceFrames checks that path holds the frames of want in order,
+// each one a frame period after the previous one: re-encoding a flat frame
+// moves its level by less than half the step between two source frames.
+func assertSourceFrames(
+	t *testing.T,
+	want []byte,
+	path string,
+	period float64,
+) {
+	t.Helper()
+
+	got := frameMarkers(t, path)
+	require.Len(t, got, len(want))
+
+	for i := range want {
+		assert.InDelta(t, float64(want[i]), float64(got[i]), 1, "frame %d", i)
+	}
+
+	times := frameTimes(t, path)
+	require.Len(t, times, len(want))
+
+	for i, ts := range times {
+		assert.InDelta(t, float64(i)*period, ts-times[0], 1e-3, "timestamp of frame %d", i)
+	}
+}
+
+// TestEncodeChunksTimeline encodes, chunk by chunk, sources whose video's
+// first frame is not the start of the container's timeline, both with
+// EncodeChunks and by running the rendered ChunkCommandLine: every chunk
+// starts on its own frame, so the joined encode holds every source frame
+// once, in order.
+func TestEncodeChunksTimeline(
+	t *testing.T,
+) {
+	params := Params{Width: 64, Height: 36, Preset: "ultrafast", GOP: 10}
+	encoders := map[string]func(t *testing.T, src ChunkSource, dst string, chunks []Chunk){
+		"EncodeChunks": func(t *testing.T, src ChunkSource, dst string, chunks []Chunk) {
+			require.NoError(t, NewFFmpeg("ffmpeg").EncodeChunks(t.Context(), codecs["h264"], src, dst, chunks, params))
+		},
+		"ChunkCommandLine": func(t *testing.T, src ChunkSource, dst string, chunks []Chunk) {
+			out, err := exec.Command("sh", "-c", codecs["h264"].ChunkCommandLine(src, dst, chunks, params)).CombinedOutput()
+			require.NoError(t, err, string(out))
+		},
+	}
+
+	for name, source := range timelineSources(t) {
+		whole := frameMarkers(t, source.path)
+		require.Len(t, whole, source.frames)
+
+		// The first chunk starts at the video's first frame, the second one
+		// within the preroll, the third one after it (25 fps) or within it.
+		third := source.frames * 3 / 5
+		chunks := []Chunk{
+			{Start: 0, Frames: source.frames / 4, CRF: 10},
+			{Start: source.frames / 4, Frames: third - source.frames/4, CRF: 12},
+			{Start: third, Frames: source.frames - third, CRF: 10},
+		}
+		src := ChunkSource{Path: source.path, Rate: source.rate, Origin: source.origin}
+
+		for method, encode := range encoders {
+			t.Run(name+"/"+method, func(t *testing.T) {
+				dst := filepath.Join(t.TempDir(), "out.mp4")
+				encode(t, src, dst, chunks)
+
+				assertSourceFrames(t, whole, dst, 1/source.rate.Float())
+			})
+		}
 	}
 }

@@ -353,7 +353,10 @@ func (b *build) allocateRung(
 		ps.Width, ps.Height = declaredGeometry(ps.Chunks)
 	}
 
-	ps.Command = b.codec.ChunkCommandLine(b.source, fmt.Sprintf("%02d-%dp-pershot.mp4", i+1, r.Height), b.video.AvgFrameRate,
+	// The command encodes the source: its video may start after the
+	// container's timeline, unlike the digest's.
+	source := encode.ChunkSource{Path: b.source, Rate: b.video.AvgFrameRate, Origin: b.origin}
+	ps.Command = b.codec.ChunkCommandLine(source, fmt.Sprintf("%02d-%dp-pershot.mp4", i+1, r.Height),
 		ps.Chunks, encode.Params{Width: r.Width, Height: r.Height, Preset: b.opts.Preset, GOP: b.gop(),
 			MaxRate: r.MaxRate, BufSize: r.BufSize, BitDepth: b.opts.BitDepth, Signal: b.signal})
 

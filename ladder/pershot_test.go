@@ -10,6 +10,7 @@ import (
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/analyze/scene"
+	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/media"
 )
@@ -200,6 +201,35 @@ func assertShotAllocations(
 	}
 
 	assert.Positive(t, ps.PooledBitrate(shots))
+}
+
+// TestBuildPerShotVideoStartingLate builds per-shot rungs of a source
+// whose video starts after its audio: the digest is cut and the rendered
+// commands seek from the video's first frame, while the chunked encodes of
+// the digest, whose timestamps start at 0, seek from 0.
+func TestBuildPerShotVideoStartingLate(
+	t *testing.T,
+) {
+	source := shotSource(30, 4)
+	source.Bitstream = &bitstream.Report{Start: media.Seconds(0.2)}
+	lab := newFakeLab(rateModel{}, source)
+
+	res, err := labEngine(lab).Build(t.Context(), sourcePath, Options{Codec: "h264", PerShot: true})
+	require.NoError(t, err)
+
+	require.Len(t, lab.digests, 1)
+	assert.Equal(t, media.Seconds(0.2), lab.digests[0].Origin)
+
+	require.NotEmpty(t, lab.chunkSources)
+
+	for _, src := range lab.chunkSources {
+		assert.Zero(t, src.Origin, "the digest starts at 0")
+	}
+
+	for _, r := range res.Rungs {
+		require.NotNil(t, r.PerShot)
+		assert.Contains(t, r.PerShot.Command, "ffmpeg -seek_timestamp 1 -ss 0.000000 -i "+sourcePath+" -ss 0.180000 ")
+	}
 }
 
 func TestPooledBitrate(

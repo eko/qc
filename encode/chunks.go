@@ -48,14 +48,29 @@ type Chunk struct {
 // references back.
 const chunkPreroll = 2.0
 
+// ChunkSource is the video a chunked encode reads.
+type ChunkSource struct {
+	Path string
+	// Rate is the frame rate of the video, which places the chunks in time.
+	Rate media.Rational
+	// Origin is the presentation time of the first frame of the video on
+	// the container's timeline (bitstream.Report.Start), which chunks are
+	// seeked on (absolute seeks): a chunk starts at Origin plus its frames'
+	// time. Without it, a video starting after its audio would be seeked
+	// from the container's start, and every chunk would start early by the
+	// difference. A digest starts at 0.
+	Origin media.Duration
+}
+
 // chunkArgs builds the ffmpeg arguments encoding chunk c of src into dst.
 // The input is seeked chunkPreroll early, then decoded frames are dropped
 // up to half a frame before the chunk's first frame (an output seek): the
 // chunk starts exactly on its frame whatever the rounding of timestamps,
-// with every reference decoded.
+// with every reference decoded. Times are on the container's timeline,
+// from the video's first frame (src.Origin).
 func (c Codec) chunkArgs(
-	src, dst string,
-	rate media.Rational,
+	src ChunkSource,
+	dst string,
 	chunk Chunk,
 	p Params,
 ) []string {
@@ -64,10 +79,13 @@ func (c Codec) chunkArgs(
 		p.Width, p.Height = chunk.Width, chunk.Height
 	}
 
-	start := max(float64(chunk.Start)-0.5, 0) / rate.Float()
-	preroll := min(chunkPreroll, start)
+	// A video starting before the container's timeline (a negative
+	// origin) may be seeked there; any other one no earlier than 0.
+	floor := min(src.Origin.Seconds(), 0)
+	start := max(src.Origin.Seconds()+(float64(chunk.Start)-0.5)/src.Rate.Float(), floor)
+	preroll := min(chunkPreroll, start-floor)
 
-	args := []string{"-ss", seconds(media.Seconds(start - preroll)), "-i", src}
+	args := append(seekArgs(media.Seconds(start-preroll)), "-i", src.Path)
 	if preroll > 0 {
 		args = append(args, "-ss", seconds(media.Seconds(preroll)))
 	}
@@ -78,18 +96,17 @@ func (c Codec) chunkArgs(
 }
 
 // EncodeChunks encodes src chunk by chunk, each with its own CRF and the
-// other settings of p, and joins the chunks into dst. rate is the frame rate
-// of src, which places the chunks in time.
+// other settings of p, and joins the chunks into dst.
 func (f *FFmpeg) EncodeChunks(
 	ctx context.Context,
 	codec Codec,
-	src, dst string,
-	rate media.Rational,
+	src ChunkSource,
+	dst string,
 	chunks []Chunk,
 	p Params,
 ) error {
 	if len(chunks) == 0 {
-		return fmt.Errorf("encode %s: %w", src, ErrNoChunks)
+		return fmt.Errorf("encode %s: %w", src.Path, ErrNoChunks)
 	}
 
 	parts := chunkPaths(dst, len(chunks))
@@ -104,23 +121,23 @@ func (f *FFmpeg) EncodeChunks(
 	}()
 
 	for i, chunk := range chunks {
-		args := append([]string{"-v", "error", "-nostdin", "-y"}, codec.chunkArgs(src, parts[i], rate, chunk, p)...)
+		args := append([]string{"-v", "error", "-nostdin", "-y"}, codec.chunkArgs(src, parts[i], chunk, p)...)
 		if err := ffexec.Stream(ctx, f.bin, args, discard); err != nil {
-			return fmt.Errorf("encode %s chunk %d with %s: %w", src, i+1, codec.Encoder, err)
+			return fmt.Errorf("encode %s chunk %d with %s: %w", src.Path, i+1, codec.Encoder, err)
 		}
 	}
 
 	if codec.transportJoin(chunks) {
-		return f.joinTransport(ctx, src, dst, parts)
+		return f.joinTransport(ctx, src.Path, dst, parts)
 	}
 
 	if err := os.WriteFile(list, []byte(concatList(parts)), 0o600); err != nil {
-		return fmt.Errorf("encode %s: %w", src, err)
+		return fmt.Errorf("encode %s: %w", src.Path, err)
 	}
 
 	args := []string{"-v", "error", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", list, "-c", "copy", dst}
 	if err := ffexec.Stream(ctx, f.bin, args, discard); err != nil {
-		return fmt.Errorf("join chunks of %s: %w", src, err)
+		return fmt.Errorf("join chunks of %s: %w", src.Path, err)
 	}
 
 	return nil
@@ -227,8 +244,8 @@ func concatList(
 // ChunkCommandLine renders a copy-pasteable shell script encoding src chunk
 // by chunk into dst (see EncodeChunks), then removing the chunk files.
 func (c Codec) ChunkCommandLine(
-	src, dst string,
-	rate media.Rational,
+	src ChunkSource,
+	dst string,
 	chunks []Chunk,
 	p Params,
 ) string {
@@ -237,7 +254,7 @@ func (c Codec) ChunkCommandLine(
 
 	for i, chunk := range chunks {
 		words := append([]string{"ffmpeg"}, c.InputArgs()...)
-		for _, a := range c.chunkArgs(src, parts[i], rate, chunk, p) {
+		for _, a := range c.chunkArgs(src, parts[i], chunk, p) {
 			words = append(words, quote(a))
 		}
 

@@ -35,6 +35,10 @@ type build struct {
 	digestReport *analysis.Report
 	workDir      string
 	video        media.VideoStream
+	// origin is the presentation time of the source's first frame on its
+	// container's timeline, which seeks in the source start from (see
+	// encode.ChunkSource.Origin).
+	origin media.Duration
 	// signal is the colour signal of every encode (HDR sources).
 	signal encode.Signal
 

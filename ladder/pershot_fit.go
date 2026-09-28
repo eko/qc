@@ -47,7 +47,7 @@ func (b *build) shotProbes(
 			}
 
 			params := b.params(Probe{Width: w, Height: h, CRF: job.crf}, encode.Params{})
-			if err := b.engine.encoder.EncodeChunks(gctx, b.codec, b.digest, path, b.video.AvgFrameRate, chunks, params); err != nil {
+			if err := b.engine.encoder.EncodeChunks(gctx, b.codec, b.digestSource(), path, chunks, params); err != nil {
 				return fmt.Errorf("%s: %w", name, err)
 			}
 

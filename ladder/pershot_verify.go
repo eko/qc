@@ -36,7 +36,7 @@ func (b *build) verifyPerShot(
 	}
 
 	params := b.params(Probe{Width: r.Width, Height: r.Height}, encode.Params{MaxRate: r.MaxRate, BufSize: r.BufSize})
-	if err := b.engine.encoder.EncodeChunks(ctx, b.codec, b.digest, path, b.video.AvgFrameRate, chunks, params); err != nil {
+	if err := b.engine.encoder.EncodeChunks(ctx, b.codec, b.digestSource(), path, chunks, params); err != nil {
 		return fmt.Errorf("ladder: per-shot: %s: %w", name, err)
 	}
 

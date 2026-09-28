@@ -195,6 +195,57 @@ func TestFFmpegSeekVideoStartingLate(
 	}
 }
 
+// TestFFmpegSeekContainerStartingEarly seeks in a 50 fps clip whose video
+// starts at 0 and its audio 42 ms (2 frames) before, the container's
+// timeline starting there: the seek is absolute (-seek_timestamp), so it
+// lands on the planned frame, where one counted from the container's start
+// would land 2 frames early.
+func TestFFmpegSeekContainerStartingEarly(
+	t *testing.T,
+) {
+	const count = 3
+
+	rate := media.Rational{Num: 50, Den: 1}
+	path := testutil.Generate(t, testutil.Clip{Rate: 50, Seconds: 2, GOP: 10, Audio: true, AudioLead: 0.021})
+	pool := frame.NewPool(clipWidth, clipHeight, frame.PoolOptions{})
+	base := Request{Path: path, Pool: pool, SourceWidth: clipWidth, SourceHeight: clipHeight, FrameRate: rate}
+
+	lumas := func(req Request) [][]byte {
+		var out [][]byte
+
+		require.NoError(t, NewFFmpeg("ffmpeg", 0).Decode(t.Context(), req, func(f *frame.Frame) error {
+			defer f.Release()
+
+			out = append(out, bytes.Clone(f.Luma.Pix))
+
+			return nil
+		}))
+
+		return out
+	}
+
+	whole := lumas(base)
+	require.Len(t, whole, 100)
+
+	testCases := []struct {
+		name  string
+		first int
+	}{
+		{name: "within the first GOP", first: 3},
+		{name: "mid-clip", first: 51},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			req := base
+			req.Start = media.Seconds(float64(testCase.first) / 50)
+			req.FirstIndex, req.MaxFrames = testCase.first, count
+
+			assert.Equal(t, whole[testCase.first:testCase.first+count], lumas(req))
+		})
+	}
+}
+
 func TestFFmpegDecodePixels(
 	t *testing.T,
 ) {

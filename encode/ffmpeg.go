@@ -91,6 +91,11 @@ type DigestSpec struct {
 	Segments            []media.Interval
 	// Rate is the source frame rate, restored on the concatenated timeline.
 	Rate media.Rational
+	// Origin is the presentation time of the source's first frame on its
+	// container's timeline (see ChunkSource.Origin): the segments are
+	// times of the video, from its first frame, and are seeked at Origin
+	// plus their start.
+	Origin media.Duration
 	// BitDepth is 8 or 10.
 	BitDepth int
 	// Lossless keeps the digest compact (FFV1); otherwise it is raw video in
@@ -127,10 +132,8 @@ func digestArgs(
 	var graph strings.Builder
 
 	for i, seg := range spec.Segments {
-		args = append(args,
-			"-ss", seconds(seg.Start),
-			"-t", seconds(seg.Length()),
-			"-i", spec.Source)
+		args = append(args, seekArgs(spec.Origin+seg.Start)...)
+		args = append(args, "-t", seconds(seg.Length()), "-i", spec.Source)
 		fmt.Fprintf(&graph, "[%d:v:0]format=%s,setsar=1[v%d];", i, format, i)
 	}
 
@@ -151,6 +154,18 @@ func digestArgs(
 	}
 
 	return append(args, spec.Destination)
+}
+
+// seekArgs are the input arguments seeking to seek on the container's
+// timeline: an absolute seek (-seek_timestamp), as decoding seeks. A plain
+// -ss is counted from the container's start, that of its earliest stream,
+// which is not the video's first frame in a video starting after its audio
+// nor in a container starting before 0 (an audio track keeping its encoder
+// priming at -21 ms): the seek would land early by the difference.
+func seekArgs(
+	seek media.Duration,
+) []string {
+	return []string{"-seek_timestamp", "1", "-ss", seconds(seek)}
 }
 
 func seconds(

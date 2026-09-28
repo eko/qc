@@ -42,6 +42,9 @@ func TestGoldenCommands(
 	}
 
 	rate := media.Rational{Num: 25, Den: 1}
+	source := ChunkSource{Path: "src.mov", Rate: rate}
+	// A video starting after its audio is seeked from its first frame.
+	late := ChunkSource{Path: "src.mov", Rate: rate, Origin: media.Seconds(0.2)}
 	uniform := []Chunk{{Start: 0, Frames: 50, CRF: 24}, {Start: 50, Frames: 100, CRF: 21.5}, {Start: 150, Frames: 50, CRF: 28}}
 	resized := []Chunk{{Start: 0, Frames: 50, CRF: 24, Width: 1280, Height: 720}, {Start: 50, Frames: 100, CRF: 21.5, Width: 960, Height: 540}}
 
@@ -62,10 +65,19 @@ func TestGoldenCommands(
 
 			for _, v := range variants {
 				fmt.Fprintf(&out, "### %s\n%s\n", v.name, codec.CommandLine("in put.nut", "out.mp4", v.params))
-				fmt.Fprintf(&out, "#### chunks\n%s\n", codec.ChunkCommandLine("src.mov", "rung.mp4", rate, uniform, v.params))
-				fmt.Fprintf(&out, "#### resized chunks\n%s\n", codec.ChunkCommandLine("src.mov", "rung.mp4", rate, resized, v.params))
+				fmt.Fprintf(&out, "#### chunks\n%s\n", codec.ChunkCommandLine(source, "rung.mp4", uniform, v.params))
+				fmt.Fprintf(&out, "#### resized chunks\n%s\n", codec.ChunkCommandLine(source, "rung.mp4", resized, v.params))
 			}
+
+			fmt.Fprintf(&out, "### late video chunks\n%s\n", codec.ChunkCommandLine(late, "rung.mp4", uniform, variants[1].params))
 		}
+	}
+
+	segments := []media.Interval{{Start: 0, End: media.Seconds(2)}, {Start: media.Seconds(10), End: media.Seconds(12)}}
+	for _, origin := range []media.Duration{0, late.Origin} {
+		fmt.Fprintf(&out, "## digest, video from %s\nffmpeg %s\n", seconds(origin), strings.Join(digestArgs(DigestSpec{
+			Source: "src.mov", Destination: "digest.nut", Segments: segments, Rate: rate, BitDepth: 8, Origin: origin,
+		}), " "))
 	}
 
 	if *update {

@@ -160,10 +160,10 @@ func TestNVENCCommandLines(
 			"-rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4",
 		codec.CommandLine("my movie.mov", "out.mp4", p))
 
-	script := codec.ChunkCommandLine("src.mov", "out.mp4", media.Rational{Num: 25, Den: 1},
+	script := codec.ChunkCommandLine(ChunkSource{Path: "src.mov", Rate: media.Rational{Num: 25, Den: 1}}, "out.mp4",
 		[]Chunk{{Start: 0, Frames: 50, CRF: 28}, {Start: 50, Frames: 50, CRF: 31}}, p)
 
-	assert.Equal(t, 2, strings.Count(script, "ffmpeg -hwaccel cuda -ss"))
+	assert.Equal(t, 2, strings.Count(script, "ffmpeg -hwaccel cuda -seek_timestamp 1 -ss"))
 	assert.Contains(t, script, "-cq 31")
 
 	cpu, err := Lookup("h264")

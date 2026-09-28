@@ -6,8 +6,35 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/media"
 )
+
+func TestVideoOrigin(
+	t *testing.T,
+) {
+	video := media.VideoStream{StartTime: media.Seconds(0.04)}
+
+	testCases := []struct {
+		name   string
+		report *analysis.Report
+		want   media.Duration
+	}{
+		{
+			name:   "first presentation time of the bitstream",
+			report: &analysis.Report{Bitstream: &bitstream.Report{Start: media.Seconds(1.4)}},
+			want:   media.Seconds(1.4),
+		},
+		{name: "stream start without the bitstream", report: &analysis.Report{}, want: media.Seconds(0.04)},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, videoOrigin(testCase.report, video))
+		})
+	}
+}
 
 func TestDigestSegments(
 	t *testing.T,
