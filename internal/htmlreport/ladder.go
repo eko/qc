@@ -34,7 +34,9 @@ func RenderLadder(
 func ladderPage(
 	r *ladder.Result,
 ) page {
-	return page{
+	own := ladderArea(r.Codec.Name)
+
+	p := page{
 		Title: fmt.Sprintf("%s ladder · %s", r.Codec.Name, filepath.Base(r.Source.Info.Path)),
 		Subtitle: fmt.Sprintf("%d rungs · digest of %d segments (%.1f%% of the title) · %d probe encodes%s · %s",
 			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, len(r.Probes), probingNote(r.Probing), r.Elapsed.Std().Round(time.Second)),
@@ -45,10 +47,19 @@ func ladderPage(
 			Table:    rungTable(r.Rungs),
 		}}, ladderExtras(r), []section{{
 			Title:     "Encoding commands",
+			Area:      areaEncoding,
 			Commands:  rungCommands(r.Rungs),
 			Collapsed: true,
 		}}),
 	}
+
+	for i := range p.Sections {
+		if p.Sections[i].Area.Title == "" {
+			p.Sections[i].Area = own
+		}
+	}
+
+	return p
 }
 
 // ladderExtras are the per-shot and film grain sections, when requested.
@@ -261,7 +272,7 @@ func ladderChart(
 	}
 
 	return svg.Chart{
-		Width: chartWidth, Height: ladderChartHeight, Series: series, LogX: true, YMin: floor10(lowest), YMax: 100,
+		Title: "Rate–quality: probes, envelope and rungs", Width: chartWidth, Height: ladderChartHeight, Series: series, LogX: true, YMin: floor10(lowest), YMax: 100,
 		X: svg.UnitBitrate, Y: svg.UnitNumber, Nearest: true,
 	}.HTML()
 }
@@ -482,7 +493,7 @@ func ladderCards(
 	if n := len(r.Rungs); n > 0 {
 		top, bottom := r.Rungs[0], r.Rungs[n-1]
 		cards = append(cards,
-			card{Label: "Top rung", Value: bitrateLabel(float64(top.Bitrate)), Detail: rungLabel(top), Tone: vmafTone(top.PredictedVMAF)},
+			card{Label: "Top rung", Value: bitrateLabel(float64(top.Bitrate)), Detail: rungLabel(top), Tone: vmafTone(top.PredictedVMAF), Meter: vmafMeter(top.PredictedVMAF)},
 			card{Label: "Bottom rung", Value: bitrateLabel(float64(bottom.Bitrate)), Detail: rungLabel(bottom)},
 		)
 	}

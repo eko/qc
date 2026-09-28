@@ -358,7 +358,7 @@ func TestGradientBar(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			bar := gradientBar(testCase.ratio, testCase.width)
+			bar := GradientBar(testCase.ratio, testCase.width)
 
 			assert.Equal(t, strings.Repeat("━", testCase.width), plain(bar))
 			assert.Equal(t, testCase.width-testCase.filled, strings.Count(bar, Subtle.Render("━")), "the rest of the bar is subtle")

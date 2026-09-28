@@ -3,6 +3,7 @@ package htmlreport
 import (
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/eko/qc/pipeline"
 )
@@ -20,8 +21,9 @@ func RenderRun(
 	return render(w, p)
 }
 
-// runPage stacks the pages of every result of a pipeline run. The first
-// section of each embedded page carries that page's title.
+// runPage stacks the pages of every result of a pipeline run, in areas: the
+// video and audio of the analysis, the quality, one area per ladder, then
+// the encoding commands of every ladder together, collapsed.
 func runPage(
 	r *pipeline.Report,
 ) page {
@@ -30,15 +32,32 @@ func runPage(
 
 	if r.Comparison != nil {
 		c := comparisonPage(r.Comparison)
-		c.Sections[0].Title = c.Title + " · " + c.Subtitle
+		for i := range c.Sections {
+			c.Sections[i].Area.Subtitle = c.Title + " · " + c.Subtitle
+		}
+
 		p.Sections = append(p.Sections, c.Sections...)
 	}
 
+	var commands []section
+
 	for _, l := range r.Ladders {
 		lp := ladderPage(l)
-		lp.Sections[0].Title = lp.Title
-		p.Sections = append(p.Sections, lp.Sections...)
+
+		for _, s := range lp.Sections {
+			if s.Area == areaEncoding {
+				s.Title = l.Codec.Name + " encoding commands"
+				commands = append(commands, s)
+
+				continue
+			}
+
+			s.Area.Subtitle = lp.Subtitle
+			p.Sections = append(p.Sections, s)
+		}
 	}
+
+	p.Sections = slices.Concat(p.Sections, commands)
 
 	return p
 }
@@ -62,6 +81,7 @@ func runSummary(
 		if len(l.Rungs) > 0 {
 			top := l.Rungs[0]
 			c.Detail = fmt.Sprintf("top %s · VMAF %.1f", bitrateLabel(float64(top.Bitrate)), top.PredictedVMAF)
+			c.Meter = vmafMeter(top.PredictedVMAF)
 		}
 
 		cards = append(cards, c)

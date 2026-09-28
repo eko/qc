@@ -120,7 +120,7 @@ func sampleLadder(
 }
 
 var (
-	sectionTitles = regexp.MustCompile(`<h2>([^<]*)</h2>`)
+	sectionTitles = regexp.MustCompile(`<h3>([^<]*)</h3>`)
 	charts        = regexp.MustCompile(`<svg viewBox="[^"]*" class="chart-svg"`)
 )
 
@@ -153,7 +153,7 @@ func TestRender(
 			wantCharts: 1,
 			want: []string{
 				"<h1>&lt;clip&gt;.mp4</h1>",
-				"h264 High · 1920×1080 · 25.000 fps · SDR · 0:04.00",
+				`<ul class="meta"><li>h264 High</li><li>1920×1080</li><li>25.000 fps</li><li>SDR</li><li>0:04.00</li></ul>`,
 				"<span>Average</span><b>5.00 Mb/s</b>", "<span>Peak (1s)</span><b>7.00 Mb/s</b>",
 				"<b>1.40</b>", "<b>2 · every 2.00s</b>", "<b>78.1 KiB</b>",
 			},
@@ -173,14 +173,14 @@ func TestRender(
 		{
 			name:       "sampled comparison",
 			result:     func(*testing.T) any { return sampleComparison(quality.ModeSampled) },
-			wantTitles: []string{"Quality"},
+			wantTitles: []string{"VMAF"},
 			wantCharts: 1,
 			want: []string{
 				"<h1>VMAF 91.20</h1>", "&lt;clip&gt;.mp4 vs &lt;clip&gt;.mp4", "model vmaf_v0.6.1 at 1920×1080",
 				"<b>± 0.45 (95% CI)</b>", "<b>20 / 100</b>", "<b>72.4</b>", "<b>1.23s</b>",
 				`class="dot"`, "stratum mean",
 			},
-			wantNot: []string{"<pre>"},
+			wantNot: []string{`class="note"`},
 		},
 		{
 			name: "exact comparison with fallback",
@@ -190,9 +190,9 @@ func TestRender(
 
 				return c
 			},
-			wantTitles: []string{"Quality"},
+			wantTitles: []string{"VMAF"},
 			wantCharts: 1,
-			want:       []string{"<b>exact</b>", "<pre>sampling would cost more: scored every frame</pre>"},
+			want:       []string{"<b>exact</b>", "<span>sampling would cost more: scored every frame</span></p>"},
 			wantNot:    []string{`class="dot"`, "stratum mean"},
 		},
 		{
@@ -202,7 +202,7 @@ func TestRender(
 			wantCharts: 1,
 			want: []string{
 				"<h1>h264 ladder · &lt;clip&gt;.mp4</h1>",
-				"2 rungs · digest of 1 segments (50.0% of the title) · 4 probe encodes · 42s",
+				"<li>2 rungs</li><li>digest of 1 segments (50.0% of the title)</li><li>4 probe encodes</li><li>42s</li>",
 				"<td>1920×1080</td><td>5.00 Mb/s</td><td>22.0</td><td>10.00 Mb/s</td><td>95.0</td><td>94.6 ± 0.5</td><td>4.90 Mb/s</td>",
 				"<td>80.0</td><td>–</td><td>–</td>",
 				"<pre><code>ffmpeg -i x -crf 22 1080p.mp4</code></pre>",
@@ -221,13 +221,11 @@ func TestRender(
 				}
 			},
 			wantTitles: []string{
-				"Bitrate", "Complexity",
-				"VMAF 91.20 · &lt;clip&gt;.mp4 vs &lt;clip&gt;.mp4",
-				"h264 ladder · &lt;clip&gt;.mp4", "Encoding commands",
-				"av1 ladder · &lt;clip&gt;.mp4", "Encoding commands",
+				"Bitrate", "Complexity", "VMAF", "Rate / quality", "Rate / quality",
+				"h264 encoding commands", "av1 encoding commands",
 			},
 			wantCharts: 3 + 1 + 1 + 1,
-			want:       []string{"SDR · 0:04.00 · 1m2s</p>"},
+			want:       []string{"<li>0:04.00</li><li>1m2s</li></ul>", `<h2 id="a-h264-ladder-title">h264 ladder</h2>`, `<h2 id="a-encoding-title">Encoding</h2>`},
 		},
 		{
 			name: "pipeline run without comparison nor ladder",

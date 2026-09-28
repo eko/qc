@@ -31,21 +31,22 @@ func lightSection(
 		{Name: "peak (99.9%)", Color: orange, Samples: &svg.Samples{X: pts, Y: f.RobustPeakNits, Frames: frames}},
 		{Name: "average", Color: blue, Samples: &svg.Samples{X: pts, Y: f.AverageNits, Frames: frames}, Area: true},
 		{Name: "strict peak", Samples: &svg.Samples{X: pts, Y: f.PeakNits, Frames: frames}, TipOnly: true},
-		{Name: "MaxCLL", Color: amber, Points: level(l.MaxCLLRobust), NoTip: true},
-		{Name: "MaxFALL", Color: aqua, Points: level(l.MaxFALL), NoTip: true},
+		{Name: "MaxCLL", Color: amber, Points: level(l.MaxCLLRobust), NoTip: true, Guide: true},
+		{Name: "MaxFALL", Color: aqua, Points: level(l.MaxFALL), NoTip: true, Guide: true},
 	}
 
 	signalled := "none"
 	if cll := v.HDR.ContentLightLevel; cll != nil && (cll.MaxCLL > 0 || cll.MaxFALL > 0) {
 		signalled = fmt.Sprintf("%d / %d cd/m²", cll.MaxCLL, cll.MaxFALL)
 		series = append(series,
-			svg.Series{Name: "signalled MaxCLL", Color: foreground, Points: level(float64(cll.MaxCLL)), NoTip: true},
-			svg.Series{Name: "signalled MaxFALL", Color: green, Points: level(float64(cll.MaxFALL)), NoTip: true})
+			svg.Series{Name: "signalled MaxCLL", Color: foreground, Points: level(float64(cll.MaxCLL)), NoTip: true, Guide: true},
+			svg.Series{Name: "signalled MaxFALL", Color: green, Points: level(float64(cll.MaxFALL)), NoTip: true, Guide: true})
 	}
 
 	return section{
 		Title:    "Light levels",
 		Subtitle: lightSubtitle(l),
+		Area:     areaVideo,
 		Topic:    findings.TopicLight,
 		Stats: []stat{
 			{"MaxCLL", fmt.Sprintf("%.0f cd/m²", l.MaxCLLRobust)},
@@ -55,10 +56,10 @@ func lightSection(
 			{"Mastering display", masteringLabel(r)},
 		},
 		Charts: []template.HTML{svg.Chart{
-			Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
+			Title: "Light per frame (cd/m²)", Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
 			Series: series, YMin: 0, X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 		}.HTML()},
-		Notes: []string{fmt.Sprintf("max(R, G, B) of every frame in cd/m² (CTA-861.3), on a grid of one pixel every %d in each direction. "+
+		Method: []string{fmt.Sprintf("max(R, G, B) of every frame in cd/m² (CTA-861.3), on a grid of one pixel every %d in each direction. "+
 			"MaxCLL is the highest 99.9th percentile of a frame: the strict maximum of a 4:2:0 picture overshoots on saturated colour edges. "+
 			"MaxFALL is taken over the picture without its black borders.", l.SampleStep)},
 	}, true

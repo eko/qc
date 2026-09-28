@@ -51,25 +51,60 @@ func (span) Attr(
 // finding is a finding as the page lists it, with the time ranges it links.
 type finding struct {
 	Level findings.Level
+	Code  findings.Code
+	// Blocking findings fail the report (findings.Finding.Blocking).
+	Blocking bool
 	// Scope names the report the finding comes from on combined pages.
 	Scope string
 	Text  string
 	Spans []span
-	// Topic is the section showing the spans; Anchor its id, set by link.
+	// Topic is the section showing the spans; Anchor its id and Where its
+	// title, set by link.
 	Topic  findings.Topic
 	Anchor string
+	Where  string
 }
 
-// LevelLabel names the level of the finding in the list.
+// filterBlocking is the filter of blocking findings, next to the level
+// names.
+const filterBlocking = "blocking"
+
+// Filter is the kind of the finding for the list's filters: blocking, or
+// its level.
+func (f finding) Filter() string {
+	if f.Blocking {
+		return filterBlocking
+	}
+
+	return f.Level.String()
+}
+
+// LevelLabel names the kind of the finding in the list.
 func (f finding) LevelLabel() string {
-	switch f.Level {
-	case findings.Warn:
+	switch {
+	case f.Blocking:
+		return "Blocking"
+	case f.Level == findings.Warn:
 		return "Warning"
-	case findings.OK:
+	case f.Level == findings.OK:
 		return "Passed"
 	}
 
 	return "Note"
+}
+
+// Icon is the symbol of the finding's kind.
+func (f finding) Icon() string {
+	switch {
+	case f.Blocking:
+		return iconFail
+	case f.Level == findings.Warn:
+		return iconWarn
+	case f.Level == findings.OK:
+		return iconPass
+	}
+
+	return iconInfo
 }
 
 // worded is a finding worded as text, with its level and topic.
@@ -79,7 +114,7 @@ func worded(
 	format string,
 	args ...any,
 ) finding {
-	return finding{Level: f.Level, Topic: f.Topic, Spans: spans, Text: fmt.Sprintf(format, args...)}
+	return finding{Level: f.Level, Code: f.Code, Blocking: f.Blocking(), Topic: f.Topic, Spans: spans, Text: fmt.Sprintf(format, args...)}
 }
 
 // sortFindings puts warnings first, then notes, then good news, keeping

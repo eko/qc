@@ -70,7 +70,7 @@ func TestRenderAnalysisAudio(
 				`id="s-audio-1"`, "Audio #1", "aac LC · stereo · 48 kHz · fra · default", "-17.5 LUFS ✗", "ebu: -23 ±0.5", "0.4 dBTP ✗",
 				"4.2 LU", "-18.0 / -20.0 LUFS", "FL/FR correlation", "short-term (LUFS)", "momentary (LUFS)", "target -23", "±0.5 LU",
 				"FL (dBFS)", "true peak over ceiling", "ceiling -1 dBTP", "FL/FR out of phase", "FL clipping", "FR silent",
-				"Audio #2", "The track is silent", "Loudness", "-17.5 LUFS", "ebu target ✗",
+				"Audio #2", "The track is silent", "Loudness", "-17.5 <small>LUFS</small>", "5.5 LU vs ebu -23 · TP 0.4 dBTP ✗",
 				"Audio #1: -17.5 LUFS, 5.5 LU above the ebu target (-23 ±0.5 LUFS)",
 				"Audio #1: true peak 0.4 dBTP over the -1 dBTP ceiling (1 passage)",
 				"Audio #1: 1 silence", "Audio #2 is silent (peak -87.2 dBFS)",
@@ -107,14 +107,14 @@ func TestAudioCard(
 		{
 			name:   "the default track, off target",
 			mutate: func(*analysis.Report) {},
-			want:   card{Label: "Loudness", Value: "-17.5 LUFS", Detail: "TP 0.4 dBTP · ebu target ✗", Tone: toneWarn},
+			want:   card{Label: "Loudness", Value: "-17.5 LUFS", Detail: "+5.5 LU vs ebu -23 · TP 0.4 dBTP ✗", Tone: toneWarn},
 		},
 		{
 			name: "on target",
 			mutate: func(r *analysis.Report) {
 				r.Audio.Tracks[0].Compliance = loudness.Compliance{Loudness: true, TruePeak: true}
 			},
-			want: card{Label: "Loudness", Value: "-17.5 LUFS", Detail: "TP 0.4 dBTP · ebu target ✓", Tone: toneGood},
+			want: card{Label: "Loudness", Value: "-17.5 LUFS", Detail: "+5.5 LU vs ebu -23 · TP 0.4 dBTP ✓", Tone: toneGood},
 		},
 		{
 			name:   "a silent default track",
@@ -130,6 +130,9 @@ func TestAudioCard(
 
 			got, ok := audioCard(r)
 			require.True(t, ok)
+			assert.Equal(t, got.Tone != toneWarn || got.Value != "silent", got.Spark != "", "a track with loudness draws its trend")
+
+			got.Spark = ""
 			assert.Equal(t, testCase.want, got)
 		})
 	}

@@ -153,11 +153,27 @@ First public release: a Go library and the `qc` CLI.
   several codecs in one command and one report.
 - **Terminal UI**: a live dashboard with progress, ETA and panels showing
   VMAF converging and probes landing on a braille rate-quality chart; an
-  interactive wizard (`qc` without arguments) that prints the equivalent
-  command.
+  interactive wizard (`qc` without arguments): full screen, with a step
+  indicator (Source › Analysis › Quality › Ladder › Outputs › Review) and a
+  progress rail, a video browser with type-to-filter and the metadata of
+  the highlighted file (codec, resolution, frame rate, bit depth, duration,
+  HDR format, audio tracks, read by ffprobe) that refuses unreadable files
+  and files without a video stream, a summary of the answers beside the
+  form on wide terminals, and a review of every choice with the exact
+  equivalent command before running (run, edit a section, or cancel). It
+  adapts to light and dark terminals and to their size (80×24 and up),
+  falls back to ASCII without colours (`NO_COLOR`, `TERM=dumb`, non-UTF-8
+  locale), and asks plain prompts for screen readers (`ACCESSIBLE=1`).
 - **Reports**: text in the terminal, JSON (`-f json`, `-o report.json`,
-  `schemaVersion` 1) and self-contained interactive HTML (`--html`) with
-  zoomable charts, per-frame tooltips and findings.
+  `schemaVersion` 1) and self-contained interactive HTML (`--html`): a
+  single offline file with an overall verdict (pass, needs attention, fail:
+  the blocking rule lives in `internal/findings`), key numbers with
+  sparklines and meters, findings filterable by kind, sections grouped by
+  area (video, audio, quality, one per ladder, encoding) behind a sidebar
+  navigation and a quick search (`/`, ⌘K), zoomable charts with exact
+  per-frame tooltips, a crosshair synchronised across time charts and
+  labelled targets and thresholds, light and dark themes, and a clean A4
+  print. Set in an embedded Inter subset (SIL OFL, 43 KB).
 - **NVIDIA GPUs** (`--gpu`): NVDEC decoding (`--hwaccel cuda`, frames
   identical to a CPU decode, or `cuda-scale` with GPU scaling), NVENC
   ladders (`--encoder nvenc`: `h264_nvenc`, `hevc_nvenc`, `av1_nvenc`, same

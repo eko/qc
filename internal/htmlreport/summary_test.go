@@ -69,14 +69,14 @@ func TestAnalysisSummary(
 			name:   "bitstream only",
 			report: sampleReport,
 			wantCards: [][2]string{
-				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Findings", "None"},
+				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"},
 			},
 		},
 		{
 			name:   "decoded, black and frozen segments",
 			report: sampleDecodedReport,
 			wantCards: [][2]string{
-				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"}, {"Findings", "2 warnings"},
+				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"},
 			},
 			wantFindings: [][2]string{{levelWarn, "Black picture: 1 segment"}, {levelWarn, "Frozen picture: 1 segment"}},
 		},
@@ -84,7 +84,7 @@ func TestAnalysisSummary(
 			name:   "every issue",
 			report: troubled,
 			wantCards: [][2]string{
-				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"}, {"Findings", "7 warnings"},
+				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"},
 			},
 			wantFindings: [][2]string{
 				{levelWarn, "Peak bitrate is 3.1× the average (HLS recommends ≤ 2×)"},
@@ -107,7 +107,7 @@ func TestAnalysisSummary(
 				return r
 			},
 			wantCards: [][2]string{
-				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"}, {"Findings", "1 warning"},
+				{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"},
 			},
 			wantFindings: [][2]string{
 				{levelWarn, "5.0% of luma samples outside 0–0 on the worst frames"},
@@ -136,7 +136,7 @@ func TestAnalysisSummary(
 	r.Bitstream, r.Info.Video[0].FrameCount = nil, 100
 	cards, _ := summary(r)
 	assert.Equal(t, "100 frames", cards[0].Detail)
-	assert.Len(t, cards, 4)
+	assert.Len(t, cards, 3)
 }
 
 func TestComparisonSummary(
@@ -154,9 +154,9 @@ func TestComparisonSummary(
 			result: func() *analysis.Comparison { return comparisonWithExtras(quality.ModeSampled, true) },
 			wantCards: [][2]string{
 				{"VMAF", "91.20"}, {"Worst frame", "72.4"}, {"Frames scored", "20 / 100"},
-				{"Model", "vmaf_v0.6.1"}, {"Banding", "1 segment"}, {"Findings", "2 warnings"},
+				{"Model", "vmaf_v0.6.1"}, {"Banding", "1 segment"},
 			},
-			wantTones: []string{toneGood, toneWarn, "", "", toneWarn, toneWarn},
+			wantTones: []string{toneGood, toneWarn, "", "", toneWarn},
 			wantFindings: [][2]string{
 				{levelWarn, "Worst scored frame 50: VMAF 72.4"},
 				{levelWarn, "Visible banding on 2 scored frames (CAMBI peak 7.0)"},
@@ -174,9 +174,9 @@ func TestComparisonSummary(
 			},
 			wantCards: [][2]string{
 				{"VMAF", "80.00"}, {"Worst frame", "79.0"}, {"Frames scored", "20 / 100"},
-				{"Model", "vmaf_v0.6.1"}, {"Banding", "None visible"}, {"Findings", "All clear"},
+				{"Model", "vmaf_v0.6.1"}, {"Banding", "None visible"},
 			},
-			wantTones: []string{"", "", "", "", toneGood, toneGood},
+			wantTones: []string{"", "", "", "", toneGood},
 			wantFindings: [][2]string{
 				{levelInfo, "scored every frame"},
 				{levelOK, "No visible banding: CAMBI ≤ 5 on every scored frame"},
@@ -190,8 +190,8 @@ func TestComparisonSummary(
 
 				return c
 			},
-			wantCards: [][2]string{{"VMAF", "91.20"}, {"Frames scored", "20 / 0"}, {"Model", "vmaf_v0.6.1"}, {"Findings", "None"}},
-			wantTones: []string{toneGood, "", "", ""},
+			wantCards: [][2]string{{"VMAF", "91.20"}, {"Frames scored", "20 / 0"}, {"Model", "vmaf_v0.6.1"}},
+			wantTones: []string{toneGood, "", ""},
 		},
 	}
 
@@ -252,7 +252,7 @@ func TestLadderSummary(
 				return r
 			},
 			wantCards: [][2]string{
-				{"Rungs", "2"}, {"Top rung", "5.00 Mb/s"}, {"Bottom rung", "1.00 Mb/s"}, {"Probe encodes", "4"}, {"Digest", "50.0%"}, {"Findings", "All clear"},
+				{"Rungs", "2"}, {"Top rung", "5.00 Mb/s"}, {"Bottom rung", "1.00 Mb/s"}, {"Probe encodes", "4"}, {"Digest", "50.0%"},
 			},
 			wantFindings: [][2]string{
 				{levelOK, "VMAF 95 reached at 5.00 Mb/s (1080p)"},
@@ -272,7 +272,7 @@ func TestLadderSummary(
 				return r
 			},
 			wantCards: [][2]string{
-				{"Rungs", "2"}, {"Top rung", "5.00 Mb/s"}, {"Bottom rung", "1.00 Mb/s"}, {"Probe encodes", "4"}, {"Digest", "50.0%"}, {"Findings", "4 warnings"},
+				{"Rungs", "2"}, {"Top rung", "5.00 Mb/s"}, {"Bottom rung", "1.00 Mb/s"}, {"Probe encodes", "4"}, {"Digest", "50.0%"},
 			},
 			wantFindings: [][2]string{
 				{levelWarn, "The title never reaches VMAF 97 at 1080p: top rung at the best probed quality"},
@@ -290,7 +290,7 @@ func TestLadderSummary(
 
 				return r
 			},
-			wantCards:    [][2]string{{"Rungs", "0"}, {"Probe encodes", "4"}, {"Digest", "50.0%"}, {"Findings", "1 warning"}},
+			wantCards:    [][2]string{{"Rungs", "0"}, {"Probe encodes", "4"}, {"Digest", "50.0%"}},
 			wantFindings: [][2]string{{levelWarn, "No rung could be selected"}},
 		},
 	}
@@ -325,7 +325,7 @@ func TestRunSummary(
 
 	assert.Equal(t, [][2]string{
 		{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"},
-		{"VMAF", "91.20"}, {"h264 ladder", "2 rungs"}, {"av1 ladder", "0 rungs"}, {"Findings", "6 warnings"},
+		{"VMAF", "91.20"}, {"h264 ladder", "2 rungs"}, {"av1 ladder", "0 rungs"},
 	}, cardValues(cards))
 	assert.Equal(t, "top 5.00 Mb/s · VMAF 95.0", cards[6].Detail)
 

@@ -39,6 +39,10 @@ func (p plot) data() []byte {
 		d.Bands = append(d.Bands, bandData{From: band.From, To: band.To, Label: band.Label, Color: band.Color})
 	}
 
+	for _, z := range c.Zones {
+		d.Zones = append(d.Zones, bandData{From: z.From, To: z.To, Label: z.Label, Color: z.Color})
+	}
+
 	// Every field is a number, a bool or a string: marshalling cannot fail.
 	out, _ := json.Marshal(d) //nolint:errchkjson // see above
 
@@ -108,6 +112,7 @@ type chartData struct {
 	YStep  float64      `json:"ys"`
 	Series []seriesData `json:"series"`
 	Bands  []bandData   `json:"bands,omitempty"`
+	Zones  []bandData   `json:"zones,omitempty"`
 }
 
 type seriesData struct {
@@ -141,6 +146,8 @@ type bandData struct {
 // style is how the page script draws the series.
 func (s Series) style() string {
 	switch {
+	case s.Guide:
+		return "guide"
 	case s.Markers:
 		return "markers"
 	case s.Step:

@@ -51,7 +51,12 @@ func analysisSummary(
 ) string {
 	v := report.Video
 
-	return fmt.Sprintf("%d shots · SI %.0f · TI %.0f", len(v.Shots), v.SITI.SISummary.Mean, v.SITI.TISummary.Mean) + loudnessSummary(report)
+	shots := fmt.Sprintf("%d shots", len(v.Shots))
+	if len(v.Shots) == 1 {
+		shots = "1 shot"
+	}
+
+	return fmt.Sprintf("%s · SI %.0f · TI %.0f", shots, v.SITI.SISummary.Mean, v.SITI.TISummary.Mean) + loudnessSummary(report)
 }
 
 // loudnessSummary is the integrated loudness of the first audio track

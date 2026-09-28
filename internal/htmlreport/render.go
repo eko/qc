@@ -13,6 +13,7 @@ import (
 	"html/template"
 	"io"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/eko/qc/internal/findings"
@@ -69,10 +70,18 @@ type stat struct {
 type section struct {
 	Title    string
 	Subtitle string
-	Stats    []stat
-	Charts   []template.HTML
-	Table    *table
-	Notes    []string
+	// Area is the part of the report the section belongs to: consecutive
+	// sections of one area are listed under it.
+	Area   area
+	Stats  []stat
+	Charts []template.HTML
+	Table  *table
+	// Notes say how this result was obtained (a fallback, a clamped
+	// budget): shown as is.
+	Notes []string
+	// Method explains how the measures are defined: reference material,
+	// collapsed under the section.
+	Method []string
 	// Commands are shell commands, shown with a copy button.
 	Commands []string
 	// Collapsed renders the section closed: reference material, such as the
@@ -81,8 +90,10 @@ type section struct {
 	Collapsed bool
 	// Topic lets findings link to the section's chart.
 	Topic findings.Topic
-	// Anchor is the section's id, set by link.
-	Anchor string
+	// Anchor is the section's id, and Warnings the number of warnings
+	// linking to the section; both set by link.
+	Anchor   string
+	Warnings int
 }
 
 type table struct {
@@ -96,24 +107,48 @@ type table struct {
 }
 
 type page struct {
-	Title     string
+	Title string
+	// Subtitle lists the facts of the title, " · " separated.
 	Subtitle  string
 	Generated string
 	// Kind names the report above its title.
 	Kind     string
+	Verdict  verdict
 	Cards    []card
 	Findings []finding
 	Sections []section
+	// Areas group the sections, set by link.
+	Areas []areaView
 }
 
-// summarize sets the header cards, ending with the count of findings, and
-// the findings, most severe first.
+// summarize sets the header cards, the findings, most severe first, and
+// the verdict they lead to.
 func (p *page) summarize(
 	cards []card,
 	list []finding,
 ) {
-	p.Cards = append(slices.Clone(cards), findingsCard(list))
+	p.Cards = slices.Clone(cards)
 	p.Findings = sortFindings(list)
+	p.Verdict = judge(p.Findings)
+}
+
+// Meta are the facts of the subtitle, one by one.
+func (p page) Meta() []string {
+	if p.Subtitle == "" {
+		return nil
+	}
+
+	return strings.Split(p.Subtitle, " · ")
+}
+
+// Issues are the warnings and notes, most severe first.
+func (p page) Issues() []finding {
+	return slices.DeleteFunc(slices.Clone(p.Findings), func(f finding) bool { return f.Level == findings.OK })
+}
+
+// Passed are the checks that passed.
+func (p page) Passed() []finding {
+	return slices.DeleteFunc(slices.Clone(p.Findings), func(f finding) bool { return f.Level != findings.OK })
 }
 
 // render writes a page, stamped with the time of generation.
@@ -124,7 +159,10 @@ func render(
 	p.Generated = time.Now().Format("2006-01-02 15:04")
 	p.link()
 
-	v := view{page: p, CSS: template.CSS(reportCSS), JS: template.JS(reportJS), Theme: template.JS(themeBootstrap), Logo: logoURI, Icon: iconURI, Project: projectURL} //nolint:gosec // embedded assets
+	v := view{
+		page: p, CSS: template.CSS(fontFace + reportCSS), JS: template.JS(reportJS), Theme: template.JS(themeBootstrap), //nolint:gosec // embedded assets
+		Logo: logoURI, Icon: iconURI, Project: projectURL,
+	}
 
 	if err := pageTemplate.Execute(w, v); err != nil {
 		return fmt.Errorf("htmlreport: %w", err)

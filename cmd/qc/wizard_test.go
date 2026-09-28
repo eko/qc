@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/charmbracelet/huh"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -229,15 +230,6 @@ func TestValidators(
 	}
 }
 
-func TestVideoPicker(
-	t *testing.T,
-) {
-	picker := videoPicker("Video", "The source.")
-
-	require.NotNil(t, picker)
-	assert.Contains(t, picker.View(), "Video")
-}
-
 func TestRunWizard(
 	t *testing.T,
 ) {
@@ -259,7 +251,7 @@ func TestRunWizard(
 				Actions: []string{actionAnalysis},
 				HTML:    html,
 			},
-			wantStderr: "equivalent command: qc run " + source + " --codecs= --html " + html,
+			wantStderr: "$ qc run " + source + " --codecs= --html " + html,
 			wantFile:   html,
 		},
 		{
@@ -315,10 +307,11 @@ func TestWizardBrand(
 	assert.Contains(t, banner, "qc · fast video quality analysis")
 	assert.Contains(t, banner, "technical metrics · VMAF · per-title ladders")
 
-	theme := wizardTheme()
-	assert.Equal(t, brandOrange, theme.Focused.Title.GetForeground())
+	theme := wizardTheme(newWizardStyle(func(string) string { return "" }, termenv.TrueColor))
+	assert.Equal(t, toneText, theme.Focused.Title.GetForeground())
 	assert.Equal(t, brandOrange, theme.Group.Title.GetForeground())
 	assert.Equal(t, brandOrange, theme.Focused.FocusedButton.GetBackground())
+	assert.Equal(t, brandOrange, theme.Focused.Base.GetBorderLeftForeground(), "the focused field has the brand bar")
 }
 
 func TestWizardInvalidConfiguration(

@@ -11,18 +11,25 @@ import (
 	"github.com/eko/qc/media"
 )
 
-func TestWizardFormGroups(
+func TestWizardFormSteps(
 	t *testing.T,
 ) {
 	answers := newWizardAnswers()
 
 	for _, offerGPU := range []bool{false, true} {
-		groups := answers.formGroups(wizardContext{offerGPU: offerGPU})
-		require.Len(t, groups, 18)
+		steps := answers.formSteps(testWizardContext(t, offerGPU))
+		require.Len(t, steps, 18)
 
-		for i, group := range groups {
-			assert.NotNil(t, group, "group %d", i)
+		var sections []section
+
+		for i, step := range steps {
+			assert.NotEmpty(t, step.fields, "step %d", i)
+			sections = append(sections, step.section)
 		}
+
+		assert.IsNonDecreasing(t, sections, "the sections follow each other")
+		assert.Equal(t, sectionOutputs, steps[len(steps)-1].section)
+		assert.Equal(t, offerGPU, !steps[14].isHidden(), "the GPU is asked only when usable")
 	}
 
 	assert.Equal(t, []string{actionAnalysis, actionLadder}, answers.Actions, "the defaults the form shows")
@@ -141,7 +148,7 @@ func TestWizardHDRDetected(
 	}
 }
 
-func TestHDRDetector(
+func TestVideoCacheDynamicRange(
 	t *testing.T,
 ) {
 	clip := testutil.HDRClip(media.TransferHLG)
@@ -149,11 +156,11 @@ func TestHDRDetector(
 	hlg := testutil.Generate(t, clip)
 	sdr := testutil.Generate(t, testutil.Clip{Seconds: 0.2})
 
-	detect := hdrDetector(t.Context(), "ffprobe")
+	videos := newVideoCache(t.Context(), "ffprobe")
 
-	assert.Equal(t, "HLG", detect(hlg))
-	assert.Equal(t, "HLG", detect(hlg), "cached")
-	assert.Empty(t, detect(sdr))
-	assert.Empty(t, detect(""))
-	assert.Empty(t, detect(filepath.Join(t.TempDir(), "missing.mov")))
+	assert.Equal(t, "HLG", videos.dynamicRange(hlg))
+	assert.Equal(t, "HLG", videos.dynamicRange(hlg), "cached")
+	assert.Empty(t, videos.dynamicRange(sdr))
+	assert.Empty(t, videos.dynamicRange(""))
+	assert.Empty(t, videos.dynamicRange(filepath.Join(t.TempDir(), "missing.mov")))
 }

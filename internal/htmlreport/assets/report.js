@@ -257,6 +257,7 @@
       out.info = s.info || null;
       return out;
     });
+    this.guides = this.series.filter(function (s) { return s.style === 'guide'; });
     this.tipSeries = this.series.filter(function (s) { return !s.notip && s.x.length; });
     this.primary = this.tipSeries.filter(function (s) { return !s.tiponly && s.style !== 'step'; })[0] || this.tipSeries[0] || null;
     this.build();
@@ -281,10 +282,11 @@
 
   Chart.prototype.build = function () {
     var self = this, fig = this.fig;
-    var head = htmlEl('div', 'chart-head');
-    var legend = fig.querySelector('.legend');
-    fig.insertBefore(head, this.plotEl);
-    if (legend) head.appendChild(legend);
+    var head = fig.querySelector('.chart-head');
+    if (!head) {
+      head = htmlEl('div', 'chart-head');
+      fig.insertBefore(head, this.plotEl);
+    }
 
     fig.querySelectorAll('.key').forEach(function (key) {
       key.addEventListener('click', function () {
@@ -385,6 +387,17 @@
     var cp = svgEl('clipPath', { id: this.clip }, defs);
     svgEl('rect', { x: b.l, y: b.t - 6, width: b.r - b.l, height: b.b - b.t + 12 }, cp);
 
+    // Area series fade downwards: one gradient per colour.
+    this.grads = {};
+    this.series.forEach(function (s, i) {
+      if (s.style !== 'area' || self.grads[s.color]) return;
+      var id = self.clip + '-g' + i;
+      var lg = svgEl('linearGradient', { id: id, x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+      svgEl('stop', { offset: '0', style: 'stop-color:' + s.color + ';stop-opacity:0.32' }, lg);
+      svgEl('stop', { offset: '1', style: 'stop-color:' + s.color + ';stop-opacity:0.02' }, lg);
+      self.grads[s.color] = id;
+    });
+
     var gy = svgEl('g', { 'class': 'yaxis' }, svg);
     this.yTicks.forEach(function (v, i) {
       var y = r1(self.Y(v));
@@ -392,6 +405,13 @@
       svgEl('text', { x: b.l - 8, y: y + 4, 'class': 'axis', 'text-anchor': 'end' }, gy).textContent = self.yLabels[i];
     });
     svgEl('line', { x1: b.l, x2: b.r, y1: b.b, y2: b.b, 'class': 'baseline' }, gy);
+
+    var gz = svgEl('g', { 'class': 'zones' }, svg);
+    (this.d.zones || []).forEach(function (z) {
+      var top = self.Y(Math.max(z.a, z.b)), bottom = self.Y(Math.min(z.a, z.b));
+      svgEl('rect', { x: b.l, y: r1(top), width: b.r - b.l, height: r1(Math.max(bottom - top, 1)), 'class': 'zone', style: 'fill:' + z.c }, gz);
+      svgEl('text', { x: b.l + 6, y: r1(bottom + 11), 'class': 'zone-label' }, gz).textContent = z.l;
+    });
 
     var gb = svgEl('g', { 'class': 'bands', 'clip-path': 'url(#' + this.clip + ')' }, svg);
     (this.d.bands || []).forEach(function (band) {
@@ -409,6 +429,7 @@
       self.drawSeries(g, s);
     });
 
+    this.drawGuideLabels(svg);
     this.overlay = svgEl('g', { 'class': 'overlay' }, svg);
     this.drawMark();
 
@@ -493,15 +514,32 @@
     };
 
     if (s.style === 'area') {
+      var grad = this.grads[s.color];
       svgEl('path', {
         d: path(mean) + ' L' + r1(mean[mean.length - 1][0]) + ',' + b.b + ' L' + r1(mean[0][0]) + ',' + b.b + ' Z',
-        'class': 'area', style: 'fill:' + s.color
+        'class': grad ? 'area grad' : 'area', style: 'fill:' + (grad ? 'url(#' + grad + ')' : s.color)
       }, g);
     } else if (highs.length) {
       svgEl('path', { d: path(highs) + ' ' + path(lows.slice().reverse()).replace('M', 'L') + ' Z', 'class': 'envelope', style: 'fill:' + s.color }, g);
     }
 
-    svgEl('path', { d: path(mean), 'class': s.bold ? 'line bold' : 'line', style: 'stroke:' + s.color }, g);
+    var cls = s.style === 'guide' ? 'line guide' : s.bold ? 'line bold' : 'line';
+    svgEl('path', { d: path(mean), 'class': cls, style: 'stroke:' + s.color }, g);
+  };
+
+  // drawGuideLabels names the reference lines at the right edge, pushed
+  // apart when close.
+  Chart.prototype.drawGuideLabels = function (svg) {
+    var self = this, b = this.box;
+    var list = this.guides.filter(function (s) { return s.y.length && !self.hidden[s.key]; }).map(function (s) {
+      return { y: Math.max(self.Y(s.y[0]) - 5, b.t + 10), s: s };
+    }).sort(function (a, c) { return a.y - c.y; });
+    if (!list.length) return;
+    var g = svgEl('g', { 'class': 'guides' }, svg);
+    list.forEach(function (l, i) {
+      if (i > 0 && l.y - list[i - 1].y < 12) l.y = list[i - 1].y + 12;
+      svgEl('text', { x: b.r - 4, y: r1(l.y), 'text-anchor': 'end', 'class': 'guide-label', style: 'fill:' + l.s.color }, g).textContent = l.s.name;
+    });
   };
 
   Chart.prototype.drawMark = function () {
@@ -655,10 +693,25 @@
   /* ----- tooltips ----- */
 
   Chart.prototype.hideTip = function () {
+    var self = this;
+    var had = this.cursor != null;
     this.tip.hidden = true;
     this.cursor = null;
     this.lastPoint = null;
     this.clearHover();
+    if (had && this.isTime()) timeCharts().forEach(function (c) { if (c !== self) c.ghostAt(null); });
+  };
+
+  // ghostAt echoes another time chart's cursor: the same instant on every
+  // time chart of the page, without a tooltip.
+  Chart.prototype.ghostAt = function (t) {
+    if (!this.overlay) return;
+    var old = this.overlay.querySelector('.ghost');
+    if (old) old.parentNode.removeChild(old);
+    if (t == null || this.cursor != null) return;
+    var b = this.box, x = this.X(t);
+    if (x < b.l || x > b.r) return;
+    svgEl('line', { x1: r1(x), x2: r1(x), y1: b.t, y2: b.b, 'class': 'crosshair ghost' }, this.overlay);
   };
 
   Chart.prototype.clearHover = function () {
@@ -705,6 +758,9 @@
       return;
     }
     svgEl('line', { x1: r1(cx), x2: r1(cx), y1: b.t, y2: b.b, 'class': 'crosshair hover' }, this.overlay);
+    if (this.isTime()) {
+      timeCharts().forEach(function (c) { if (c !== self) c.ghostAt(at); });
+    }
 
     var tip = this.tip;
     tip.textContent = '';
@@ -935,7 +991,7 @@
 
   /* ---------- copy ---------- */
 
-  function copyText(text, button) {
+  function copyText(text, button, message) {
     var done = function () {
       if (button) {
         var label = button.textContent;
@@ -943,7 +999,7 @@
         button.classList.add('done');
         setTimeout(function () { button.textContent = label; button.classList.remove('done'); }, 1400);
       }
-      toast('Copied to the clipboard');
+      toast(message || 'Copied to the clipboard');
     };
     var fallback = function () {
       var area = htmlEl('textarea', null, null, doc.body);
@@ -1005,6 +1061,12 @@
       });
     }
 
+    var print = doc.querySelector('[data-action="print"]');
+    if (print && window.print) {
+      print.hidden = false;
+      print.addEventListener('click', function () { window.print(); });
+    }
+
     var sections = doc.querySelectorAll('details.section');
     var collapse = doc.querySelector('[data-action="collapse"]');
     if (collapse && sections.length) {
@@ -1016,56 +1078,242 @@
       });
     }
 
-    doc.querySelectorAll('.navlinks a, a.card').forEach(function (a) {
-      a.addEventListener('click', function () {
-        var target = doc.getElementById((a.getAttribute('href') || '').slice(1));
-        if (target && target.tagName === 'DETAILS') target.open = true;
-      });
+    // Links to a collapsed section open it: the navigation, the verdict,
+    // the "go to" links of findings, the search.
+    doc.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="#"]');
+      if (!a || a.classList.contains('ts')) return;
+      var id = a.getAttribute('href').slice(1);
+      openId(id);
+      // A section's link icon copies the address of the section.
+      if (a.classList.contains('permalink')) {
+        e.preventDefault();
+        if (history.replaceState) history.replaceState(null, '', '#' + id);
+        copyText(location.href, null, 'Link to the section copied');
+      }
     });
 
     // A link straight to a collapsed section (report.html#s-encoding-commands)
     // opens it, on load and when the anchor changes.
     function openTarget() {
-      var target = location.hash && doc.getElementById(location.hash.slice(1));
-      if (target && target.tagName === 'DETAILS') target.open = true;
+      if (location.hash) openId(location.hash.slice(1));
     }
 
     openTarget();
     window.addEventListener('hashchange', openTarget);
+    watchNav();
+    setupFilters();
+    setupPrint();
+  }
 
-    if ('IntersectionObserver' in window) {
-      var links = {};
-      doc.querySelectorAll('.navlinks a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          var a = links[entry.target.id];
-          if (!a || !entry.isIntersecting) return;
-          Object.keys(links).forEach(function (k) { links[k].classList.remove('active'); });
-          a.classList.add('active');
-          var nav = a.parentNode;
-          if (a.offsetLeft < nav.scrollLeft || a.offsetLeft + a.offsetWidth > nav.scrollLeft + nav.clientWidth) {
-            nav.scrollLeft = a.offsetLeft - 16;
-          }
-        });
-      }, { rootMargin: '-60px 0px -65% 0px' });
-      Object.keys(links).forEach(function (id) {
-        var el = doc.getElementById(id);
-        if (el) io.observe(el);
+  function openId(id) {
+    var target = id && doc.getElementById(id);
+    if (target && target.tagName === 'DETAILS') target.open = true;
+  }
+
+  // watchNav highlights the navigation link of the section in view and
+  // keeps it visible in the navigation.
+  function watchNav() {
+    if (!('IntersectionObserver' in window)) return;
+    var links = {};
+    doc.querySelectorAll('.nav a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    var current = null;
+    var activate = function (a) {
+      if (!a || a === current) return;
+      if (current) current.classList.remove('active');
+      a.classList.add('active');
+      current = a;
+      var nav = a.closest('.nav'), box = nav.getBoundingClientRect(), r = a.getBoundingClientRect();
+      if (nav.scrollWidth > nav.clientWidth + 1) {
+        if (r.left < box.left || r.right > box.right - 150) nav.scrollLeft += r.left - box.left - 16;
+      } else {
+        var side = nav.closest('.sidebar');
+        var sb = side.getBoundingClientRect();
+        if (r.top < sb.top + 60 || r.bottom > sb.bottom - 16) side.scrollTop += r.top - sb.top - sb.height / 2;
+      }
+    };
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) activate(links[entry.target.id]);
       });
-    }
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    // The last sections may never reach the top band: at the bottom of the
+    // page, the last link is the current one.
+    var all = doc.querySelectorAll('.nav a');
+    window.addEventListener('scroll', function () {
+      if (window.innerHeight + window.scrollY >= doc.documentElement.scrollHeight - 4) activate(all[all.length - 1]);
+    }, { passive: true });
+    Object.keys(links).forEach(function (id) {
+      var el = doc.getElementById(id);
+      if (el) io.observe(el);
+    });
+  }
 
-    // Printing opens every section and uses the light theme.
+  // setupFilters adds a segmented control above the findings: every one,
+  // or one kind.
+  function setupFilters() {
+    var box = doc.querySelector('.findings .filters');
+    var items = doc.querySelectorAll('.findings .finding');
+    if (!box || items.length < 2) return;
+    var passed = doc.querySelector('.findings .passed');
+    var kinds = [['all', 'All'], ['blocking', 'Blocking'], ['warn', 'Warnings'], ['info', 'Notes'], ['ok', 'Passed']];
+    var counts = { all: items.length };
+    items.forEach(function (li) { counts[li.dataset.level] = (counts[li.dataset.level] || 0) + 1; });
+    var shown = kinds.filter(function (k) { return counts[k[0]]; });
+    if (shown.length < 3) return;
+    var buttons = shown.map(function (k) {
+      var b = htmlEl('button', null, k[1] + ' ', box);
+      b.type = 'button';
+      htmlEl('b', null, String(counts[k[0]]), b);
+      b.setAttribute('aria-pressed', k[0] === 'all' ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        buttons.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+        items.forEach(function (li) { li.hidden = k[0] !== 'all' && li.dataset.level !== k[0]; });
+        if (passed) {
+          passed.hidden = k[0] !== 'all' && k[0] !== 'ok';
+          if (k[0] === 'ok') passed.open = true;
+        }
+      });
+      return b;
+    });
+    box.hidden = false;
+  }
+
+  // Printing opens every section, method and list, in the light theme.
+  function setupPrint() {
     var printState = null;
     window.addEventListener('beforeprint', function () {
-      printState = { theme: root.getAttribute('data-theme'), open: Array.prototype.map.call(sections, function (s) { return s.open; }) };
+      var all = doc.querySelectorAll('details');
+      printState = { theme: root.getAttribute('data-theme'), all: all, open: Array.prototype.map.call(all, function (d) { return d.open; }) };
       root.setAttribute('data-theme', 'light');
-      sections.forEach(function (s) { s.open = true; });
+      all.forEach(function (d) { d.open = true; });
+      doc.querySelectorAll('.findings [hidden]').forEach(function (el) { if (!el.classList.contains('filters')) el.hidden = false; });
     });
     window.addEventListener('afterprint', function () {
       if (!printState) return;
       if (printState.theme) root.setAttribute('data-theme', printState.theme); else root.removeAttribute('data-theme');
-      sections.forEach(function (s, i) { s.open = printState.open[i]; });
+      printState.all.forEach(function (d, i) { d.open = printState.open[i]; });
       printState = null;
+    });
+  }
+
+  /* ---------- search: jump to a section or finding ---------- */
+
+  function setupPalette() {
+    var trigger = doc.querySelector('[data-action="search"]');
+    var entries = [];
+    doc.querySelectorAll('.nav a').forEach(function (a) {
+      var isArea = !!a.closest('.nav-title');
+      entries.push({ text: a.textContent.trim(), where: isArea ? 'Area' : 'Section', cls: isArea ? 'area-item' : 'section-item', id: a.getAttribute('href').slice(1) });
+    });
+    doc.querySelectorAll('.findings .finding').forEach(function (li, i) {
+      if (!li.id) li.id = 'f-' + (i + 1);
+      var text = li.querySelector('.finding-text'), scope = text.querySelector('.scope');
+      var words = scope ? scope.textContent + ' · ' + text.textContent.slice(scope.textContent.length) : text.textContent;
+      entries.push({ text: words.trim(), where: li.querySelector('.level').textContent, cls: li.dataset.level, id: li.id });
+    });
+    if (!trigger || !entries.length) return;
+
+    var box = htmlEl('div', 'palette', null, doc.body);
+    box.hidden = true;
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', 'Jump to');
+    var panel = htmlEl('div', 'palette-box', null, box);
+    var field = htmlEl('label', 'palette-input', null, panel);
+    field.appendChild(trigger.querySelector('svg').cloneNode(true));
+    var input = htmlEl('input', null, null, field);
+    input.type = 'text';
+    input.placeholder = 'Jump to a section or finding…';
+    input.setAttribute('aria-label', 'Jump to a section or finding');
+    input.setAttribute('aria-controls', 'qc-palette-list');
+    input.setAttribute('autocomplete', 'off');
+    var list = htmlEl('ul', 'palette-list', null, panel);
+    list.id = 'qc-palette-list';
+    list.setAttribute('role', 'listbox');
+    var foot = htmlEl('div', 'palette-foot', null, panel);
+    [['↑↓', 'move'], ['↵', 'open'], ['esc', 'close']].forEach(function (k) {
+      var s = htmlEl('span', null, null, foot);
+      htmlEl('kbd', null, k[0], s);
+      s.appendChild(doc.createTextNode(' ' + k[1]));
+    });
+    var matches = [], sel = 0, back = null;
+
+    function draw() {
+      var q = input.value.trim().toLowerCase();
+      matches = entries.filter(function (e) { return !q || e.text.toLowerCase().indexOf(q) >= 0 || e.where.toLowerCase().indexOf(q) >= 0; });
+      sel = Math.min(sel, Math.max(matches.length - 1, 0));
+      list.textContent = '';
+      if (!matches.length) htmlEl('li', 'palette-empty', 'Nothing matches', list);
+      matches.forEach(function (e, i) {
+        var li = htmlEl('li', e.cls, null, list);
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', i === sel ? 'true' : 'false');
+        htmlEl('i', null, null, li);
+        htmlEl('span', null, e.text, li);
+        htmlEl('small', null, e.where, li);
+        li.addEventListener('mousemove', function () { if (sel !== i) { sel = i; mark(); } });
+        li.addEventListener('click', function () { go(e); });
+      });
+    }
+
+    function mark() {
+      Array.prototype.forEach.call(list.children, function (li, i) {
+        li.setAttribute('aria-selected', i === sel ? 'true' : 'false');
+        if (i === sel && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' });
+      });
+    }
+
+    function open() {
+      back = doc.activeElement;
+      box.hidden = false;
+      input.value = '';
+      sel = 0;
+      draw();
+      input.focus();
+    }
+
+    function close() {
+      box.hidden = true;
+      if (back && back.focus) back.focus();
+    }
+
+    function go(e) {
+      box.hidden = true;
+      openId(e.id);
+      var el = doc.getElementById(e.id);
+      if (!el) return;
+      var passed = el.closest('details.passed');
+      if (passed) passed.open = true;
+      if (el.hidden) el.hidden = false;
+      el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      if (history.replaceState) history.replaceState(null, '', '#' + e.id);
+      var focusable = el.querySelector('summary') || el;
+      if (!focusable.hasAttribute('tabindex') && focusable === el) el.setAttribute('tabindex', '-1');
+      focusable.focus({ preventScroll: true });
+    }
+
+    input.addEventListener('input', function () { sel = 0; draw(); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % Math.max(matches.length, 1);
+        mark();
+        e.preventDefault();
+      } else if (e.key === 'Enter' && matches[sel]) {
+        go(matches[sel]);
+        e.preventDefault();
+      }
+    });
+    box.addEventListener('keydown', function (e) { if (e.key === 'Escape') { close(); e.preventDefault(); } });
+    box.addEventListener('pointerdown', function (e) { if (e.target === box) close(); });
+    trigger.hidden = false;
+    trigger.addEventListener('click', open);
+    doc.addEventListener('keydown', function (e) {
+      var t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing && box.hidden)) {
+        e.preventDefault();
+        if (box.hidden) open(); else close();
+      }
     });
   }
 
@@ -1081,6 +1329,7 @@
     doc.querySelectorAll('.commands').forEach(enhanceCommands);
     doc.querySelectorAll('.findings a.ts').forEach(bindTimestamp);
     setupTools();
+    setupPalette();
 
     var figs = Array.prototype.slice.call(doc.querySelectorAll('figure.chart'));
     Promise.all(figs.map(function (fig) {

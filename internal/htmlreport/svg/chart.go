@@ -54,6 +54,10 @@ type Series struct {
 	// TipOnly lists the series in tooltips without drawing it (metrics of
 	// the charted frames).
 	TipOnly bool
+	// Guide draws a reference line (a target, a ceiling, a mean) dashed and
+	// labelled with its name at the right edge of the plot, instead of in
+	// the legend: the label sits where the eye already is.
+	Guide bool
 	// Digits is the number of decimals of the values in tooltips.
 	Digits int
 
@@ -85,6 +89,8 @@ type Field struct {
 // Chart describes a chart: a static SVG, progressively enhanced by the page
 // script with tooltips, legend toggles and zoom.
 type Chart struct {
+	// Title names the chart above its legend.
+	Title         string
 	Width, Height int
 	Series        []Series
 	LogX          bool
@@ -101,6 +107,15 @@ type Chart struct {
 	MaxPoints int
 	// Bands shade x ranges (e.g. black segments).
 	Bands []Band
+	// Zones shade y ranges (e.g. a loudness tolerance around its target).
+	Zones []Zone
+}
+
+// Zone is a shaded y range, labelled at its top left.
+type Zone struct {
+	From, To float64
+	Color    string
+	Label    string
 }
 
 // Band is a shaded x range.
@@ -138,6 +153,11 @@ const (
 	timeOrigin = 0.05
 	// markerRadius makes markers 8 units wide.
 	markerRadius = 4
+	// guideLabelGap is the least vertical distance between two guide
+	// labels, so close reference lines keep readable names.
+	guideLabelGap = 12
+	// guideLabelLift raises a guide label above its line.
+	guideLabelLift = 5
 )
 
 // timeSteps are the x tick steps of time axes, in seconds.
@@ -203,7 +223,7 @@ func (c Chart) HTML() template.HTML {
 	}
 
 	fmt.Fprintf(&b, `<figure class="chart" data-mode="%s">`, mode)
-	c.legend(&b)
+	c.head(&b)
 	b.WriteString(`<div class="plot">`)
 	p.svg(&b)
 	b.WriteString(`</div>`)
@@ -250,6 +270,7 @@ func (p plot) svg(
 	fmt.Fprintf(b, `<svg viewBox="0 0 %d %d" class="chart-svg" role="img" aria-label="%s">`,
 		c.Width, c.Height, template.HTMLEscapeString(c.ariaLabel()))
 	p.grid(b)
+	p.zones(b)
 	p.bands(b)
 	p.xAxis(b)
 
@@ -263,7 +284,65 @@ func (p plot) svg(
 		b.WriteString(`</g>`)
 	}
 
+	p.guideLabels(b)
 	b.WriteString(`</svg>`)
+}
+
+// zones shades the y ranges, each labelled at its top left.
+func (p plot) zones(
+	b *strings.Builder,
+) {
+	if len(p.chart.Zones) == 0 {
+		return
+	}
+
+	b.WriteString(`<g class="zones">`)
+
+	for _, z := range p.chart.Zones {
+		top, bottom := p.y(math.Max(z.From, z.To)), p.y(math.Min(z.From, z.To))
+		fmt.Fprintf(b, `<rect x="%.0f" y="%.1f" width="%.1f" height="%.1f" style="fill:%s" class="zone"><title>%s</title></rect>`,
+			p.left, top, p.pw, math.Max(bottom-top, 1), template.HTMLEscapeString(z.Color), template.HTMLEscapeString(z.Label))
+		fmt.Fprintf(b, `<text x="%.0f" y="%.1f" class="zone-label">%s</text>`, p.left+6, bottom+guideLabelGap-1, template.HTMLEscapeString(z.Label))
+	}
+
+	b.WriteString(`</g>`)
+}
+
+// guideLabels names the reference lines at the right edge of the plot,
+// pushed apart when lines are close.
+func (p plot) guideLabels(
+	b *strings.Builder,
+) {
+	type label struct {
+		y           float64
+		name, color string
+	}
+
+	var list []label
+
+	for _, s := range p.chart.Series {
+		if s.Guide && len(s.Points) > 0 {
+			list = append(list, label{math.Max(p.y(s.Points[0][1])-guideLabelLift, p.top+guideLabelGap-2), s.Name, s.Color})
+		}
+	}
+
+	if len(list) == 0 {
+		return
+	}
+
+	slices.SortStableFunc(list, func(a, b label) int { return cmp.Compare(a.y, b.y) })
+	b.WriteString(`<g class="guides">`)
+
+	for i, l := range list {
+		if i > 0 && l.y-list[i-1].y < guideLabelGap {
+			list[i].y = list[i-1].y + guideLabelGap
+		}
+
+		fmt.Fprintf(b, `<text x="%.1f" y="%.1f" text-anchor="end" style="fill:%s" class="guide-label">%s</text>`,
+			p.right-4, list[i].y, template.HTMLEscapeString(l.color), template.HTMLEscapeString(l.name))
+	}
+
+	b.WriteString(`</g>`)
 }
 
 // ariaLabel names the chart after its series.
@@ -271,9 +350,13 @@ func (c Chart) ariaLabel() string {
 	var names []string
 
 	for _, s := range c.Series {
-		if s.Name != "" && !s.NoLegend && !s.TipOnly {
+		if s.Name != "" && !s.NoLegend && !s.TipOnly && !s.Guide {
 			names = append(names, s.Name)
 		}
+	}
+
+	if c.Title != "" {
+		return c.Title + ": " + strings.Join(names, ", ")
 	}
 
 	return "Chart: " + strings.Join(names, ", ")
@@ -443,13 +526,22 @@ func (p plot) series(
 		fmt.Fprintf(b, `<path d="%sZ" style="fill:%s" class="envelope"/>`, env.String(), color)
 	}
 
-	class := "line"
-	if s.Bold {
-		class = "line bold"
-	}
+	class := s.lineClass()
 
 	fmt.Fprintf(b, `<path d="%s" style="stroke:%s" class="%s"><title>%s</title></path>`,
 		strings.TrimSpace(path.String()), color, class, template.HTMLEscapeString(s.Name))
+}
+
+// lineClass styles a line: dashed guides, bold headline series.
+func (s Series) lineClass() string {
+	switch {
+	case s.Guide:
+		return "line guide"
+	case s.Bold:
+		return "line bold"
+	}
+
+	return "line"
 }
 
 // markers draws a dot per point, with its values as a native tooltip for
@@ -468,6 +560,20 @@ func (p plot) markers(
 	}
 }
 
+// head writes the chart's title and legend.
+func (c Chart) head(
+	b *strings.Builder,
+) {
+	b.WriteString(`<div class="chart-head">`)
+
+	if c.Title != "" {
+		fmt.Fprintf(b, `<figcaption class="chart-title">%s</figcaption>`, template.HTMLEscapeString(c.Title))
+	}
+
+	c.legend(b)
+	b.WriteString(`</div>`)
+}
+
 // legend lists the legend keys as toggle buttons; a single key names the
 // chart's series.
 func (c Chart) legend(
@@ -480,7 +586,7 @@ func (c Chart) legend(
 	var entries []entry
 
 	for _, s := range c.Series {
-		if s.Name == "" || s.NoLegend || s.TipOnly {
+		if s.Name == "" || s.NoLegend || s.TipOnly || s.Guide {
 			continue
 		}
 

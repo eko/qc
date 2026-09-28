@@ -105,7 +105,7 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `internal/segments` | Merges per-frame flags into time segments (black, frozen) |
 | `internal/colorimetry` | BT.2100 colour science as lookup tables: PQ and HLG transfer functions, BT.2020 Y′CbCr, ICtCp, for the light analyzer and the HDR metrics |
 | `internal/linalg` | Small dense linear algebra (Gauss-Jordan solve and inverse, ridge regression) behind the curve fits and shot predictions |
-| `internal/findings` | The rules turning a report into typed findings (banding, rank conflicts, calibrated rungs, letterboxing...), shared by the terminal and HTML presenters, which word them |
+| `internal/findings` | The rules turning a report into typed findings (banding, rank conflicts, calibrated rungs, letterboxing...) and the verdict they lead to (pass, attention, fail on a blocking finding), shared by the terminal and HTML presenters, which word them |
 | `internal/tui` | Live dashboard (bubbletea), terminal charts, static terminal reports |
 | `internal/htmlreport` | Self-contained HTML reports, one typed entry point per report (`RenderAnalysis`, `RenderComparison`, `RenderLadder`, `RenderRun`) |
 | `internal/htmlreport/svg` | The charts of the HTML reports: static SVG readable without script, and their data for the page script (tooltips, zoom, legend toggles) |

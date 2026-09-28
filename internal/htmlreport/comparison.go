@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/decode"
 	"github.com/eko/qc/internal/findings"
 	"github.com/eko/qc/internal/htmlreport/svg"
 	"github.com/eko/qc/quality"
@@ -43,8 +44,9 @@ func comparisonPage(
 		Title:    fmt.Sprintf("VMAF %.2f", v.Mean),
 		Subtitle: filepath.Base(c.Distorted.Info.Path) + " vs " + filepath.Base(c.Reference.Info.Path),
 		Sections: []section{{
-			Title:    "Quality",
+			Title:    "VMAF",
 			Subtitle: fmt.Sprintf("model %s at %d×%d", v.Model.Name, v.Model.Width, v.Model.Height),
+			Area:     areaQuality,
 			Topic:    findings.TopicQuality,
 			Stats: []stat{
 				{"Mean", fmt.Sprintf("%.2f", v.Mean)},
@@ -54,7 +56,7 @@ func comparisonPage(
 				{"Time", v.Elapsed.Std().Round(10 * time.Millisecond).String()},
 			},
 			Charts: []template.HTML{svg.Chart{
-				Width: chartWidth, Height: vmafChartHeight, Series: scoreSeries(v), MaxPoints: maxScorePoints,
+				Title: "VMAF per scored frame", Width: chartWidth, Height: vmafChartHeight, Series: scoreSeries(v), MaxPoints: maxScorePoints,
 				YMin: floor10(v.Scored.Min), YMax: 100, X: svg.UnitTime, Y: svg.UnitNumber,
 			}.HTML()},
 			Notes: nonEmpty(v.Fallback),
@@ -101,6 +103,7 @@ func deviceSection(
 	return section{
 		Title:    "VMAF per device",
 		Subtitle: "one VMAF v1 model per viewing condition, scored on the same frames",
+		Area:     areaQuality,
 		Table:    t,
 	}
 }
@@ -133,8 +136,9 @@ func metricSection(
 	return section{
 		Title:    "Metrics",
 		Subtitle: subtitle,
+		Area:     areaQuality,
 		Table:    t,
-		Notes:    notes,
+		Method:   notes,
 	}
 }
 
@@ -174,19 +178,20 @@ func bandingSection(
 	s := section{
 		Title:    "Banding",
 		Subtitle: fmt.Sprintf("CAMBI per scored frame; above %.0f banding is visible", b.Threshold),
+		Area:     areaQuality,
 		Topic:    findings.TopicBanding,
 		Stats: []stat{
 			{"Banded frames", fmt.Sprintf("%d / %d scored", b.BandedFrames, len(xs))},
 			{"Segments", strconv.Itoa(len(b.Segments))},
 		},
 		Charts: []template.HTML{svg.Chart{
-			Width: chartWidth, Height: lumaChartHeight, MaxPoints: maxScorePoints,
+			Title: "Banding per scored frame (CAMBI)", Width: chartWidth, Height: lumaChartHeight, MaxPoints: maxScorePoints,
 			Series: []svg.Series{
 				{
 					Name: "CAMBI", Color: blue, Samples: &svg.Samples{X: xs, Y: ys, Frames: frames},
 					Markers: v.Mode == quality.ModeSampled, Digits: 2,
 				},
-				{Name: "visible", Color: amber, Points: threshold, NoTip: true},
+				{Name: fmt.Sprintf("visible above %g", b.Threshold), Color: amber, Points: threshold, NoTip: true, Guide: true},
 			},
 			YMin: 0, YMax: max(2*b.Threshold, slices.Max(append(ys, 0))), X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 		}.HTML()},
@@ -232,6 +237,12 @@ func scoreSeries(
 	}
 
 	series := []svg.Series{{Name: "VMAF", Color: orange, Samples: scores, Markers: sampled, Digits: 2}}
+	if n := len(scores.X); n > 0 {
+		series = append(series, svg.Series{
+			Name: fmt.Sprintf("mean %.2f", v.Mean), Color: foreground, Points: [][2]float64{{scores.X[0], v.Mean}, {scores.X[n-1], v.Mean}},
+			NoTip: true, Guide: true,
+		})
+	}
 
 	if sampled {
 		strata := make([][2]float64, 0, 2*len(v.Strata))
@@ -281,7 +292,15 @@ func metricTips(
 func comparisonCards(
 	v *quality.Result,
 ) []card {
-	vmafCard := card{Label: "VMAF", Value: fmt.Sprintf("%.2f", v.Mean), Detail: "exact · every frame", Tone: vmafTone(v.Mean)}
+	scores := make([]float64, len(v.Frames))
+	for i, f := range v.Frames {
+		scores[i] = f.Score
+	}
+
+	vmafCard := card{
+		Label: "VMAF", Value: fmt.Sprintf("%.2f", v.Mean), Detail: "exact · every frame", Tone: vmafTone(v.Mean),
+		Meter: vmafMeter(v.Mean), Spark: svg.Sparkline(scores),
+	}
 	if v.Mode == quality.ModeSampled {
 		vmafCard.Detail = fmt.Sprintf("± %.2f · %.0f%% CI", v.HalfWidth, v.Confidence*100)
 	}
@@ -311,7 +330,7 @@ func comparisonCards(
 	)
 
 	if gpu := v.GPUSummary(); gpu != "" {
-		cards = append(cards, card{Label: "GPU", Value: "NVIDIA", Detail: gpu})
+		cards = append(cards, card{Label: "Hardware", Value: hardwareVendor(v.HWAccel), Detail: gpu})
 	}
 
 	if b := v.Banding; b != nil {
@@ -343,4 +362,16 @@ func worstFrame(
 	}
 
 	return worst, true
+}
+
+// hardwareVendor names the hardware a measurement ran on: Apple's
+// VideoToolbox, or an NVIDIA GPU (NVDEC decoding, CUDA VMAF features).
+func hardwareVendor(
+	hwaccel string,
+) string {
+	if hwaccel == string(decode.HWAccelVideoToolbox) {
+		return "Apple"
+	}
+
+	return "NVIDIA"
 }

@@ -92,9 +92,12 @@ func bitrateSection(
 	}
 
 	charts := []template.HTML{svg.Chart{
-		Width: chartWidth, Height: timeChartHeight,
-		Series: []svg.Series{{Name: "bitrate", Color: orange, Points: bitrate, Area: true}},
-		X:      svg.UnitTime, Y: svg.UnitBitrate, Bands: bands,
+		Title: "Bitrate over time", Width: chartWidth, Height: timeChartHeight,
+		Series: []svg.Series{
+			{Name: "bitrate", Color: orange, Points: bitrate, Area: true},
+			{Name: "average " + bitrateLabel(float64(bs.AverageBitrate)), Color: foreground, Points: referenceLine(bitrateTimes(bitrate), float64(bs.AverageBitrate)), NoTip: true, Guide: true},
+		},
+		X: svg.UnitTime, Y: svg.UnitBitrate, Bands: bands,
 	}.HTML()}
 
 	if f != nil && len(f.Size) > 0 {
@@ -103,6 +106,7 @@ func bitrateSection(
 
 	return section{
 		Title: "Bitrate",
+		Area:  areaVideo,
 		Topic: findings.TopicBitrate,
 		Stats: []stat{
 			{"Average", bitrateLabel(float64(bs.AverageBitrate))},
@@ -136,7 +140,7 @@ func frameSizeChart(
 	}
 
 	return svg.Chart{
-		Width: chartWidth, Height: lumaChartHeight, MaxPoints: maxFramePoints,
+		Title: "Frame sizes and keyframes", Width: chartWidth, Height: lumaChartHeight, MaxPoints: maxFramePoints,
 		Series: []svg.Series{
 			{Name: "frame size", Color: aqua, Samples: &svg.Samples{X: pts, Y: sizes, Frames: frames}},
 			{Name: "keyframe", Color: amber, Samples: &keys, Markers: true},
@@ -170,6 +174,7 @@ func complexitySection(
 	return section{
 		Title:    "Complexity",
 		Subtitle: "ITU-T P.910 spatial and temporal information",
+		Area:     areaVideo,
 		Topic:    findings.TopicComplexity,
 		Stats: []stat{
 			{"SI mean", fmt.Sprintf("%.1f (%s)", v.SITI.SISummary.Mean, v.Complexity.Spatial)},
@@ -178,14 +183,14 @@ func complexitySection(
 			{"Content", fmt.Sprintf("%d×%d", v.Crop.Content.Width, v.Crop.Content.Height)},
 		},
 		Charts: []template.HTML{svg.Chart{
-			Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
+			Title: "Spatial and temporal information", Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
 			Series: []svg.Series{
 				{Name: "SI", Color: blue, Samples: series(f.SI), Digits: 1},
 				{Name: "TI", Color: amber, Samples: series(f.TI), Digits: 1},
 			},
 			X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 		}.HTML(), svg.Chart{
-			Width: chartWidth, Height: lumaChartHeight, MaxPoints: maxFramePoints,
+			Title: "Mean luma", Width: chartWidth, Height: lumaChartHeight, MaxPoints: maxFramePoints,
 			Series: []svg.Series{{Name: "luma mean", Color: green, Samples: series(f.LumaMean), Digits: 1}},
 			YMax:   maxLuma, X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 		}.HTML()},
@@ -221,9 +226,15 @@ func analysisCards(
 	}
 
 	if bs := r.Bitstream; bs != nil {
+		rates := make([]float64, len(bs.Bitrate))
+		for i, b := range bs.Bitrate {
+			rates[i] = float64(b.Bitrate)
+		}
+
 		cards = append(cards, card{
 			Label: "Bitrate", Value: bitrateLabel(float64(bs.AverageBitrate)),
 			Detail: fmt.Sprintf("peak %s (%.2f×)", bitrateLabel(float64(bs.PeakBitrate)), bs.PeakToAverage),
+			Spark:  svg.Sparkline(rates),
 		})
 	}
 
@@ -271,4 +282,16 @@ func bitDepthLabel(
 	}
 
 	return fmt.Sprintf("· %d-bit", depth)
+}
+
+// bitrateTimes are the start times of the bitrate windows.
+func bitrateTimes(
+	points [][2]float64,
+) []float64 {
+	out := make([]float64, len(points))
+	for i, p := range points {
+		out[i] = p[0]
+	}
+
+	return out
 }

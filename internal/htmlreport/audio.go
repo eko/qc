@@ -72,10 +72,11 @@ func trackSection(
 	s := section{
 		Title:    fmt.Sprintf("Audio #%d", t.Stream),
 		Subtitle: trackSubtitle(t, stream),
+		Area:     areaAudio,
 		Topic:    findings.AudioTopic(t.Stream),
 		Stats:    trackStats(t, target),
 		Table:    defectTable(t),
-		Notes: []string{"Loudness per ITU-R BS.1770-5 (K-weighted, LFE excluded, surround channels +1.5 dB): momentary over 400 ms, " +
+		Method: []string{"Loudness per ITU-R BS.1770-5 (K-weighted, LFE excluded, surround channels +1.5 dB): momentary over 400 ms, " +
 			"short-term over 3 s, every 100 ms; the first windows reach before the start, counted as silence. " +
 			"Integrated loudness gated at -70 LUFS and 10 LU below the mean, loudness range per EBU Tech 3342, " +
 			"true peak by 4× oversampling (BS.1770 Annex 2). Levels are RMS per 100 ms in dBFS (a full-scale sine reads -3). " +
@@ -83,7 +84,7 @@ func trackSection(
 	}
 
 	if t.Loudness.Integrated <= loudness.Floor {
-		s.Notes = []string{"The track is silent: nothing above the absolute gate of -70 LUFS."}
+		s.Notes, s.Method = []string{"The track is silent: nothing above the absolute gate of -70 LUFS."}, nil
 
 		return s
 	}
@@ -218,17 +219,19 @@ func loudnessChart(
 	x := stepTimes(t, len(series.ShortTerm))
 
 	return svg.Chart{
-		Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
+		Title: "Loudness", Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
 		Series: []svg.Series{
 			// The momentary loudness first: the short-term one is drawn
 			// over it.
 			{Name: "momentary (LUFS)", Color: blue, Samples: &svg.Samples{X: x, Y: series.Momentary}, Digits: 1},
 			{Name: "short-term (LUFS)", Color: orange, Samples: &svg.Samples{X: x, Y: series.ShortTerm}, Bold: true, Digits: 1},
-			{Name: fmt.Sprintf("target %g", target.Integrated), Color: green, Points: referenceLine(x, target.Integrated), NoTip: true},
-			{Name: fmt.Sprintf("±%g LU", target.Tolerance), Key: "tolerance", Color: aqua, Points: referenceLine(x, target.Integrated+target.Tolerance), NoTip: true},
-			{Name: "-tolerance", Key: "tolerance", Color: aqua, Points: referenceLine(x, target.Integrated-target.Tolerance), NoTip: true, NoLegend: true},
-			{Name: "integrated", Color: foreground, Points: referenceLine(x, t.Loudness.Integrated), NoTip: true},
+			{Name: fmt.Sprintf("target %g", target.Integrated), Color: green, Points: referenceLine(x, target.Integrated), NoTip: true, Guide: true},
+			{Name: fmt.Sprintf("integrated %.1f", t.Loudness.Integrated), Color: foreground, Points: referenceLine(x, t.Loudness.Integrated), NoTip: true, Guide: true},
 		},
+		Zones: []svg.Zone{{
+			From: target.Integrated - target.Tolerance, To: target.Integrated + target.Tolerance,
+			Color: green, Label: fmt.Sprintf("±%g LU", target.Tolerance),
+		}},
 		YMin: loudnessFloor, X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 	}.HTML()
 }
@@ -263,11 +266,11 @@ func levelChart(
 	series = append(series,
 		svg.Series{Name: "true peak (dBTP)", Samples: &svg.Samples{X: x, Y: tp}, TipOnly: true, Digits: 1},
 		svg.Series{Name: "true peak over ceiling", Color: red, Samples: &over, Markers: true, Digits: 1},
-		svg.Series{Name: fmt.Sprintf("ceiling %g dBTP", target.MaxTruePeak), Color: red, Points: referenceLine(x, target.MaxTruePeak), NoTip: true},
+		svg.Series{Name: fmt.Sprintf("ceiling %g dBTP", target.MaxTruePeak), Color: red, Points: referenceLine(x, target.MaxTruePeak), NoTip: true, Guide: true},
 	)
 
 	return svg.Chart{
-		Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
+		Title: "Channel levels and true peak", Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
 		Series: series, YMin: loudnessFloor, YMax: 0, X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 	}.HTML()
 }
@@ -288,7 +291,7 @@ func phaseChart(
 	}
 
 	return svg.Chart{
-		Width: chartWidth, Height: phaseChartHeight, MaxPoints: maxFramePoints,
+		Title: "Phase correlation", Width: chartWidth, Height: phaseChartHeight, MaxPoints: maxFramePoints,
 		Series: series, YMin: -1, YMax: 1, X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 	}.HTML()
 }
@@ -352,11 +355,14 @@ func audioCard(
 		return card{Label: "Loudness", Value: "silent", Detail: fmt.Sprintf("audio #%d", t.Stream), Tone: toneWarn}, true
 	}
 
+	target := r.Audio.Target
 	c := card{
-		Label:  "Loudness",
-		Value:  fmt.Sprintf("%.1f LUFS", t.Loudness.Integrated),
-		Detail: fmt.Sprintf("TP %.1f dBTP · %s target %s", t.Loudness.TruePeak, r.Audio.Target.Name, mark(t.Compliance.OK())),
-		Tone:   toneGood,
+		Label: "Loudness",
+		Value: fmt.Sprintf("%.1f LUFS", t.Loudness.Integrated),
+		Detail: fmt.Sprintf("%+.1f LU vs %s %g · TP %.1f dBTP %s",
+			t.Loudness.Integrated-target.Integrated, target.Name, target.Integrated, t.Loudness.TruePeak, mark(t.Compliance.OK())),
+		Tone:  toneGood,
+		Spark: svg.Sparkline(t.Loudness.Series.ShortTerm),
 	}
 
 	if !t.Compliance.OK() {

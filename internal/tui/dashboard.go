@@ -260,12 +260,13 @@ func (d *dashboard) View() string {
 		}
 	}
 
-	hint := "q quit"
+	// Key hints as in the wizard: the key, then what it does, dimmer.
+	hint := Bold.Render("q") + Subtle.Render(" quit")
 	if d.canceling {
-		hint = "cancelling…"
+		hint = Subtle.Render("cancelling…")
 	}
 
-	b.WriteString("\n " + Subtle.Render(hint) + "\n")
+	b.WriteString("\n " + hint + "\n")
 
 	return b.String()
 }
@@ -343,7 +344,7 @@ func (d *dashboard) progress(
 		stats += Subtle.Render(" · ") + s.detail
 	}
 
-	return gradientBar(ratio, barWidth) + stats
+	return GradientBar(ratio, barWidth) + stats
 }
 
 func stageDuration(
@@ -352,8 +353,9 @@ func stageDuration(
 	return Subtle.Render(fmt.Sprintf("%7s  ", Elapsed(d)))
 }
 
-// gradientBar draws a thin bar filled with the brand's orange gradient.
-func gradientBar(
+// GradientBar draws a thin bar filled with the brand's orange gradient: the
+// dashboard's progress bars, and the wizard's progress rail.
+func GradientBar(
 	ratio float64,
 	width int,
 ) string {

@@ -65,7 +65,7 @@ func shotLadderSection(
 			len(r.Shots), len(rungs), measured),
 		Charts: []template.HTML{shotLadderChart(r, rungs)},
 		Table:  shotLadderTable(r, rungs),
-		Notes: []string{"Cost is a shot's bitrate over its rung's average, averaged over the rungs. " +
+		Method: []string{"Cost is a shot's bitrate over its rung's average, averaged over the rungs. " +
 			"Predicted values come from the shot models, without the rungs' rate caps; the tooltips add, for shots in the digest, " +
 			"the bitrate and VMAF of their part of the verification encode."},
 	}, true
@@ -99,7 +99,7 @@ func shotLadderChart(
 		}
 	}
 
-	return svg.Chart{Width: chartWidth, Height: shotChartHeight, Series: series, X: svg.UnitTime, Y: svg.UnitBitrate, LogY: true}.HTML()
+	return svg.Chart{Title: "Predicted bitrate of every shot per rung", Width: chartWidth, Height: shotChartHeight, Series: series, X: svg.UnitTime, Y: svg.UnitBitrate, LogY: true}.HTML()
 }
 
 // rungName names a per-shot rung in legends and table heads.

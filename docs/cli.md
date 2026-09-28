@@ -52,35 +52,63 @@ single-width, so layouts stay aligned in every terminal.
 
 ## Wizard
 
-`qc` without arguments, in a terminal:
+`qc` without arguments, in a terminal, opens a full-screen wizard:
 
-1. pick the video in a file browser (sizes shown; only video files can be selected);
-2. choose what to compute: technical analysis, VMAF against a reference,
-   streaming ladder;
-3. for VMAF: the reference, then the **VMAF mode**: a target precision
-   (± VMAF, adaptive, the default), a fixed budget as a share of the frames
-   (5% by default) or as clips per scene (2 by default), or exact scoring,
-   each followed by its value; then the
-   **metrics** to measure next to VMAF, ticked one by one with their CPU cost
-   (defaults pre-ticked: XPSNR, CAMBI, PSNR; untick everything for VMAF
-   only), and optional **per-device VMAF** (phone, TV, 4K). This screen also
-   shows for ladders: the verified rungs get the same metrics;
-4. for ladders: the codecs, then optionally **customise the ladder**:
+<p align="center"><img src="assets/wizard.png" alt="The review screen of the qc wizard: every answer, the equivalent command, and Run / Edit a section / Cancel" width="760"></p>
+
+A step indicator runs across the top (**Source › Analysis › Quality ›
+Ladder › Outputs › Review**, with a progress rail); sections that the answers
+make irrelevant are skipped and shown as such. On terminals of 124 columns
+and more, a summary of the answers given so far sits beside the form.
+
+1. **Source**: browse folders for the video. Type to filter, `enter` opens a
+   folder or picks a file, `←` goes up. Only video files are listed; the
+   highlighted one is described by a quick ffprobe (codec, resolution, frame
+   rate, bit depth, duration, SDR or HDR format, audio tracks, size). A file
+   ffprobe cannot read, or without a video stream, cannot be picked;
+2. **Analysis**: what to compute: technical analysis, VMAF against a
+   reference, streaming ladder;
+3. **Quality**, for VMAF: the reference (browsed from the folder of the
+   source), then the **VMAF mode**: a target precision (± VMAF, adaptive,
+   the default), a fixed budget as a share of the frames (5% by default) or
+   as clips per scene (2 by default), or exact scoring, each followed by its
+   value; then the **metrics** to measure next to VMAF, ticked one by one
+   with their CPU cost (defaults pre-ticked: XPSNR, CAMBI, PSNR; untick
+   everything for VMAF only), and optional **per-device VMAF** (phone, TV,
+   4K). The metrics are also asked for ladders: the verified rungs get the
+   same metrics. When the picked video (or the reference) is HDR, how VMAF
+   scores it: on the HDR signal or on an SDR tone mapping (`--hdr-metric`),
+   with the detected format (HDR10, HLG…) in the question;
+4. **Ladder**: the codecs, then optionally **customise the ladder**:
    - shape: automatic, a number of rungs, or one rung per listed resolution;
    - top and minimum VMAF;
-   - bitrate cap (kb/s), encoder preset, 8 or 10-bit, verification on or off;
-5. when the picked video (or the reference) is HDR and VMAF is measured, how
-   VMAF scores it: on the HDR signal or on an SDR tone mapping
-   (`--hdr-metric`), with the detected format (HDR10, HLG…) in the question;
-6. when an NVIDIA GPU is usable with the ffmpeg in use (`QC_FFMPEG`, the
-   `QC_CONFIG` file or `PATH`; see [GPU](#nvidia-gpu)), whether to use it
-   (`--gpu`);
-7. optionally name an HTML report;
-8. when the source is analysed or compared, whether to produce an annotated
-   video, and where (`--overlay`, see [annotated videos](overlay.md)).
+   - bitrate cap (kb/s), encoder preset, 8 or 10-bit, verification on or off,
+     probe placement, per-shot rungs, and AV1 film grain synthesis;
+5. **Outputs**: when an NVIDIA GPU is usable with the ffmpeg in use
+   (`QC_FFMPEG`, the `QC_CONFIG` file or `PATH`; see [GPU](#nvidia-gpu)),
+   whether to use it (`--gpu`); optionally an HTML report; and last, when the
+   source is analysed or compared, whether to produce an annotated video, and
+   where (`--overlay`, see [annotated videos](overlay.md));
+6. **Review**: every answer, section by section, with the metadata of the
+   videos and the hardware the run uses (the NVIDIA GPU with `--gpu`, Apple
+   VideoToolbox on macOS, the CPU elsewhere), and the exact equivalent `qc run`
+   command (wrapped with `\` continuations, so it can be copied as it is).
+   **Run** (`enter` or `r`), **Edit a section** (`e`, or its number `1`–`5`:
+   the section is asked again, with the pages the change calls for, such as
+   the reference when VMAF is added) or **Cancel** (`q`).
 
-It prints the equivalent `qc run` command, only with the options that differ
-from the defaults, and runs exactly that command with the dashboard.
+Keys are shown at the bottom of every page. `esc` goes back a page (or
+clears a filter), `shift+tab` back a field, `ctrl+c` quits at any time. The
+wizard adapts to light and dark terminals and to their size (80×24 and
+more; smaller terminals are asked to grow). Without colours (`NO_COLOR`, or
+`TERM=dumb`) or without a UTF-8 locale it draws in ASCII, with brackets
+around what is focused. With `ACCESSIBLE=1` (or `TERM=dumb`) it asks plain,
+numbered prompts that screen readers can follow, skips the questions that do
+not apply, and ends with the same review and choices.
+
+Once run is chosen, the wizard prints the equivalent command, only with the
+options that differ from the defaults, and runs exactly that command with
+the dashboard.
 
 ## Flags
 
@@ -257,30 +285,56 @@ Paste the output of `qc version --check` in bug reports. See
   per-frame series are stored as columns. `qc run` writes one document with
   `analysis`, `comparison` and `ladders`.
 - **HTML**: one self-contained page per report (or a combined page for
-  `qc run`): a single file with its style and script inline, no external
-  request, so it opens offline and can be mailed or attached as is.
-  - **Header**: key numbers as cards (duration, resolution, codec, bitrate,
-    VMAF ± CI, worst frame, rungs, banding) and a findings count linking to
-    the findings, listed by severity (warning, note, passed).
+  `qc run`): a single file with its style, script and font inline, no
+  external request, so it opens offline and can be mailed or attached as is.
+
+  ![The HTML report of a qc run: verdict, key numbers, findings](assets/report.png)
+
+  - **Overview**: the title and its facts, then the **verdict** — *Pass*
+    (no warning), *Needs attention* (warnings, none blocking) or *Fail* (a
+    blocking finding: a silent track, a muted or inverted channel, a true
+    peak over the ceiling of the `--loudness-target`, an HDR signal with
+    the wrong primaries, matrix or bit depth, a ladder without rungs;
+    integrated loudness off its target only needs attention, since the
+    right target depends on the delivery) — with
+    the count of each kind. Then the key numbers as tiles (duration,
+    resolution, codec, bitrate, shots, camera, light, loudness, VMAF ± CI,
+    worst frame, rungs, banding): trends as sparklines (bitrate, loudness,
+    VMAF), VMAF on its 0–100 scale with the 75 and 90 marks, loudness as
+    its distance to the target.
+  - **Findings**, most severe first, filterable (blocking, warnings, notes,
+    passed; passed checks folded), each linking to the section showing it.
+  - **Areas**: Video, Audio, Quality, one per ladder, Encoding — listed in a
+    sidebar (a scrolling bar on phones) that follows the reading and marks
+    the sections with warnings. Sections collapse; methodology notes and
+    the encoding commands start collapsed; every section has a link to copy.
+    Press `/` (or ⌘K / Ctrl+K) to jump to any section or finding.
   - **Charts** (bitrate, frame sizes with keyframes, SI/TI, luma, light
-    levels of HDR videos, loudness, channel levels and phase of each audio
-    track, VMAF, CAMBI, rate-quality): hovering shows the exact values at the pointer —
-    time as hh:mm:ss.mmm and frame number, every series at that time, the
-    other metrics of the same frame under VMAF, the black/frozen/banded
-    segment under the cursor. Ladder points show bitrate, VMAF (± its
+    levels of HDR videos, camera motion, loudness, channel levels and phase
+    of each audio track, VMAF, CAMBI, rate-quality, per-shot ladder):
+    targets and thresholds are labelled dashed lines (average bitrate, mean
+    VMAF, loudness target with its tolerance band, true-peak ceiling,
+    MaxCLL/MaxFALL, CAMBI visibility). Hovering shows the exact values at the
+    pointer — time as hh:mm:ss.mmm and frame number, every series at that
+    time, the other metrics of the same frame under VMAF, the
+    black/frozen/banded segment under the cursor — and the same instant on
+    every other time chart. Ladder points show bitrate, VMAF (± its
     interval), resolution and CRF, rungs their predicted and measured
     quality. Tooltips read every measured frame, not the drawn average;
     long titles store them gzipped (a two-hour title stays under 3 MB).
   - **Zoom**: drag across a time chart to zoom, double-click (or Reset) to
     go back; all time charts zoom together. Keyboard: focus a chart, arrows
     step frame by frame (Shift ×10), `+`/`-` zoom, Escape resets.
-  - **Timestamps** in findings, shot and banding tables zoom the charts on
-    their range and highlight it.
+  - **Timestamps** in findings, shot, defect and banding tables zoom the
+    charts on their range and highlight it.
   - Legend entries toggle their series; table columns sort; encoding
-    commands have copy buttons; sections collapse; the light/dark theme
-    follows the system and a toggle remembers the choice. Printing opens
-    every section in the light theme.
-  - Without script, the page still shows every chart (static SVG), table and
-    command.
+    commands have copy buttons; the light/dark theme follows the system and
+    a toggle remembers the choice; motion is reduced when the system asks.
+    Printing (or the print button) gives a clean A4 document: light theme,
+    every section and note open, no controls.
+  - Without script, the page still shows every chart (static SVG), table,
+    finding and command.
+
+  ![Charts of the HTML report in the dark theme, with a tooltip](assets/report-dark.png)
 
 A hidden `--cpuprofile file` flag writes a Go CPU profile of the run.

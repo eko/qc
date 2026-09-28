@@ -53,6 +53,13 @@ func TestStageSummary(
 			want:   "3 shots · SI 42 · TI 8",
 		},
 		{
+			name: "single shot",
+			result: pipeline.StageResult{Stage: stage(pipeline.KindAnalysis), Analysis: &analysis.Report{Info: inspection.Info, Video: &analysis.VideoReport{
+				Shots: make([]analysis.ShotReport, 1),
+			}}},
+			want: "1 shot · SI 0 · TI 0",
+		},
+		{
 			name: "sampled vmaf",
 			result: pipeline.StageResult{Stage: stage(pipeline.KindVMAF), Comparison: &analysis.Comparison{
 				VMAF: &quality.Result{Mean: 93.456, HalfWidth: 0.41},

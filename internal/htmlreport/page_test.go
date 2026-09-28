@@ -86,7 +86,9 @@ func TestTooltipData(
 
 		cambi := seriesNamed(t, data[1], "CAMBI")
 		assert.Equal(t, []float64{7, 7}, cambi.Y.values())
-		assert.True(t, seriesNamed(t, data[1], "visible").NoTip)
+		visible := seriesNamed(t, data[1], "visible above 5")
+		assert.True(t, visible.NoTip)
+		assert.Equal(t, "guide", visible.Style, "the threshold is a labelled reference line")
 		assert.Equal(t, "banding", data[1].Bands[0].Label)
 	})
 
@@ -188,7 +190,7 @@ func TestPageStructure(
 	})
 
 	assert.Contains(t, html, `<p class="eyebrow">Full run</p>`)
-	assert.Contains(t, html, `<a class="card warn" href="#findings">`)
+	assert.Contains(t, html, `<a class="verdict attention" href="#findings">`)
 	assert.Contains(t, html, `<section class="panel findings" id="findings"`)
 
 	ids := regexp.MustCompile(`<details class="panel section" id="([^"]+)"( open)?>`).FindAllStringSubmatch(html, -1)
@@ -196,7 +198,7 @@ func TestPageStructure(
 
 	// Reference material starts collapsed; the analysis starts open.
 	for _, m := range ids {
-		collapsed := strings.HasPrefix(m[1], "s-encoding-commands")
+		collapsed := strings.HasSuffix(m[1], "-encoding-commands")
 		assert.Equal(t, collapsed, m[2] == "", "%s collapsed: %v", m[1], collapsed)
 	}
 
@@ -207,12 +209,12 @@ func TestPageStructure(
 		assert.Contains(t, html, `<a href="#`+m[1]+`">`, "the navigation links every section")
 	}
 
-	assert.True(t, seen["s-encoding-commands-2"], "repeated titles get a suffix")
+	assert.True(t, seen["s-rate-quality-2"], "repeated titles get a suffix")
 
 	// Findings link to the chart showing them; the shot table rows carry
 	// their time range.
 	assert.Contains(t, html, `<a class="ts" href="#s-complexity" data-t0="0.000" data-t1="0.500">0:00.000 – 0:00.500</a>`)
-	assert.Contains(t, html, `<a class="ts" href="#s-vmaf-91-20-clip-mp4-vs-clip-mp4" data-t0="2.000" data-t1="2.000">0:02.000</a>`)
+	assert.Contains(t, html, `<a class="ts" href="#s-vmaf" data-t0="2.000" data-t1="2.000">0:02.000</a>`)
 	assert.Contains(t, html, `<a class="ts" href="#s-banding" data-t0="0.000" data-t1="1.500">`)
 	assert.Contains(t, html, `<tr data-t0="0.000" data-t1="4.000" data-link="1"><td>1</td>`)
 	assert.Contains(t, html, `<tr data-t0="0.000" data-t1="1.500" data-link="0"><td>0:00.00</td>`)

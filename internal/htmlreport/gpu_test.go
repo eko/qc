@@ -1,6 +1,7 @@
 package htmlreport
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,12 +15,30 @@ func TestGPUCards(
 	t *testing.T,
 ) {
 	v := sampleVMAF(quality.ModeSampled)
-	assert.NotContains(t, cardLabels(comparisonCards(v)), "GPU")
+	assert.NotContains(t, cardLabels(comparisonCards(v)), "Hardware")
 
-	v.HWAccel = "cuda"
-	cards := comparisonCards(v)
-	assert.Contains(t, cardLabels(cards), "GPU")
-	assert.Equal(t, "NVDEC decoding (cuda)", cards[len(cards)-1].Detail)
+	testCases := []struct {
+		name       string
+		hwaccel    string
+		wantVendor string
+		wantDetail string
+	}{
+		{name: "NVDEC", hwaccel: "cuda", wantVendor: "NVIDIA", wantDetail: "NVDEC decoding (cuda)"},
+		{name: "VideoToolbox", hwaccel: "videotoolbox", wantVendor: "Apple", wantDetail: "VideoToolbox decoding"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			v := sampleVMAF(quality.ModeSampled)
+			v.HWAccel = testCase.hwaccel
+
+			cards := comparisonCards(v)
+			i := slices.Index(cardLabels(cards), "Hardware")
+			require.GreaterOrEqual(t, i, 0)
+			assert.Equal(t, testCase.wantVendor, cards[i].Value)
+			assert.Equal(t, testCase.wantDetail, cards[i].Detail)
+		})
+	}
 }
 
 func TestCodecLabel(

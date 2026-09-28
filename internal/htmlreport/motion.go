@@ -40,7 +40,7 @@ func motionSection(
 	samples := func(values []float64) *svg.Samples { return &svg.Samples{X: pts, Y: values, Frames: frames} }
 
 	move := svg.Chart{
-		Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
+		Title: "Camera moves", Width: chartWidth, Height: timeChartHeight, MaxPoints: maxFramePoints,
 		Series: []svg.Series{
 			{Name: "pan (%W/s)", Color: orange, Samples: samples(f.MotionPan), Digits: 1},
 			{Name: "tilt (%W/s)", Color: blue, Samples: samples(f.MotionTilt), Digits: 1},
@@ -53,7 +53,7 @@ func motionSection(
 	move.YMax = symmetricLimit(f.MotionPan, f.MotionTilt, f.MotionZoom)
 	move.YMin = -move.YMax
 	shake := svg.Chart{
-		Width: chartWidth, Height: motionChartHeight, MaxPoints: maxFramePoints,
+		Title: "Camera shake", Width: chartWidth, Height: motionChartHeight, MaxPoints: maxFramePoints,
 		Series: []svg.Series{{Name: "shake (%W)", Color: amber, Samples: samples(f.MotionShake), Area: true, Digits: 2}},
 		YMin:   0, X: svg.UnitTime, Y: svg.UnitNumber, Bands: bands,
 	}
@@ -61,10 +61,11 @@ func motionSection(
 	return section{
 		Title:    "Camera motion",
 		Subtitle: "global motion of the picture, per frame and per shot",
+		Area:     areaVideo,
 		Topic:    findings.TopicMotion,
 		Stats:    motionStats(v.Motion),
 		Charts:   []template.HTML{move.HTML(), shake.HTML()},
-		Notes: []string{"Camera moves, low-passed over 0.5 s: pan and tilt in % of the picture width per second (positive right and up), " +
+		Method: []string{"Camera moves, low-passed over 0.5 s: pan and tilt in % of the picture width per second (positive right and up), " +
 			"zoom in % of scale per second (positive in). Shake is the jitter of the camera path around its trend, in % of the width. " +
 			"Estimated on the thumbnails with a robust similarity fit, so moving subjects do not count as camera motion; " +
 			"frames without enough texture (flat pictures, fades) and the first frame of each shot are interpolated (confidence 0)."},

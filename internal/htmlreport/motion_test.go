@@ -43,7 +43,7 @@ func TestRenderAnalysisMotion(
 			report: motionDecodedReport(),
 			want: []string{
 				"Camera motion", "pan (%W/s)", "shake (%W)", "<b>100% · 1 shot</b>", "<b>97%</b>",
-				"pan right, shaky", "100% pan", "1 shaky shot: camera jitter up to 0.6% of the width",
+				"pan right, shaky", "100% <small>pan</small>", "1 shaky shot: camera jitter up to 0.6% of the width",
 			},
 		},
 		{name: "motion skipped", report: sampleDecodedReport(), wantNot: []string{"Camera motion", "shaky"}},

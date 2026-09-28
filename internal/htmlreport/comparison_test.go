@@ -91,7 +91,7 @@ func TestComparisonExtras(
 		t.Run(testCase.name, func(t *testing.T) {
 			html := renderHTML(t, testCase.result)
 
-			assert.Equal(t, []string{"Quality", "VMAF per device", "Metrics", "Banding"}, titles(html))
+			assert.Equal(t, []string{"VMAF", "VMAF per device", "Metrics", "Banding"}, titles(html))
 			assert.Len(t, charts.FindAllString(html, -1), 2)
 
 			for _, want := range testCase.want {
