@@ -385,6 +385,23 @@ func ladderFooter(
 	return line
 }
 
+// RenderWrittenVideo reports the annotated copy of a video written, when
+// one was (path not empty).
+func RenderWrittenVideo(
+	w io.Writer,
+	path string,
+) error {
+	if path == "" {
+		return nil
+	}
+
+	if _, err := fmt.Fprintln(w, writtenLine("annotated video", path)); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
+
+	return nil
+}
+
 // RenderWritten reports the files written, when any.
 func RenderWritten(
 	w io.Writer,

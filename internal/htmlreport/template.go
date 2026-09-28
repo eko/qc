@@ -171,7 +171,7 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
 <ul>{{range .Findings}}<li class="finding {{.Level}}"><span class="level">{{.LevelLabel}}</span><span class="finding-text">{{with .Scope}}<span class="scope">{{.}}</span>{{end}}{{.Text}}{{$anchor := .Anchor}}{{range .Spans}} {{if $anchor}}<a class="ts" href="#{{$anchor}}" data-t0="{{.Attr .From}}" data-t1="{{.Attr .To}}">{{.Label}}</a>{{else}}<span class="ts-static">{{.Label}}</span>{{end}}{{end}}</span></li>{{end}}</ul>
 </section>{{end}}
 {{range .Sections}}
-<details class="panel section" id="{{.Anchor}}" open>
+<details class="panel section" id="{{.Anchor}}"{{if not .Collapsed}} open{{end}}>
 <summary><span class="chevron" aria-hidden="true"></span><span class="summary-text"><h2>{{.Title}}</h2>{{if .Subtitle}}<span class="sub">{{.Subtitle}}</span>{{end}}</span></summary>
 <div class="section-body">
 {{if .Stats}}<div class="stats">{{range .Stats}}<div class="stat"><span>{{.Label}}</span><b>{{.Value}}</b></div>{{end}}</div>{{end}}

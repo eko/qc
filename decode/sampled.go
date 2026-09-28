@@ -49,10 +49,17 @@ func sampledGraph(
 
 	var head []string
 
-	if mode == HWAccelCUDAScale {
+	switch mode {
+	case HWAccelCUDAScale:
 		head = append(head,
 			fmt.Sprintf("scale_cuda=%d:%d:interp_algo=bicubic:format=yuv420p10le", pool.Width(), pool.Height()),
 			"hwdownload", "format=yuv420p10le")
+	case HWAccelVideoToolbox:
+		// Frames come as NV12 or P010, which extractplanes after a split
+		// crashes on (ffmpeg 9.0): convert them to the source's planar
+		// format first, exactly, so the rest of the graph is a CPU
+		// decode's.
+		head = append(head, "format="+req.PixelFormat)
 	}
 
 	if len(req.Select) > 0 {

@@ -3,6 +3,7 @@
 package crop
 
 import (
+	"github.com/eko/qc/analyze"
 	"github.com/eko/qc/frame"
 	"github.com/eko/qc/media"
 )
@@ -56,15 +57,22 @@ type Result struct {
 	FramesUsed int  `json:"framesUsed"`
 }
 
-// Analyzer implements analyze.Analyzer.
+// Analyzer implements analyze.Analyzer and analyze.Forker.
 type Analyzer struct {
 	opts Options
 	// limit is the brightest mean a border line may have.
 	limit         int
 	width, height int
-	// union of content boxes, as [x0, y0, x1, y1) with x0 > x1 when empty.
+	series        analyze.Series[box]
+	// seq is the run of a sequential pass (Consume).
+	seq *run
+}
+
+// box is the content box of one frame as [x0, y0, x1, y1), when the frame
+// was analysed and not fully dark.
+type box struct {
 	x0, y0, x1, y1 int
-	used           int
+	used           bool
 }
 
 // New returns an Analyzer for width×height frames.
@@ -80,8 +88,6 @@ func New(
 		limit:  levels.Black + opts.Tolerance,
 		width:  width,
 		height: height,
-		x0:     width,
-		y0:     height,
 	}
 }
 
@@ -89,20 +95,104 @@ func New(
 func (a *Analyzer) Consume(
 	f *frame.Frame,
 ) error {
-	if f.Index%a.opts.Every != 0 {
-		return nil
+	if a.seq == nil {
+		a.seq = a.fork()
 	}
 
-	p := &f.Luma
+	return a.seq.Consume(f)
+}
 
+// Close implements analyze.Analyzer.
+func (a *Analyzer) Close() error {
+	if a.seq != nil {
+		return a.seq.Close()
+	}
+
+	return nil
+}
+
+// Fork implements analyze.Forker.
+func (a *Analyzer) Fork() analyze.Analyzer {
+	return a.fork()
+}
+
+func (a *Analyzer) fork() *run {
+	return &run{parent: a, first: -1}
+}
+
+// Result returns the content rectangle, aligned on even coordinates as
+// required by 4:2:0 chroma subsampling: the union of the content boxes of
+// the analysed frames.
+func (a *Analyzer) Result() Result {
+	x0, y0, x1, y1, used := a.width, a.height, 0, 0, 0
+
+	for _, b := range a.series.Merge() {
+		if b.used {
+			x0, y0 = min(x0, b.x0), min(y0, b.y0)
+			x1, y1 = max(x1, b.x1), max(y1, b.y1)
+			used++
+		}
+	}
+
+	if used == 0 {
+		return Result{Content: Rect{Width: a.width, Height: a.height}}
+	}
+
+	x0, y0 = x0&^1, y0&^1
+	x1, y1 = min(a.width, (x1+1)&^1), min(a.height, (y1+1)&^1)
+
+	return Result{
+		Content:    Rect{X: x0, Y: y0, Width: x1 - x0, Height: y1 - y0},
+		Letterbox:  y0 > 0 || y1 < a.height,
+		Pillarbox:  x0 > 0 || x1 < a.width,
+		FramesUsed: used,
+	}
+}
+
+// run finds the content boxes of the frames of one run.
+type run struct {
+	parent *Analyzer
+	first  int
+	boxes  []box
+}
+
+// Consume implements analyze.Analyzer.
+func (r *run) Consume(
+	f *frame.Frame,
+) error {
+	if r.first < 0 {
+		r.first = f.Index
+	}
+
+	b := box{}
+	if f.Index%r.parent.opts.Every == 0 {
+		b = r.parent.contentBox(&f.Luma)
+	}
+
+	r.boxes = append(r.boxes, b)
+
+	return nil
+}
+
+// Close implements analyze.Analyzer.
+func (r *run) Close() error {
+	r.parent.series.Add(r.first, r.boxes)
+
+	return nil
+}
+
+// contentBox scans p from each edge inwards. Fully dark frames (fades,
+// black inserts) say nothing about the borders: their box is unused.
+func (a *Analyzer) contentBox(
+	p *frame.Plane,
+) box {
 	top := 0
 	for top < p.Height && a.darkRow(p, top) {
 		top++
 	}
 
-	// Fully dark frames (fades, black inserts) say nothing about the borders.
 	if top == p.Height {
-		return nil
+		return box{}
 	}
 
 	bottom := p.Height
@@ -120,34 +210,7 @@ func (a *Analyzer) Consume(
 		right--
 	}
 
-	a.x0, a.y0 = min(a.x0, left), min(a.y0, top)
-	a.x1, a.y1 = max(a.x1, right), max(a.y1, bottom)
-	a.used++
-
-	return nil
-}
-
-// Close implements analyze.Analyzer.
-func (a *Analyzer) Close() error {
-	return nil
-}
-
-// Result returns the content rectangle, aligned on even coordinates as
-// required by 4:2:0 chroma subsampling.
-func (a *Analyzer) Result() Result {
-	if a.used == 0 {
-		return Result{Content: Rect{Width: a.width, Height: a.height}}
-	}
-
-	x0, y0 := a.x0&^1, a.y0&^1
-	x1, y1 := min(a.width, (a.x1+1)&^1), min(a.height, (a.y1+1)&^1)
-
-	return Result{
-		Content:    Rect{X: x0, Y: y0, Width: x1 - x0, Height: y1 - y0},
-		Letterbox:  y0 > 0 || y1 < a.height,
-		Pillarbox:  x0 > 0 || x1 < a.width,
-		FramesUsed: a.used,
-	}
+	return box{x0: left, y0: top, x1: right, y1: bottom, used: true}
 }
 
 // darkRow reports whether a line is border: dark on average and without any

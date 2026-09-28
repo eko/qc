@@ -1,0 +1,82 @@
+[Script Info]
+; Debug overlay written by qc (github.com/eko/qc)
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: qc,DejaVu Sans Mono,26,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: badge,DejaVu Sans Mono,24,&H0008101A,&H0008101A,&H00439FFF,&H00439FFF,-1,0,0,0,100,100,0,0,3,5,0,7,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,24)\bord0\shad0\1c&H000000&\1a&H50&\p1}m 0 0 l 500 0 500 142 0 142 {\p0}
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,24)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 0 l 4 0 4 142 0 142 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.000{\fs26\b0}{\c&HA8B0B8&}  #0
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.040{\fs26\b0}{\c&HA8B0B8&}  #1
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.080{\fs26\b0}{\c&HA8B0B8&}  #2
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.120{\fs26\b0}{\c&HA8B0B8&}  #3
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.160{\fs26\b0}{\c&HA8B0B8&}  #4
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.200{\fs26\b0}{\c&HA8B0B8&}  #5
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.240{\fs26\b0}{\c&HA8B0B8&}  #6
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.280{\fs26\b0}{\c&HA8B0B8&}  #7
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.320{\fs26\b0}{\c&HA8B0B8&}  #8
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.360{\fs26\b0}{\c&HA8B0B8&}  #9
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.400{\fs26\b0}{\c&HA8B0B8&}  #10
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.440{\fs26\b0}{\c&HA8B0B8&}  #11
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}90.0 kB  {\c&H439FFF&}{\b1}KEY{\b0}
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}800 B
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}20.0 kB
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}21.0 kB
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}19.5 kB
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}22.0 kB
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}85.0 kB  {\c&H439FFF&}{\b1}KEY{\b0}
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}30.0 kB
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}31.0 kB
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}30.5 kB
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}29.0 kB
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}28.0 kB
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}720 kb/s
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}726 kb/s
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}886 kb/s
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}1.05 Mb/s
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}1.21 Mb/s
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}1.39 Mb/s
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.07 Mb/s
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.31 Mb/s
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.55 Mb/s
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.80 Mb/s
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}3.03 Mb/s
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}3.25 Mb/s
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(1516,24)\bord0\shad0\1c&H000000&\1a&H50&\p1}m 0 0 l 380 0 380 224 0 224 {\p0}
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(1516,24)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 0 l 4 0 4 224 0 224 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(1534,38)}{\c&HA8B0B8&}VMAF
+Dialogue: 1,0:00:00.00,0:00:00.10,qc,,0,0,0,,{\an7\pos(1534,72)}{\fs56\b1}{\c&HA8B0B8&}–
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(1534,72)}{\fs56\b1}{\c&H24BFFB&}88.4
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(1534,72)}{\fs56\b1}{\c&H24BFFB&}85.0
+Dialogue: 1,0:00:00.18,0:00:00.38,qc,,0,0,0,,{\an7\pos(1534,72)}{\fs56\b1}{\c&HA8B0B8&}–
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(1534,72)}{\fs56\b1}{\c&H80D34A&}97.0
+Dialogue: 1,0:00:00.42,0:00:00.52,qc,,0,0,0,,{\an7\pos(1534,72)}{\fs56\b1}{\c&HA8B0B8&}–
+Dialogue: 1,0:00:00.00,0:00:00.10,qc,,0,0,0,,{\an7\pos(1534,138)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(1534,138)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}38.84{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(1534,138)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}38.50{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.18,0:00:00.38,qc,,0,0,0,,{\an7\pos(1534,138)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(1534,138)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.70{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.42,0:00:00.52,qc,,0,0,0,,{\an7\pos(1534,138)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.00,0:00:00.10,qc,,0,0,0,,{\an7\pos(1534,172)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(1534,172)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}1.00
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(1534,172)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}1.50
+Dialogue: 1,0:00:00.18,0:00:00.38,qc,,0,0,0,,{\an7\pos(1534,172)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(1534,172)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}4.50
+Dialogue: 1,0:00:00.42,0:00:00.52,qc,,0,0,0,,{\an7\pos(1534,172)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(1534,206)}{\fs20}{\c&HA8B0B8&}sampled · 25.0% of frames scored
+Dialogue: 1,0:00:00.18,0:00:00.26,badge,,0,0,0,,{\an7\pos(540,38)}BANDING
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,954)\bord0\shad0\1c&H000000&\1a&H50&\p1}m 0 0 l 1872 0 1872 102 0 102 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,968)\fs20}{\c&H439FFF&}VMAF  {\c&HA8B0B8&}80–100
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an9\pos(1882,968)\fs20}{\c&HA8B0B8&}my \{clip\}.mp4
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,998)\bord0\shad0\1c&HA8B0B8&\1a&H90&\p1}m 307 26 l 461 26 461 44 307 44 m 461 33 l 614 33 614 44 461 44 m 1383 7 l 1536 7 1536 44 1383 44 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,998)\bord0\shad0\1c&H439FFF&\clip(38,998,38,1042)\t(40,520,\clip(38,998,1882,1042))\p1}m 307 26 l 461 26 461 44 307 44 m 461 33 l 614 33 614 44 461 44 m 1383 7 l 1536 7 1536 44 1383 44 {\p0}
+Dialogue: 2,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\move(38,990,1882,990,40,520)\bord0\shad0\1c&HFFFFFF&\p1}m -1 0 l 2 0 2 52 -1 52 {\p0}

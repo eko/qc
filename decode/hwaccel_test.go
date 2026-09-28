@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -29,6 +30,8 @@ func TestParseHWAccel(
 		{name: "none", input: "none", want: HWAccelNone},
 		{name: "cuda", input: "CUDA", want: HWAccelCUDA},
 		{name: "cuda-scale", input: " cuda-scale ", want: HWAccelCUDAScale},
+		{name: "videotoolbox", input: "VideoToolbox", want: HWAccelVideoToolbox},
+		{name: "auto", input: "auto", want: HWAccelAuto},
 		{name: "unknown", input: "vaapi", wantErr: ErrHWAccel},
 	}
 
@@ -53,6 +56,7 @@ func TestHWAccelOrder(
 		{mode: HWAccelNone, name: "none", fallback: HWAccelNone, rank: 0},
 		{mode: HWAccelCUDA, name: "cuda", fallback: HWAccelNone, rank: 1},
 		{mode: HWAccelCUDAScale, name: "cuda-scale", fallback: HWAccelCUDA, rank: 2},
+		{mode: HWAccelVideoToolbox, name: "videotoolbox", fallback: HWAccelNone, rank: 1},
 	}
 
 	for _, testCase := range testCases {
@@ -82,6 +86,13 @@ func TestHWAccelArgs(
 			mode: HWAccelCUDA,
 			req:  Request{Path: "in.mp4", Pool: luma, SourceWidth: 320, SourceHeight: 180},
 			want: "-v error -nostdin -threads 0 -hwaccel cuda -i in.mp4 -map 0:v:0 -fps_mode passthrough -an -sn -dn " +
+				"-vf extractplanes=y,scale=320:180:flags=bicubic,format=gray -f rawvideo -",
+		},
+		{
+			name: "videotoolbox decodes on the hardware and filters on the CPU",
+			mode: HWAccelVideoToolbox,
+			req:  Request{Path: "in.mp4", Pool: luma, SourceWidth: 320, SourceHeight: 180},
+			want: "-v error -nostdin -threads 0 -hwaccel videotoolbox -i in.mp4 -map 0:v:0 -fps_mode passthrough -an -sn -dn " +
 				"-vf extractplanes=y,scale=320:180:flags=bicubic,format=gray -f rawvideo -",
 		},
 		{
@@ -130,32 +141,79 @@ func TestModeFor(
 	testCases := []struct {
 		name       string
 		configured HWAccel
-		codec      string
+		req        Request
 		degraded   map[string]HWAccel
 		want       HWAccel
 	}{
-		{name: "cpu decoder", configured: HWAccelNone, codec: "h264", want: HWAccelNone},
+		{name: "cpu decoder", configured: HWAccelNone, req: Request{Codec: "h264"}, want: HWAccelNone},
 		{name: "unknown codec is tried", configured: HWAccelCUDA, want: HWAccelCUDA},
-		{name: "nvdec codec", configured: HWAccelCUDAScale, codec: "hevc", want: HWAccelCUDAScale},
-		{name: "prores stays on the cpu", configured: HWAccelCUDA, codec: "prores", want: HWAccelNone},
-		{name: "raw digest stays on the cpu", configured: HWAccelCUDAScale, codec: "rawvideo", want: HWAccelNone},
+		{name: "nvdec codec", configured: HWAccelCUDAScale, req: Request{Codec: "hevc"}, want: HWAccelCUDAScale},
+		{name: "prores stays on the cpu", configured: HWAccelCUDA, req: Request{Codec: "prores"}, want: HWAccelNone},
+		{name: "raw digest stays on the cpu", configured: HWAccelCUDAScale, req: Request{Codec: "rawvideo"}, want: HWAccelNone},
 		{
-			name: "a failed file keeps its fallback", configured: HWAccelCUDAScale, codec: "h264",
+			name: "a failed file keeps its fallback", configured: HWAccelCUDAScale, req: Request{Codec: "h264"},
 			degraded: map[string]HWAccel{"in.mp4": HWAccelCUDA}, want: HWAccelCUDA,
 		},
 		{
-			name: "another file is unaffected", configured: HWAccelCUDA, codec: "h264",
+			name: "another file is unaffected", configured: HWAccelCUDA, req: Request{Codec: "h264"},
 			degraded: map[string]HWAccel{"other.mp4": HWAccelNone}, want: HWAccelCUDA,
 		},
+		{
+			name: "videotoolbox 10-bit hevc", configured: HWAccelVideoToolbox,
+			req: Request{Codec: "hevc", PixelFormat: "yuv420p10le"}, want: HWAccelVideoToolbox,
+		},
+		{
+			name: "videotoolbox leaves mpeg-2 to the cpu", configured: HWAccelVideoToolbox,
+			req: Request{Codec: "mpeg2video", PixelFormat: "yuv420p"}, want: HWAccelNone,
+		},
+		{
+			name: "videotoolbox leaves 4:2:2 to the cpu", configured: HWAccelVideoToolbox,
+			req: Request{Codec: "h264", PixelFormat: "yuv422p10le"}, want: HWAccelNone,
+		},
+		{
+			name: "videotoolbox needs the pixel format", configured: HWAccelVideoToolbox,
+			req: Request{Codec: "h264"}, want: HWAccelNone,
+		},
+		{
+			name: "auto decodes segments with videotoolbox", configured: HWAccelAuto,
+			req: Request{Codec: "h264", PixelFormat: "yuv420p", Segment: true}, want: HWAccelVideoToolbox,
+		},
+		{name: "auto decodes the rest on the cpu", configured: HWAccelAuto, req: Request{Codec: "h264", PixelFormat: "yuv420p"}, want: HWAccelNone},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			d := NewFFmpeg("ffmpeg", 0, WithHWAccel(testCase.configured))
-			d.degraded = testCase.degraded
+			d := &FFmpeg{bin: "ffmpeg", hwaccel: testCase.configured, degraded: testCase.degraded}
 
-			assert.Equal(t, testCase.configured, d.HWAccel())
-			assert.Equal(t, testCase.want, d.modeFor(Request{Path: "in.mp4", Codec: testCase.codec}))
+			req := testCase.req
+			req.Path = "in.mp4"
+
+			assert.Equal(t, testCase.want, d.modeFor(req))
+		})
+	}
+}
+
+func TestHWAccelResolve(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name         string
+		mode         HWAccel
+		goos         string
+		want         HWAccel
+		wantReported HWAccel
+	}{
+		{name: "auto on macOS", mode: HWAccelAuto, goos: "darwin", want: HWAccelAuto, wantReported: HWAccelNone},
+		{name: "auto elsewhere", mode: HWAccelAuto, goos: "linux", want: HWAccelNone, wantReported: HWAccelNone},
+		{name: "explicit modes are kept", mode: HWAccelCUDA, goos: "linux", want: HWAccelCUDA, wantReported: HWAccelCUDA},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := testCase.mode.Resolve(testCase.goos)
+			assert.Equal(t, testCase.want, got)
+			assert.Equal(t, testCase.wantReported, (&FFmpeg{hwaccel: got}).HWAccel())
+			assert.Equal(t, got == HWAccelCUDA || got == HWAccelCUDAScale, got.CUDA())
 		})
 	}
 }
@@ -296,6 +354,13 @@ func TestSampledArgs(
 				branches + outputs,
 		},
 		{
+			name: "videotoolbox converts to the planar format first",
+			mode: HWAccelVideoToolbox,
+			req:  Request{Path: "in.mp4", Pool: sampled, MaxFrames: 2, PixelFormat: "yuv420p10le"},
+			want: "-v error -nostdin -threads 0 -hwaccel videotoolbox -i in.mp4 -filter_complex [0:v:0]format=yuv420p10le," +
+				branches + outputs,
+		},
+		{
 			name: "cuda-scale scales on the GPU first",
 			mode: HWAccelCUDAScale,
 			req:  Request{Path: "in.mp4", Pool: sampled, MaxFrames: 2},
@@ -311,4 +376,91 @@ func TestSampledArgs(
 			assert.Equal(t, testCase.want, got)
 		})
 	}
+}
+
+func TestSegmentDecoders(
+	t *testing.T,
+) {
+	h264 := Request{Path: "in.mp4", Codec: "h264", PixelFormat: "yuv420p"}
+
+	// Auto means VideoToolbox on macOS only: elsewhere it decodes on the CPU.
+	auto := 1
+	if runtime.GOOS == darwin {
+		auto = runtime.NumCPU()
+	}
+
+	testCases := []struct {
+		name string
+		opts []Option
+		req  Request
+		want int
+	}{
+		{name: "cpu: one decode", req: h264, want: 1},
+		{name: "nvdec: one decode", opts: []Option{WithHWAccel(HWAccelCUDA)}, req: h264, want: 1},
+		{name: "videotoolbox: a session per core", opts: []Option{WithHWAccel(HWAccelVideoToolbox)}, req: h264, want: runtime.NumCPU()},
+		{name: "auto", opts: []Option{WithHWAccel(HWAccelAuto)}, req: h264, want: auto},
+		{
+			name: "fewer sessions",
+			opts: []Option{WithHWAccel(HWAccelVideoToolbox), WithVideoToolboxSessions(4)}, req: h264, want: 4,
+		},
+		{
+			name: "a codec videotoolbox leaves to the cpu",
+			opts: []Option{WithHWAccel(HWAccelVideoToolbox)},
+			req:  Request{Path: "in.mov", Codec: "prores", PixelFormat: "yuv422p10le"}, want: 1,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, NewFFmpeg("ffmpeg", 0, testCase.opts...).SegmentDecoders(testCase.req))
+		})
+	}
+}
+
+func TestVideoToolboxSessions(
+	t *testing.T,
+) {
+	segment := Request{Path: "in.mp4", Codec: "h264", PixelFormat: "yuv420p", Segment: true}
+
+	testCases := []struct {
+		name     string
+		opts     []Option
+		sessions int
+	}{
+		{name: "explicit", opts: []Option{WithVideoToolboxSessions(2)}, sessions: 2},
+		{name: "a session per core by default", sessions: runtime.NumCPU()},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// VideoToolbox explicitly: auto only means it on macOS.
+			d := NewFFmpeg("ffmpeg", 0, append([]Option{WithHWAccel(HWAccelVideoToolbox)}, testCase.opts...)...)
+
+			releases := make([]func(), testCase.sessions)
+			for i := range releases {
+				var mode HWAccel
+
+				mode, releases[i] = d.acquire(segment)
+				require.Equal(t, HWAccelVideoToolbox, mode, "session %d", i)
+			}
+
+			beyond, releaseBeyond := d.acquire(segment)
+			assert.Equal(t, HWAccelNone, beyond, "decodes beyond the sessions run on the cpu")
+			releaseBeyond()
+
+			releases[0]()
+
+			again, releaseAgain := d.acquire(segment)
+			assert.Equal(t, HWAccelVideoToolbox, again, "a released session is reused")
+			releaseAgain()
+
+			for _, release := range releases[1:] {
+				release()
+			}
+		})
+	}
+
+	cpu, release := NewFFmpeg("ffmpeg", 0, WithVideoToolboxSessions(1)).acquire(segment)
+	assert.Equal(t, HWAccelNone, cpu, "no session without videotoolbox")
+	release()
 }

@@ -86,6 +86,29 @@ func TestWizardAnswersRunArgs(
 			want: []string{"hdr.mov", "--codecs=hevc", "--skip-analysis", "--hdr-metric", "tonemap"},
 		},
 		{
+			name: "annotated copy",
+			answers: wizardAnswers{
+				Source:      "encode.mp4",
+				Reference:   "source.mov",
+				Actions:     []string{actionVMAF},
+				VMAFMode:    vmafExact,
+				Overlay:     true,
+				OverlayPath: " -annotated.mp4 ",
+			},
+			want: []string{"encode.mp4", "-r", "source.mov", "--exact", "--codecs=", "--skip-analysis", "--overlay", "./-annotated.mp4"},
+		},
+		{
+			name: "annotated copy of a ladder-only run is left out",
+			answers: wizardAnswers{
+				Source:      "source.mov",
+				Actions:     []string{actionLadder},
+				Codecs:      []string{"h264"},
+				Overlay:     true,
+				OverlayPath: "annotated.mp4",
+			},
+			want: []string{"source.mov", "--codecs=h264", "--skip-analysis"},
+		},
+		{
 			name: "hdr default metric and tone mapping without vmaf are left out",
 			answers: wizardAnswers{
 				Source:    "hdr.mov",

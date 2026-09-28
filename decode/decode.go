@@ -57,8 +57,16 @@ type Request struct {
 	// frames missing from PTS.
 	FrameRate media.Rational
 	// Codec is the ffprobe codec name of the video, when known: hardware
-	// decoding is only tried for codecs NVDEC decodes.
+	// decoding is only tried for codecs the hardware decodes exactly.
 	Codec string
+	// PixelFormat is the ffprobe pixel format of the video, when known:
+	// VideoToolbox only decodes the formats it outputs as they are.
+	PixelFormat string
+	// Segment marks the decode as one of several concurrent decodes of
+	// segments of a video: HWAccelAuto then decodes with VideoToolbox,
+	// whose concurrent sessions add up while a single one is slower than
+	// the CPU.
+	Segment bool
 	// ToneMap, when set, converts HDR frames to SDR while scaling (pools
 	// with chroma only, see ToneMap).
 	ToneMap *ToneMap
@@ -68,12 +76,17 @@ type Request struct {
 // 8-bit samples or 16-bit little-endian ones for high bit depth pools.
 // Luma-only pools only receive the Y plane: a third of the bytes of a 4:2:0
 // frame, enough for every pixel analyzer. WithHWAccel decodes on an NVIDIA
-// GPU.
+// GPU or with VideoToolbox.
 type FFmpeg struct {
 	bin     string
 	threads int
 	hwaccel HWAccel
 	logger  *slog.Logger
+
+	// sessions holds a token per decode using VideoToolbox (see
+	// WithVideoToolboxSessions), created once by acquire when not set.
+	sessions chan struct{}
+	once     sync.Once
 
 	// mu guards degraded: the mode each file fell back to after a
 	// hardware decoding failure.
@@ -107,7 +120,8 @@ func (d *FFmpeg) Decode(
 	req Request,
 	fn func(*frame.Frame) error,
 ) error {
-	mode := d.modeFor(req)
+	mode, release := d.acquire(req)
+	defer release()
 
 	for {
 		delivered := 0

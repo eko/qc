@@ -89,7 +89,7 @@ func Check(
 		return &CheckError{Part: PartEncoding, Err: err}
 	}
 
-	if req.HWAccel == decode.HWAccelNone && len(encoders) == 0 {
+	if !req.HWAccel.CUDA() && len(encoders) == 0 {
 		return nil
 	}
 

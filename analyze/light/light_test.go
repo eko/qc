@@ -120,6 +120,8 @@ func TestAnalyzerTracksBrightestFrames(
 		f.Release()
 	}
 
+	require.NoError(t, a.Close())
+
 	res := a.Result()
 	assert.Equal(t, 11, res.MaxCLLFrame)
 	assert.Equal(t, 11, res.MaxFALLFrame)

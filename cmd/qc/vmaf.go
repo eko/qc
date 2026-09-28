@@ -21,14 +21,22 @@ func newVMAFCommand(
 			"interval of the mean is narrower than --precision. --sample fixes the budget\n" +
 			"instead (5%: that share of the frames, 2/scene: two clips per scene) and reports\n" +
 			"the interval it reaches. --exact scores every frame.\n" +
-			"Both videos are scaled to the resolution of the model.",
+			"Both videos are scaled to the resolution of the model.\n" +
+			"--overlay also writes a copy of the distorted video with its per-frame scores\n" +
+			"burnt in (sampled measurements score some frames only: use --exact).",
 		Example: "  qc vmaf mezzanine.mov encode.mp4\n" +
 			"  qc vmaf mezzanine.mov encode.mp4 --precision 0.25\n" +
 			"  qc vmaf mezzanine.mov encode.mp4 --sample 5%\n" +
-			"  qc vmaf mezzanine.mov encode.mp4 --exact -f json > exact.json",
+			"  qc vmaf mezzanine.mov encode.mp4 --exact -f json > exact.json\n" +
+			"  qc vmaf mezzanine.mov encode.mp4 --exact --overlay annotated.mp4",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, err := loadConfig(cmd)
+			if err != nil {
+				return err
+			}
+
+			overlayOpts, err := overlayOptions(config, args[1])
 			if err != nil {
 				return err
 			}
@@ -38,6 +46,7 @@ func newVMAFCommand(
 				Reference:    args[0],
 				SkipAnalysis: true,
 				Quality:      qualityOptions(config),
+				Overlay:      overlayOpts,
 			})
 			if err != nil {
 				return err
@@ -51,6 +60,7 @@ func newVMAFCommand(
 
 	addOutputFlags(cmd)
 	addQualityFlags(cmd)
+	addOverlayFlags(cmd)
 	addGPUFlags(cmd, gpuDecode|gpuVMAF)
 
 	return cmd

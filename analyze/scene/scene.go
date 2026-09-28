@@ -64,13 +64,18 @@ type Result struct {
 	Shots  []Shot    `json:"shots"`
 }
 
-// Analyzer implements analyze.Analyzer.
+// Analyzer implements analyze.Analyzer and analyze.Forker.
 type Analyzer struct {
-	opts Options
-	// prev is a copy of the previous thumbnail (frames are recycled).
-	prev   []byte
-	scores []float64
-	pts    []media.Duration
+	opts   Options
+	series analyze.Series[scored]
+	// seq is the run of a sequential pass (Consume).
+	seq *run
+}
+
+// scored is the measure of one frame.
+type scored struct {
+	score float64
+	pts   media.Duration
 }
 
 // New returns an Analyzer.
@@ -84,34 +89,78 @@ func New(
 func (a *Analyzer) Consume(
 	f *frame.Frame,
 ) error {
-	thumb := analyze.Thumbnail(f)
-
-	score := 0.0
-	if a.prev != nil {
-		score = MeanAbsDiff(a.prev, thumb)
-	} else {
-		a.prev = make([]byte, len(thumb))
+	if a.seq == nil {
+		a.seq = &run{series: &a.series}
 	}
 
-	copy(a.prev, thumb)
-	a.scores = append(a.scores, score)
-	a.pts = append(a.pts, f.PTS)
-
-	return nil
+	return a.seq.Consume(f)
 }
 
 // Close implements analyze.Analyzer.
 func (a *Analyzer) Close() error {
+	if a.seq != nil {
+		return a.seq.Close()
+	}
+
 	return nil
+}
+
+// Fork implements analyze.Forker.
+func (a *Analyzer) Fork() analyze.Analyzer {
+	return &run{series: &a.series}
 }
 
 // Result returns the shots. end is the end time of the last frame.
 func (a *Analyzer) Result(
 	end media.Duration,
 ) Result {
-	cuts := DetectCuts(a.scores, a.pts, a.opts)
+	frames := a.series.Merge()
+	if len(frames) == 0 {
+		return Result{}
+	}
 
-	return Result{Scores: a.scores, Shots: shots(cuts, a.pts, end)}
+	scores, pts := make([]float64, len(frames)), make([]media.Duration, len(frames))
+
+	for i, fr := range frames {
+		scores[i], pts[i] = fr.score, fr.pts
+	}
+
+	return Result{Scores: scores, Shots: shots(DetectCuts(scores, pts, a.opts), pts, end)}
+}
+
+// run scores the frames of one run.
+type run struct {
+	series *analyze.Series[scored]
+	// prev is a copy of the previous thumbnail (frames are recycled).
+	prev   []byte
+	first  int
+	frames []scored
+}
+
+// Consume implements analyze.Analyzer.
+func (r *run) Consume(
+	f *frame.Frame,
+) error {
+	thumb := analyze.Thumbnail(f)
+
+	score := 0.0
+	if r.prev != nil {
+		score = MeanAbsDiff(r.prev, thumb)
+	} else {
+		r.prev, r.first = make([]byte, len(thumb)), f.Index
+	}
+
+	copy(r.prev, thumb)
+	r.frames = append(r.frames, scored{score: score, pts: f.PTS})
+
+	return nil
+}
+
+// Close implements analyze.Analyzer.
+func (r *run) Close() error {
+	r.series.Add(r.first, r.frames)
+
+	return nil
 }
 
 // DetectCuts returns the indices of frames starting a new shot (frame 0
@@ -174,16 +223,13 @@ func neighbourMean(
 	return sum / float64(n), true
 }
 
-// shots splits the frames at cuts. end closes the last shot.
+// shots splits the frames (at least one) at cuts. end closes the last
+// shot.
 func shots(
 	cuts []int,
 	pts []media.Duration,
 	end media.Duration,
 ) []Shot {
-	if len(pts) == 0 {
-		return nil
-	}
-
 	starts := append([]int{0}, cuts...)
 	out := make([]Shot, len(starts))
 

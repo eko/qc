@@ -93,6 +93,10 @@ func analysisLines(
 		return line("interlaced source (%s)", f.Text)
 	}
 
+	if text := motionFindingText(f); text != "" {
+		return line("%s", text)
+	}
+
 	if text := hdrFindingText(f); text != "" {
 		return line("%s", text)
 	}

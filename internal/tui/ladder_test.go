@@ -341,6 +341,27 @@ func TestRenderWritten(
 	}
 }
 
+func TestRenderWrittenVideo(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "no copy", want: ""},
+		{name: "copy", path: "a.mp4", want: "✓ annotated video written to a.mp4\n"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			require.NoError(t, RenderWrittenVideo(&buf, testCase.path))
+			assert.Equal(t, testCase.want, plain(buf.String()))
+		})
+	}
+}
+
 func TestLadderShape(
 	t *testing.T,
 ) {

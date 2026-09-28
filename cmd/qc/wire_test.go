@@ -18,6 +18,7 @@ import (
 	"github.com/eko/qc/internal/testutil"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/nvidia"
+	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/pipeline"
 )
 
@@ -52,12 +53,14 @@ func TestModuleProvidesEveryPort(
 		builder   pipeline.LadderBuilder
 		source    decode.Source
 		runner    *pipeline.Runner
+		burner    overlay.Burner
+		overlayer pipeline.Overlayer
 	)
 
 	app := fx.New(
 		fx.NopLogger,
 		module(t.Context(), Config{Tools: testTools}),
-		fx.Populate(&analyzer, &inspector, &stages, &encoder, &digester, &lab, &builder, &source, &runner),
+		fx.Populate(&analyzer, &inspector, &stages, &encoder, &digester, &lab, &builder, &source, &runner, &burner, &overlayer),
 	)
 	require.NoError(t, app.Err())
 
@@ -67,6 +70,8 @@ func TestModuleProvidesEveryPort(
 	assert.Same(t, analyzer, stages)
 	assert.Same(t, encoder, digester, "one ffmpeg encoder behind every port")
 	assert.Same(t, encoder, lab)
+	assert.Same(t, encoder, burner, "the annotated copies are encoded by the same adapter")
+	assert.IsType(t, (*overlay.Renderer)(nil), overlayer)
 
 	reporter, ok := source.(decode.HWAccelReporter)
 	require.True(t, ok)

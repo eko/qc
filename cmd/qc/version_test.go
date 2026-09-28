@@ -141,6 +141,17 @@ func TestDoctorCheck(
 		"ffmpeg -encoders": ffmpegEncoders + " V....D h264_nvenc   NVIDIA NVENC H.264 encoder (codec h264)\n" +
 			" V....D av1_nvenc    NVIDIA NVENC av1 encoder (codec av1)\n",
 	}
+	withVT := map[string]string{
+		"ffmpeg -version":  healthy["ffmpeg -version"],
+		"ffprobe -version": healthy["ffprobe -version"],
+		"ffmpeg -encoders": ffmpegEncoders + " V....D h264_videotoolbox VideoToolbox H.264 Encoder (codec h264)\n",
+	}
+	withLibass := map[string]string{
+		"ffmpeg -version":  healthy["ffmpeg -version"],
+		"ffprobe -version": healthy["ffprobe -version"],
+		"ffmpeg -encoders": ffmpegEncoders,
+		"ffmpeg -filters":  " ... scale        V->V       Scale the input video size.\n ... subtitles    V->V       Render text subtitles.\n",
+	}
 	x264Only := map[string]string{
 		"ffmpeg -version":  healthy["ffmpeg -version"],
 		"ffprobe -version": "custom build\n",
@@ -162,14 +173,34 @@ func TestDoctorCheck(
 				checkFFmpeg:    "7.1.1-1",
 				checkFFprobe:   "7.1.1-1",
 				checkNVENC:     "not available (optional)",
+				checkVT:        "not available (optional)",
+				checkLibass:    "not available (optional: --overlay)",
 				checkVMAFModel: "/models/vmaf_v1.0.16_3d0h.json",
 			},
+		},
+		{
+			name:       "libass",
+			tools:      fakeTools{outputs: withLibass},
+			wantOK:     map[string]bool{checkLibass: true},
+			wantDetail: map[string]string{checkLibass: "subtitles filter (--overlay)"},
+		},
+		{
+			name:       "filters unreadable",
+			tools:      fakeTools{outputs: withLibass, errs: map[string]error{"ffmpeg -filters": errors.New("killed")}},
+			wantOK:     map[string]bool{checkLibass: false},
+			wantDetail: map[string]string{checkLibass: "not available (optional: --overlay)"},
 		},
 		{
 			name:       "nvenc encoders",
 			tools:      fakeTools{outputs: withNVENC},
 			wantOK:     map[string]bool{checkNVENC: true},
 			wantDetail: map[string]string{checkNVENC: "h264_nvenc, av1_nvenc (built in; needs an NVIDIA GPU and driver)"},
+		},
+		{
+			name:       "videotoolbox encoder",
+			tools:      fakeTools{outputs: withVT},
+			wantOK:     map[string]bool{checkVT: true, checkNVENC: false},
+			wantDetail: map[string]string{checkVT: "h264_videotoolbox (built in; --overlay on macOS)"},
 		},
 		{
 			name:       "missing encoders and unknown version",
@@ -231,7 +262,7 @@ func TestDoctorCheck(
 			}
 
 			wantNames := append([]string{checkFFmpeg, checkFFprobe}, requiredEncoders...)
-			assert.Equal(t, append(wantNames, checkNVENC, checkVMAFModel), names)
+			assert.Equal(t, append(wantNames, checkNVENC, checkVT, checkLibass, checkVMAFModel), names)
 			assert.Equal(t, testCase.wantFailed, report.failed())
 			assert.Equal(t, []string{"/models"}, gotDirs)
 		})

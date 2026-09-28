@@ -40,6 +40,7 @@ make gpu-validate
 | Probe and verification encodes | x264, x265, SVT-AV1 | **NVENC** (`--encoder nvenc`) | same probes, curves, rungs and checks |
 | Rung commands | `ffmpeg -i … -c:v libx264 …` | `ffmpeg -hwaccel cuda -i … -c:v h264_nvenc …` | the encoder that was measured |
 | Per-shot rungs, AV1 film grain synthesis | CPU | rejected with NVENC | see [limitations](#limitations) |
+| Annotated copy (`--overlay`) | VideoToolbox on macOS, x264 elsewhere | **NVENC** (`--overlay-encoder nvenc`), decoded with NVDEC | segments rendered four at once ([overlay.md](overlay.md#performance)) |
 
 The live dashboard shows the GPU parts in its title
 (`run · GPU: NVDEC, NVENC, CUDA VMAF (auto)`), stage summaries end with
@@ -51,8 +52,8 @@ card, and the JSON report carries `vmaf.backend`, `vmaf.backendNote`,
 
 | Flag | Values | Meaning |
 |---|---|---|
-| `--gpu` | | Use the GPU where available: `--hwaccel cuda`, `--encoder nvenc` (when ladders are built), `--vmaf-backend auto`. Flags set explicitly win. |
-| `--hwaccel` | `none` (default), `cuda`, `cuda-scale` | Hardware decoding ([details](#decoding-nvdec)) |
+| `--gpu` | | Use the GPU where available: `--hwaccel cuda`, `--encoder nvenc` (when ladders are built), `--overlay-encoder nvenc` (with `--overlay`), `--vmaf-backend auto`. Flags set explicitly win. |
+| `--hwaccel` | `auto` (default), `none`, `videotoolbox`, `cuda`, `cuda-scale` | Hardware decoding ([details](#decoding-nvdec)). `auto` never picks NVDEC: it is VideoToolbox for the segments of a frame analysis on macOS ([analysis.md](analysis.md#segments-and-hardware-decoding)), the CPU otherwise |
 | `--encoder` | `cpu` (default), `nvenc` | Ladder encoders, for every codec of the run |
 | `--vmaf-backend` | `cpu` (default), `cuda`, `auto` | VMAF feature extraction. `cuda` fails for models without CUDA features; `auto` falls back to the CPU |
 

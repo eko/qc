@@ -46,6 +46,10 @@ var requiredEncoders = []string{"libx264", "libx265", "libsvtav1"}
 // bug reports.
 var nvencEncoders = []string{"h264_nvenc", "hevc_nvenc", "av1_nvenc"}
 
+// vtEncoders are Apple's hardware encoders the annotated copies use on
+// macOS: optional (x264 takes over).
+var vtEncoders = []string{"h264_videotoolbox"}
+
 // Probe resolution of the VMAF model check: a 1080p25 source resolves to
 // the default VMAF v1 model (vmaf_v1.0.16_3d0h), the one libvmaf 3.2.0
 // cannot load.
@@ -59,6 +63,8 @@ const (
 	checkFFmpeg    = "ffmpeg"
 	checkFFprobe   = "ffprobe"
 	checkNVENC     = "nvenc"
+	checkVT        = "videotoolbox"
+	checkLibass    = "libass"
 	checkVMAFModel = "vmaf model"
 )
 
@@ -110,7 +116,7 @@ func newVersionCommand() *cobra.Command {
 		Short: "Print the version of qc and its libraries, and check the environment",
 		Long: "Print the version of qc, of Go and of the libvmaf it is linked against.\n\n" +
 			"--check also checks what qc needs at run time: ffmpeg and ffprobe, the libx264,\n" +
-			"libx265 and libsvtav1 encoders, NVENC (optional) and a loadable VMAF v1 model.\n" +
+			"libx265 and libsvtav1 encoders, NVENC and libass (optional) and a loadable VMAF v1 model.\n" +
 			"It exits with an error when a requirement is missing: paste its output in bug\n" +
 			"reports.",
 		Example: "  qc version\n" +
@@ -248,6 +254,7 @@ func (d doctor) check(
 	ffmpeg := d.toolCheck(ctx, checkFFmpeg, config.Tools.FFmpeg)
 	checks := []envCheck{ffmpeg, d.toolCheck(ctx, checkFFprobe, config.Tools.FFprobe)}
 	checks = append(checks, d.encoderChecks(ctx, config.Tools.FFmpeg, ffmpeg.OK)...)
+	checks = append(checks, d.libassCheck(ctx, config.Tools.FFmpeg, ffmpeg.OK))
 
 	path, err := d.loadModel(config.Quality.ModelDir)
 	if err != nil {
@@ -278,8 +285,8 @@ func (d doctor) toolCheck(
 	return envCheck{Name: name, OK: true, Detail: fields[2]}
 }
 
-// encoderChecks reports the required encoders, then NVENC. Without a
-// working ffmpeg every encoder is missing.
+// encoderChecks reports the required encoders, then the hardware ones
+// (NVENC, VideoToolbox). Without a working ffmpeg every encoder is missing.
 func (d doctor) encoderChecks(
 	ctx context.Context,
 	bin string,
@@ -300,7 +307,7 @@ func (d doctor) encoderChecks(
 		}
 	}
 
-	checks := make([]envCheck, 0, len(requiredEncoders)+1)
+	checks := make([]envCheck, 0, len(requiredEncoders)+2)
 
 	for _, name := range requiredEncoders {
 		if encoders[name] {
@@ -310,22 +317,59 @@ func (d doctor) encoderChecks(
 		}
 	}
 
-	var nvenc []string
+	return append(checks,
+		hardwareCheck(encoders, checkNVENC, nvencEncoders, "needs an NVIDIA GPU and driver"),
+		hardwareCheck(encoders, checkVT, vtEncoders, "--overlay on macOS"))
+}
 
-	for _, name := range nvencEncoders {
+// hardwareCheck reports the optional hardware encoders names that ffmpeg
+// lists in encoders: ffmpeg lists those it was built with, hardware or
+// not, hence the hint on what they need.
+func hardwareCheck(
+	encoders map[string]bool,
+	check string,
+	names []string,
+	hint string,
+) envCheck {
+	var built []string
+
+	for _, name := range names {
 		if encoders[name] {
-			nvenc = append(nvenc, name)
+			built = append(built, name)
 		}
 	}
 
-	if len(nvenc) == 0 {
-		return append(checks, envCheck{Name: checkNVENC, Optional: true, Detail: "not available (optional)"})
+	if len(built) == 0 {
+		return envCheck{Name: check, Optional: true, Detail: "not available (optional)"}
 	}
 
-	// ffmpeg lists NVENC encoders it was built with, GPU or not.
-	detail := strings.Join(nvenc, ", ") + " (built in; needs an NVIDIA GPU and driver)"
+	return envCheck{Name: check, OK: true, Optional: true, Detail: strings.Join(built, ", ") + " (built in; " + hint + ")"}
+}
 
-	return append(checks, envCheck{Name: checkNVENC, OK: true, Optional: true, Detail: detail})
+// libassCheck reports whether ffmpeg has the subtitles filter (libass),
+// which --overlay burns the annotated videos with: optional.
+func (d doctor) libassCheck(
+	ctx context.Context,
+	bin string,
+	ffmpegOK bool,
+) envCheck {
+	missing := envCheck{Name: checkLibass, Optional: true, Detail: "not available (optional: --overlay)"}
+	if !ffmpegOK {
+		return missing
+	}
+
+	out, err := d.output(ctx, bin, []string{"-hide_banner", "-filters"})
+	if err != nil {
+		return missing
+	}
+
+	for line := range strings.Lines(string(out)) {
+		if fields := strings.Fields(line); len(fields) >= 2 && fields[1] == "subtitles" {
+			return envCheck{Name: checkLibass, OK: true, Optional: true, Detail: "subtitles filter (--overlay)"}
+		}
+	}
+
+	return missing
 }
 
 // parseEncoders reads the video encoders of ffmpeg -encoders, listed after

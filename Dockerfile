@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # qc, CPU image: qc, libvmaf 3.2.1 with the VMAF v1 models, and ffmpeg and
-# ffprobe with libx264, libx265, libsvtav1 and libdav1d.
+# ffprobe with libx264, libx265, libsvtav1, libdav1d and libass (the
+# annotated videos of --overlay, drawn in DejaVu Sans Mono).
 #
 #   docker build -t qc .
 #   docker run --rm -v "$PWD:/data" qc vmaf reference.mov encode.mp4
@@ -23,7 +24,7 @@ FROM golang:${GO_VERSION}-${DEBIAN_RELEASE} AS toolchain
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         cmake meson nasm ninja-build xxd xz-utils \
-        libdav1d-dev libx264-dev libx265-dev zlib1g-dev \
+        libass-dev libdav1d-dev libx264-dev libx265-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -71,9 +72,10 @@ RUN git clone --depth 1 --branch "v${SVTAV1_VERSION}" https://gitlab.com/AOMedia
 
 # ---------------------------------------------------------------------------
 # ffmpeg with only what qc needs: every native decoder, demuxer and filter,
-# the three ladder encoders and dav1d to decode AV1 rungs, plus the lavfi
-# device to generate test clips. No autodetected dependency (X11, Vulkan,
-# VAAPI, SDL…), no network, no ffplay.
+# the three ladder encoders and dav1d to decode AV1 rungs, libass for the
+# subtitles filter that burns the --overlay, plus the lavfi device to
+# generate test clips. No autodetected dependency (X11, Vulkan, VAAPI,
+# SDL…), no network, no ffplay.
 FROM svtav1 AS ffmpeg
 
 ARG FFMPEG_VERSION=9.0.2
@@ -89,11 +91,12 @@ RUN curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VER
         --enable-gpl \
         --enable-shared --disable-static \
         --disable-autodetect --enable-zlib \
-        --enable-libdav1d --enable-libsvtav1 --enable-libx264 --enable-libx265 \
+        --enable-libass --enable-libdav1d --enable-libsvtav1 --enable-libx264 --enable-libx265 \
         --disable-debug --disable-doc --disable-ffplay --disable-network \
     && make -j"$(nproc)" \
     && make install \
     && ldconfig \
+    && ffmpeg -hide_banner -filters | grep -q " subtitles " \
     && mkdir -p /runtime/usr/local/lib /runtime/usr/local/bin \
     && cp -a /usr/local/lib/libSvtAv1Enc.so.* /usr/local/lib/libav*.so.* /usr/local/lib/libsw*.so.* /runtime/usr/local/lib/ \
     && cp /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /runtime/usr/local/bin/
@@ -130,8 +133,10 @@ LABEL org.opencontainers.image.title="qc" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}"
 
+# libass draws the --overlay in DejaVu Sans Mono (overlay.DefaultFont).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libdav1d7 libx264-164 libx265-215 \
+    && apt-get install -y --no-install-recommends \
+        fonts-dejavu-mono libass9 libdav1d7 libx264-164 libx265-215 \
     && rm -rf /var/lib/apt/lists/*
 
 # The runtime trees keep the library symlinks (COPY of a glob would copy

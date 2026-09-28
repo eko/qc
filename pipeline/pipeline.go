@@ -13,11 +13,16 @@ import (
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/media"
+	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/quality"
 )
 
 // ErrNothingToDo is returned when every stage is disabled.
 var ErrNothingToDo = errors.New("pipeline: nothing to do")
+
+// ErrNoOverlayer is returned when an overlay is requested from a Runner
+// built without an Overlayer (see WithOverlayer).
+var ErrNoOverlayer = errors.New("pipeline: no overlayer configured")
 
 // Options selects the stages. The zero value analyses the source only.
 type Options struct {
@@ -38,6 +43,19 @@ type Options struct {
 	Analysis analysis.Options
 	Quality  quality.Options
 	Ladder   ladder.Options
+	// Overlay, when its Output is set, writes an annotated copy of Source
+	// once it is analysed and compared: see OverlayOptions.
+	Overlay OverlayOptions
+}
+
+// OverlayOptions configures the annotated copy of the source: the frame
+// analysis (or the inspection alone, with SkipAnalysis) and the comparison
+// burnt into its frames as a debug overlay (see package overlay).
+type OverlayOptions struct {
+	// Output is the file written; empty writes no copy.
+	Output string
+	// Render tunes the overlay and its encode.
+	Render overlay.RenderOptions
 }
 
 // Report gathers the results of a run.
@@ -62,6 +80,8 @@ type StageResult struct {
 	Comparison *analysis.Comparison
 	// Ladder is the ladder built (KindLadder), with at least one rung.
 	Ladder *ladder.Result
+	// Overlay is the annotated copy written (KindOverlay).
+	Overlay string
 }
 
 // Stage identifies a step of the pipeline.
@@ -78,6 +98,7 @@ const (
 	KindAnalysis = "analysis"
 	KindVMAF     = "vmaf"
 	KindLadder   = "ladder"
+	KindOverlay  = "overlay"
 )
 
 // Hooks receive the pipeline events. Every field is optional; i is the
@@ -94,6 +115,8 @@ type Hooks struct {
 	Quality func(i int, p quality.Progress)
 	// Ladder reports the progress of a ladder.
 	Ladder func(i int, p ladder.Progress)
+	// Overlay reports the progress of the annotated copy.
+	Overlay func(i int, p overlay.Progress)
 }
 
 // Analyzer inspects, analyses and compares files. *analysis.Analyzer
@@ -120,10 +143,34 @@ type LadderBuilder interface {
 	) (*ladder.Result, error)
 }
 
+// Overlayer writes annotated copies of videos. *overlay.Renderer implements
+// it.
+type Overlayer interface {
+	Render(
+		ctx context.Context,
+		source, output string,
+		in overlay.Input,
+		opts overlay.RenderOptions,
+	) error
+}
+
 // Runner runs pipelines.
 type Runner struct {
 	analyzer Analyzer
 	ladders  LadderBuilder
+	// overlayer is nil unless WithOverlayer set it.
+	overlayer Overlayer
+}
+
+// RunnerOption configures a Runner.
+type RunnerOption func(*Runner)
+
+// WithOverlayer lets the Runner write annotated copies
+// (Options.Overlay).
+func WithOverlayer(
+	o Overlayer,
+) RunnerOption {
+	return func(r *Runner) { r.overlayer = o }
 }
 
 // NewRunner returns a Runner. ladders is only used when ladders are
@@ -131,8 +178,14 @@ type Runner struct {
 func NewRunner(
 	analyzer Analyzer,
 	ladders LadderBuilder,
+	opts ...RunnerOption,
 ) *Runner {
-	return &Runner{analyzer: analyzer, ladders: ladders}
+	r := &Runner{analyzer: analyzer, ladders: ladders}
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	return r
 }
 
 // Stages lists the stages opts will run, in order.
@@ -152,6 +205,12 @@ func Stages(
 		}
 
 		stages = append(stages, Stage{Kind: KindVMAF, Label: label})
+	}
+
+	// The copy shows the analysis and the comparison, and comes before the
+	// ladders, which take longer.
+	if opts.Overlay.Output != "" {
+		stages = append(stages, Stage{Kind: KindOverlay, Label: "Overlay"})
 	}
 
 	for _, codec := range opts.Codecs {
@@ -223,6 +282,8 @@ func (r *Runner) runStage(
 		return r.compare(ctx, opts, rep, func(p quality.Progress) { hooks.quality(i, p) })
 	case KindLadder:
 		return r.ladder(ctx, stage.Codec, opts, rep, func(p ladder.Progress) { hooks.ladder(i, p) })
+	case KindOverlay:
+		return r.overlay(ctx, opts, rep, func(p overlay.Progress) { hooks.overlay(i, p) })
 	default:
 		return StageResult{}, fmt.Errorf("unknown stage %q", stage.Kind)
 	}
@@ -329,6 +390,33 @@ func (r *Runner) ladder(
 	return StageResult{Ladder: res}, nil
 }
 
+// overlay writes the annotated copy of the source: its analysis, and its
+// comparison when one ran.
+func (r *Runner) overlay(
+	ctx context.Context,
+	opts Options,
+	rep *Report,
+	progress func(overlay.Progress),
+) (StageResult, error) {
+	if r.overlayer == nil {
+		return StageResult{}, ErrNoOverlayer
+	}
+
+	in := overlay.Input{Report: rep.Analysis}
+	if rep.Comparison != nil {
+		in.Quality = rep.Comparison.VMAF
+	}
+
+	ropts := opts.Overlay.Render
+	ropts.Progress = progress
+
+	if err := r.overlayer.Render(ctx, opts.Source, opts.Overlay.Output, in, ropts); err != nil {
+		return StageResult{}, err
+	}
+
+	return StageResult{Overlay: opts.Overlay.Output}, nil
+}
+
 // measuredLight is the content light level the frame analysis measured on
 // an HDR source, for its encodes to carry when the source signals none:
 // the robust MaxCLL (the strict maximum of a 4:2:0 source overshoots, see
@@ -374,5 +462,11 @@ func (h Hooks) quality(i int, p quality.Progress) {
 func (h Hooks) ladder(i int, p ladder.Progress) {
 	if h.Ladder != nil {
 		h.Ladder(i, p)
+	}
+}
+
+func (h Hooks) overlay(i int, p overlay.Progress) {
+	if h.Overlay != nil {
+		h.Overlay(i, p)
 	}
 }

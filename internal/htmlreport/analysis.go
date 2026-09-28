@@ -49,6 +49,10 @@ func analyzePage(
 		p.Sections = append(p.Sections, s)
 	}
 
+	if s, ok := motionSection(r, bands); ok {
+		p.Sections = append(p.Sections, s)
+	}
+
 	return p
 }
 
@@ -190,13 +194,13 @@ func complexitySection(
 func shotTable(
 	shots []analysis.ShotReport,
 ) *table {
-	t := &table{Head: []string{"#", "start", "end", "frames", "SI", "TI", "bitrate"}, LinkCol: 1}
+	t := &table{Head: []string{"#", "start", "end", "frames", "SI", "TI", "bitrate", "camera"}, LinkCol: 1}
 
 	for i, s := range shots {
 		t.Spans = append(t.Spans, span{s.Start.Seconds(), s.End.Seconds()})
 		t.Rows = append(t.Rows, []string{
 			strconv.Itoa(i + 1), clock(s.Start), clock(s.End), strconv.Itoa(s.Frames),
-			fmt.Sprintf("%.1f", s.SIMean), fmt.Sprintf("%.1f", s.TIMean), bitrateLabel(float64(s.Bitrate)),
+			fmt.Sprintf("%.1f", s.SIMean), fmt.Sprintf("%.1f", s.TIMean), bitrateLabel(float64(s.Bitrate)), cameraCell(s.Camera),
 		})
 	}
 
@@ -229,6 +233,10 @@ func analysisCards(
 	}
 
 	if c, ok := lightCard(r); ok {
+		cards = append(cards, c)
+	}
+
+	if c, ok := motionCard(r); ok {
 		cards = append(cards, c)
 	}
 

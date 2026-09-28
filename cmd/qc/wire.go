@@ -15,6 +15,7 @@ import (
 	"github.com/eko/qc/decode"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/pipeline"
 	"github.com/eko/qc/probe"
 	"github.com/eko/qc/quality"
@@ -23,26 +24,28 @@ import (
 
 // module is the composition root of the commands: it provides every
 // service from config, each adapter behind the ports its consumers declare,
-// then checks the GPU before any work (checkGPU) and ties the CPU profile to
-// the application lifecycle (registerProfile).
+// then checks the GPU and the overlay's libass before any work (checkGPU,
+// checkOverlay) and ties the CPU profile to the application lifecycle
+// (registerProfile).
 //
 //	ToolsConfig ─┬─ newProber        → probe.Prober ─────────┐
 //	             ├─ newPacketReader  → bitstream.PacketReader ┤
 //	gpuSettings ─┼─ newDecoder       → decode.Source ─────────┼─ analysis.New → *Analyzer, ladder.Inspector, pipeline.Analyzer
 //	             │   libvmaf.NewEngine → quality.Engine       │
 //	             │   quality.NewMeter  → analysis.Meter ──────┘
-//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab
+//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab, overlay.Burner
 //	                newLadderEngine → pipeline.LadderBuilder
-//	                pipeline.NewRunner → *pipeline.Runner
+//	                overlay.NewRenderer → pipeline.Overlayer
+//	                newRunner → *pipeline.Runner
 //
-// ctx bounds the GPU preflight, which runs while the application is built:
-// a missing GPU then fails before anything starts.
+// ctx bounds the preflights, which run while the application is built: a
+// missing GPU or libass then fails before anything starts.
 func module(
 	ctx context.Context,
 	config Config,
 ) fx.Option {
 	return fx.Options(
-		fx.Supply(config.Tools, config.Output, gpuSettingsOf(config)),
+		fx.Supply(config.Tools, config.Output, config.Overlay, gpuSettingsOf(config)),
 		fx.Provide(
 			func() context.Context { return ctx },
 			newLogger,
@@ -54,11 +57,13 @@ func module(
 			fx.Annotate(analysis.New,
 				fx.As(fx.Self()), fx.As(new(ladder.Inspector)), fx.As(new(pipeline.Analyzer))),
 			fx.Annotate(newEncoder,
-				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.GrainLab))),
+				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.GrainLab)),
+				fx.As(new(overlay.Burner)), fx.As(new(burnChecker))),
 			fx.Annotate(newLadderEngine, fx.As(new(pipeline.LadderBuilder))),
-			pipeline.NewRunner,
+			fx.Annotate(overlay.NewRenderer, fx.As(new(pipeline.Overlayer))),
+			newRunner,
 		),
-		fx.Invoke(checkGPU, registerProfile),
+		fx.Invoke(checkGPU, checkOverlay, registerProfile),
 	)
 }
 
@@ -129,11 +134,13 @@ func newDecoder(
 }
 
 // newEncoder is the ffmpeg adapter of every encoding port of the ladder
-// engine: encodes, digests and grain measurements.
+// engine (encodes, digests and grain measurements) and of the overlay's
+// burns; it logs a hardware encoder falling back to x264.
 func newEncoder(
 	tools ToolsConfig,
+	logger *slog.Logger,
 ) *encode.FFmpeg {
-	return encode.NewFFmpeg(tools.FFmpeg)
+	return encode.NewFFmpeg(tools.FFmpeg, encode.WithLogger(logger))
 }
 
 // newLadderEngine gives the ladder engine a grain lab, so that AV1 film
@@ -145,6 +152,16 @@ func newLadderEngine(
 	lab ladder.GrainLab,
 ) *ladder.Engine {
 	return ladder.NewEngine(inspector, encoder, digester, ladder.WithGrainLab(lab))
+}
+
+// newRunner gives the runner the overlayer, so that --overlay can write
+// annotated copies.
+func newRunner(
+	analyzer pipeline.Analyzer,
+	ladders pipeline.LadderBuilder,
+	overlayer pipeline.Overlayer,
+) *pipeline.Runner {
+	return pipeline.NewRunner(analyzer, ladders, pipeline.WithOverlayer(overlayer))
 }
 
 // registerProfile profiles the CPU while the application runs, when

@@ -110,5 +110,5 @@ func videoFindings(
 		out = append(out, Finding{Level: OK, Code: NoBlackOrFrozen})
 	}
 
-	return out
+	return append(out, motionFindings(v)...)
 }

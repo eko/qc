@@ -191,8 +191,14 @@ func TestPageStructure(
 	assert.Contains(t, html, `<a class="card warn" href="#findings">`)
 	assert.Contains(t, html, `<section class="panel findings" id="findings"`)
 
-	ids := regexp.MustCompile(`<details class="panel section" id="([^"]+)" open>`).FindAllStringSubmatch(html, -1)
+	ids := regexp.MustCompile(`<details class="panel section" id="([^"]+)"( open)?>`).FindAllStringSubmatch(html, -1)
 	require.NotEmpty(t, ids)
+
+	// Reference material starts collapsed; the analysis starts open.
+	for _, m := range ids {
+		collapsed := strings.HasPrefix(m[1], "s-encoding-commands")
+		assert.Equal(t, collapsed, m[2] == "", "%s collapsed: %v", m[1], collapsed)
+	}
 
 	seen := map[string]bool{}
 	for _, m := range ids {

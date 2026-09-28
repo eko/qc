@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/eko/qc/internal/ffexec"
 	"github.com/eko/qc/media"
@@ -19,9 +22,32 @@ var ErrNoSegments = errors.New("digest needs at least one segment")
 // slices, so FFV1 encodes and decodes on several threads.
 const ffv1Slices = "16"
 
+// darwin is the GOOS of macOS, where VideoToolbox is.
+const darwin = "darwin"
+
 // FFmpeg encodes with the ffmpeg binary.
 type FFmpeg struct {
-	bin string
+	bin    string
+	logger *slog.Logger
+	// goos is the operating system BurnAuto resolves for.
+	goos string
+
+	// autoOnce resolves BurnAuto once: auto is the encoder it stands for.
+	autoOnce sync.Once
+	auto     BurnEncoder
+}
+
+// Option configures an FFmpeg.
+type Option func(*FFmpeg)
+
+// WithLogger logs to logger the fallbacks of automatic choices (a hardware
+// encoder that does not work on this machine).
+func WithLogger(
+	logger *slog.Logger,
+) Option {
+	return func(f *FFmpeg) {
+		f.logger = logger
+	}
 }
 
 // NewFFmpeg returns an FFmpeg running bin. It encodes, extracts digests,
@@ -29,8 +55,14 @@ type FFmpeg struct {
 // the narrow part they use.
 func NewFFmpeg(
 	bin string,
+	opts ...Option,
 ) *FFmpeg {
-	return &FFmpeg{bin: bin}
+	f := &FFmpeg{bin: bin, logger: slog.New(slog.DiscardHandler), goos: runtime.GOOS}
+	for _, opt := range opts {
+		opt(f)
+	}
+
+	return f
 }
 
 // Encode encodes src into dst with codec and the settings of p.

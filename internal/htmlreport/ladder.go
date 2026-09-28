@@ -44,8 +44,9 @@ func ladderPage(
 			Charts:   []template.HTML{ladderChart(r)},
 			Table:    rungTable(r.Rungs),
 		}}, ladderExtras(r), []section{{
-			Title:    "Encoding commands",
-			Commands: rungCommands(r.Rungs),
+			Title:     "Encoding commands",
+			Commands:  rungCommands(r.Rungs),
+			Collapsed: true,
 		}}),
 	}
 }

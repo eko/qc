@@ -136,19 +136,19 @@ func run(
 	stderr := &boundedBuffer{limit: maxStderr}
 	cmd.Stderr = stderr
 
-	outputs, closeOutputs, err := pipes(cmd, extra)
+	outputs, closeOutputs, writers, err := pipes(cmd, extra)
 	if err != nil {
 		return err
 	}
 	defer closeOutputs()
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("ffexec: start %s: %w", bin, err)
-	}
+	err = cmd.Start()
 
 	// The child holds its own copies of the write ends.
-	for _, w := range cmd.ExtraFiles {
-		_ = w.Close()
+	closeFiles(writers)
+
+	if err != nil {
+		return fmt.Errorf("ffexec: start %s: %w", bin, err)
 	}
 
 	consumeErr := consume(outputs)
@@ -177,21 +177,14 @@ func run(
 	return nil
 }
 
-// pipes connects stdout and extra more pipes to cmd and returns their read
-// ends, and what closes the extra read ends once done (exec closes stdout's
-// itself).
+// pipes connects stdout and extra more outputs to cmd. It returns their
+// read ends, what closes them once done, and the write ends, which the
+// caller closes once the process started (the child holds its copies).
 func pipes(
 	cmd *exec.Cmd,
 	extra int,
-) ([]io.Reader, func(), error) {
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("ffexec: stdout pipe: %w", err)
-	}
-
-	outputs := []io.Reader{stdout}
-
-	var readers []*os.File
+) ([]io.Reader, func(), []*os.File, error) {
+	var readers, writers []*os.File
 
 	closeAll := func() {
 		for _, r := range readers {
@@ -199,20 +192,35 @@ func pipes(
 		}
 	}
 
-	for range extra {
-		r, w, err := os.Pipe()
+	for range extra + 1 {
+		r, w, err := outputPipe()
 		if err != nil {
 			closeAll()
+			closeFiles(writers)
 
-			return nil, nil, fmt.Errorf("ffexec: extra pipe: %w", err)
+			return nil, nil, nil, fmt.Errorf("ffexec: output pipe: %w", err)
 		}
 
-		readers = append(readers, r)
-		outputs = append(outputs, r)
-		cmd.ExtraFiles = append(cmd.ExtraFiles, w)
+		readers, writers = append(readers, r), append(writers, w)
 	}
 
-	return outputs, closeAll, nil
+	cmd.Stdout, cmd.ExtraFiles = writers[0], writers[1:]
+
+	outputs := make([]io.Reader, len(readers))
+	for i, r := range readers {
+		outputs[i] = r
+	}
+
+	return outputs, closeAll, writers, nil
+}
+
+// closeFiles closes files, ignoring errors (write ends of pipes).
+func closeFiles(
+	files []*os.File,
+) {
+	for _, f := range files {
+		_ = f.Close()
+	}
 }
 
 // drain reads every output to its end, concurrently: the process may be

@@ -581,8 +581,111 @@ of the verifications cost nothing visible next to the run-to-run variation
 of a ladder (calibration steps depend on the encodes, which now carry
 `hdr10-opt`).
 
+## Camera motion
+
+Three checks: synthetic moves of known speed (`bench/motionval`), a visual
+review of real shots, and the cost. Apple Silicon (12 cores), ffmpeg 9.0.1.
+
+### Synthetic moves (`bench/motionval`)
+
+`go run ./bench/motionval -texture photo.jpg -dir /tmp/motionval` renders 35
+clips at 1920×1080 (x264 CRF 18) through a camera path of known speed over a
+still — here a 5496×3091 landscape photograph (sky, rock faces, forest) —
+with ffmpeg's `zoompan`, plus overlays for moving objects and parallax
+planes, `noise`, `gblur` and `fade`. Each clip is analysed twice through the
+library: unsmoothed (`Options.Smooth` shorter than a frame) for the
+per-frame error on the frames the analyzer trusts, and with the defaults for
+the classification. Speeds are in % of the picture width per second
+(%W/s); "px" are 1080p pixels.
+
+| Clips | Reliable frames | Per-frame RMSE | Bias | Classified right |
+|---|---|---|---|---|
+| Pans and tilts, 3 to 100 %W/s, both directions, 24/25/50 fps (14) | 100% | 0.01–0.99 %W/s (≤ 0.60 px per frame) | ≤ 0.64 %W/s | 14/14 |
+| Zooms in and out, 3, 10 and 25 %/s (6) | 100% | zoom 0.37–0.92 %/s | ≤ 0.62 %/s | 6/6 |
+| Static, static with strong grain, 1 %W/s drift (expected static), fades in and out (4) | 96–100% | ≤ 0.57 %W/s | ≤ 0.15 %W/s | 4/4 |
+| Handheld (tremor 2–7 Hz, ±6 px), light handheld (±1.5 px), shaky pan, pan + tilt, pan + zoom (5) | 100% | ≤ 0.82 %W/s | ≤ 0.40 %W/s | 5/5 |
+| Moving object over 8% / 35% of a static shot, parallax plane (lower 40% moving 3× faster), heavy blur, heavy noise, a cut (6) | 100% | ≤ 0.79 %W/s | ≤ 0.57 %W/s | 6/6 |
+
+All 35 clips get the expected class, direction and shake flag. Shake
+measured against the true path's (same definition): handheld 0.32 vs 0.32%
+of the width, shaky pan 0.31 vs 0.31, light handheld 0.09 vs 0.08 (under
+the 0.25 threshold: static), steady moves ≤ 0.03. Most of the per-frame
+error is the renderer's: `zoompan` places its window on whole texture
+pixels, which alone adds about 0.4 px RMS to the true per-frame
+displacement; the 24 fps pan, one thumbnail pixel per frame exactly, is
+estimated within 0.01 %W/s. On sequences rendered exactly in Go (unit tests,
+`analyze/motion`), the error is 0.025 thumbnail pixel RMS (0.2 px) on
+pans, zoom and roll rates within 1% (0.00397 for 0.004 per frame), and
+sub-pixel pans of 0.3 thumbnail pixel read 6% high.
+
+Three choices came out of these clips and the real titles. A single
+Lucas–Kanade step read
+sub-pixel motion 12% high (zoom 0.0045 for 0.004): the second, warped
+step removed it. An inlier tolerance of 1 pixel let a fake zoom absorb a
+moving object covering a third of a static shot (classified tracking); at
+0.5 pixel it is an outlier and the shot is static, with no loss elsewhere.
+Starting Lucas–Kanade from a parabola fitted to the level-1 costs, instead
+of a ±1 pixel search at level 0, saved a quarter of the CPU and passed all
+35 clips, but on the real titles it lost fast zooms and pans (three
+reviewed shots changed class, 1–2 points fewer reliable frames): the smooth
+photograph hides what sharp animation and live action show, so the level-0
+search stays.
+
+### Real content: visual review
+
+Both SDR titles of the corpus, every shot of the drama and 28 shots of the
+cartoon sampled across classes, checked on strips of three frames (8%, 50%
+and 92% of the shot) and, when in doubt, full-resolution crops of the first
+and last frames. Stills show pans, tilts, zooms and parallax, not shake:
+the shake flags were checked on the per-frame traces instead.
+
+| | Shots reviewed | Agree | Plausible, not decidable from stills | Debatable | Wrong | Unknown (no answer) | Not checkable |
+|---|---|---|---|---|---|---|---|
+| Drama 1 min (live action, 39 shots) | 39 | 30 | 5 | 2 | 0 | 2 | 0 |
+| Cartoon 10:36 (CG animation, 235 shots) | 28 | 11 | 5 | 1 | 3 | 4 | 4 |
+
+- Drama: pans and tilts get the right direction (a tilt down onto a seated
+  actress, a pan right across a lobby), push-ins and pull-backs read as
+  zooms, and the orbits around plated desserts and lateral moves past
+  foreground objects as tracking. Debatable: a handheld close-up labelled
+  tracking rather than handheld, and a push-in over water under a burnt-in
+  title labelled tracking in rather than zoom in (the static title and the
+  moving water are the "parallax"). The two unknowns are fast handheld
+  follows (a flamingo in flight over water, a character at a car). The four
+  shaky shots are the handheld scenes of the trailer.
+- Cartoon: 73% of its duration is static, as expected of the series. Wrong:
+  a character's head turning against a flat sky read as a slow zoom
+  (confidence 0.14), a vehicle driving into a static camera read as a
+  dolly out, and a quick tilt followed by a long hold stays static (27% of
+  moving frames). The four shots not checkable span wipe transitions the
+  cut detector does not split (the series' badge wipes); the unknowns are
+  flat skies and fast chases. The first version flagged 37 shaky shots and
+  17 handheld: bursts from whip pans and wipes inflated an RMS shake. With
+  the median jitter, counted only below 40 %W/s, 7 remain (3 handheld),
+  mostly fast chases whose virtual camera does shake; one fast handheld pan
+  of the drama lost its flag in the process.
+
+### Cost
+
+The estimator costs about 165 µs of CPU per frame (one thread, 1080p
+thumbnail, measured with `getrusage` over 2 000 frames on a loaded machine;
+`BenchmarkEstimate`), and nothing per frame is allocated. On the cartoon
+(15 903 frames) that is about 2.7 s of CPU, **≈ 2.5% of the frame
+analysis** (≈ 100–110 s of CPU for the whole analysis in the segmented
+pipeline). It runs inside each segment's
+decode loop, so it adds no stage and no decode. End-to-end runs of
+`qc analyze` with and without `--no-motion` (5 alternated pairs) were
+measured on a machine shared with other jobs (load average 30–57): wall
+times ranged 15–37 s either way and the median user CPU was 72.9 s with the
+analysis and 75.5 s without, a difference well inside the run-to-run noise.
+The direct measure above is the reliable one; a quiet-machine A/B remains
+to be done.
+
 ## What is not validated yet
 
+- Camera motion: the real-content check is a visual review of stills by
+  one reviewer, not an annotated ground truth; shake on real content and
+  the tracking heuristic are not measured against references.
 - The corpus has only two real SDR titles and one HDR10 excerpt. It should
   grow to cover sport, real film grain, 3D animation, HLG camera content and
   screen content.

@@ -246,8 +246,14 @@ func (p *Pool) put(
 	p.frames.Put(f)
 }
 
+// maxSumFactor is the largest box factor whose column sums fit in 16 bits
+// (255 × factor ≤ 65535).
+const maxSumFactor = 257
+
 // boxDownscale averages factor×factor blocks of 8-bit src into dst, rounding
-// to nearest. Source rows and columns beyond dst×factor are ignored.
+// to nearest. Source rows and columns beyond dst×factor are ignored. Each
+// band of factor rows is first summed per column (16-bit sums, added a row
+// at a time: a vector loop on arm64), then every factor columns.
 func boxDownscale(
 	src, dst *Plane,
 	factor int,
@@ -258,6 +264,51 @@ func boxDownscale(
 		return
 	}
 
+	if factor > maxSumFactor {
+		boxDownscaleWide(src, dst, factor)
+
+		return
+	}
+
+	area := factor * factor
+	columns := make([]uint16, dst.Width*factor)
+
+	for ty := range dst.Height {
+		clear(columns)
+
+		for dy := range factor {
+			addBytes(columns, src.Row(ty*factor + dy)[:len(columns)])
+		}
+
+		out := dst.Row(ty)
+		for tx := range out {
+			sum := 0
+			for _, v := range columns[tx*factor : tx*factor+factor] {
+				sum += int(v)
+			}
+
+			out[tx] = byte((sum + area/2) / area) //nolint:gosec // an average of bytes fits in a byte
+		}
+	}
+}
+
+// addBytesGeneric adds src to the column sums of dst.
+func addBytesGeneric(
+	dst []uint16,
+	src []byte,
+) {
+	dst = dst[:len(src)]
+	for x, v := range src {
+		dst[x] += uint16(v)
+	}
+}
+
+// boxDownscaleWide is boxDownscale for factors whose column sums need more
+// than 16 bits (sources over 60 000 pixels wide).
+func boxDownscaleWide(
+	src, dst *Plane,
+	factor int,
+) {
 	area := factor * factor
 	sums := make([]int, dst.Width)
 

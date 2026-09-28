@@ -20,6 +20,7 @@ import (
 	"github.com/eko/qc/internal/testutil"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/media"
+	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/probe"
 	"github.com/eko/qc/quality"
 	"github.com/eko/qc/vmaf/libvmaf"
@@ -132,6 +133,33 @@ func (l *fakeLadders) Build(
 	return &ladder.Result{Rungs: l.rungs, Codec: l.codec}, nil
 }
 
+var errOverlay = errors.New("overlay failed")
+
+// fakeOverlayer records the annotated copies it is asked for.
+type fakeOverlayer struct {
+	err     error
+	outputs []string
+	inputs  []overlay.Input
+	opts    []overlay.RenderOptions
+}
+
+func (o *fakeOverlayer) Render(
+	_ context.Context,
+	source, output string,
+	in overlay.Input,
+	opts overlay.RenderOptions,
+) error {
+	o.outputs = append(o.outputs, source+" → "+output)
+	o.inputs = append(o.inputs, in)
+	o.opts = append(o.opts, opts)
+
+	if opts.Progress != nil {
+		opts.Progress(overlay.Progress{Done: 1, Total: 2})
+	}
+
+	return o.err
+}
+
 // events records the hooks of a run.
 type events struct {
 	started  []int
@@ -147,6 +175,7 @@ func (e *events) hooks() Hooks {
 		Analysis: func(int, analysis.Progress) { e.progress = append(e.progress, KindAnalysis) },
 		Quality:  func(int, quality.Progress) { e.progress = append(e.progress, KindVMAF) },
 		Ladder:   func(int, ladder.Progress) { e.progress = append(e.progress, KindLadder) },
+		Overlay:  func(int, overlay.Progress) { e.progress = append(e.progress, KindOverlay) },
 	}
 }
 
@@ -280,6 +309,89 @@ func TestRun(
 			assert.NotNil(t, rep.Analysis)
 			assert.Equal(t, testCase.opts.Reference != "", rep.Comparison != nil)
 			assert.Len(t, rep.Ladders, len(testCase.opts.Codecs))
+		})
+	}
+}
+
+func TestRunOverlay(
+	t *testing.T,
+) {
+	render := overlay.RenderOptions{Height: 720}
+	withVMAF := Options{Source: "a.mp4", Reference: "r.mp4", Overlay: OverlayOptions{Output: "o.mp4", Render: render}}
+
+	testCases := []struct {
+		name         string
+		opts         Options
+		overlayer    *fakeOverlayer
+		wantDone     []string
+		wantProgress []string
+		wantQuality  bool
+		wantErr      error
+	}{
+		{
+			name:         "analysis and vmaf burnt in",
+			opts:         withVMAF,
+			overlayer:    &fakeOverlayer{},
+			wantDone:     []string{KindInspect, KindAnalysis, KindVMAF, KindOverlay},
+			wantProgress: []string{KindAnalysis, KindVMAF, KindOverlay},
+			wantQuality:  true,
+		},
+		{
+			name:         "inspection only",
+			opts:         Options{Source: "a.mp4", SkipAnalysis: true, Overlay: OverlayOptions{Output: "o.mp4", Render: render}},
+			overlayer:    &fakeOverlayer{},
+			wantDone:     []string{KindInspect, KindOverlay},
+			wantProgress: []string{KindOverlay},
+		},
+		{
+			name:         "overlay failure",
+			opts:         withVMAF,
+			overlayer:    &fakeOverlayer{err: errOverlay},
+			wantDone:     []string{KindInspect, KindAnalysis, KindVMAF},
+			wantProgress: []string{KindAnalysis, KindVMAF, KindOverlay},
+			wantErr:      errOverlay,
+		},
+		{
+			name:         "no overlayer",
+			opts:         withVMAF,
+			wantDone:     []string{KindInspect, KindAnalysis, KindVMAF},
+			wantProgress: []string{KindAnalysis, KindVMAF},
+			wantErr:      ErrNoOverlayer,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var (
+				ev      events
+				options []RunnerOption
+			)
+
+			if testCase.overlayer != nil {
+				options = append(options, WithOverlayer(testCase.overlayer))
+			}
+
+			rep, err := NewRunner(&fakeAnalyzer{}, &fakeLadders{}, options...).Run(t.Context(), testCase.opts, ev.hooks())
+
+			assert.Equal(t, testCase.wantDone, ev.done)
+			assert.Equal(t, testCase.wantProgress, ev.progress)
+
+			if testCase.wantErr != nil {
+				require.ErrorIs(t, err, testCase.wantErr)
+				assert.ErrorContains(t, err, "Overlay: ")
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			o := testCase.overlayer
+			require.Len(t, o.outputs, 1)
+			assert.Equal(t, "a.mp4 → o.mp4", o.outputs[0])
+			assert.Same(t, rep.Analysis, o.inputs[0].Report)
+			assert.Equal(t, testCase.wantQuality, o.inputs[0].Quality != nil)
+			assert.Equal(t, 720, o.opts[0].Height)
+			assert.Equal(t, "o.mp4", ev.results[len(ev.results)-1].Overlay)
 		})
 	}
 }

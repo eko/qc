@@ -10,6 +10,10 @@ qc needs three things at run time:
   `/opt/homebrew/share/libvmaf/model`, `/usr/local/share/libvmaf/model` and
   `/usr/share/libvmaf/model` (or `--model-dir`, `QC_MODEL_DIR`).
 
+Optionally, ffmpeg built with **libass** (its `subtitles` filter) and a
+monospaced font (Menlo on macOS, DejaVu Sans Mono elsewhere) for the
+annotated videos of `--overlay` ([overlay.md](overlay.md)).
+
 The Docker image and the Homebrew formula bring all of them. Whatever the
 method, check the result with:
 
@@ -30,6 +34,7 @@ libvmaf  3.2.0
 ✓ libx265
 ✓ libsvtav1
 - nvenc       not available (optional)
+✓ libass      subtitles filter (--overlay)
 ✓ vmaf model  /usr/local/share/libvmaf/model/vmaf_v1.0.16/vmaf_v1.0.16_3d0h.json
 ```
 
@@ -95,14 +100,15 @@ ladders) but a native install is faster on long titles, and the VM only sees the
 |---|---|---|
 | qc | the release | built with cgo, `-trimpath` |
 | libvmaf | 3.2.1 + v1.0.16 models | built from the release tarball, checksum pinned |
-| ffmpeg, ffprobe | 9.0.2 | built from the release tarball, checksum pinned: every native decoder, demuxer and filter, lavfi; no network, no hardware acceleration |
+| ffmpeg, ffprobe | 9.0.2 | built from the release tarball, checksum pinned: every native decoder, demuxer and filter, lavfi, libass (`--overlay`); no network, no hardware acceleration |
 | SVT-AV1 | 4.2.0 | built from the tag, commit pinned (Debian ships 2.3) |
-| x264, x265, dav1d | Debian trixie | Debian packages and their security updates |
+| x264, x265, dav1d, libass, DejaVu Sans Mono | Debian trixie | Debian packages and their security updates |
 
-Base: `debian:trixie-slim`, about 230 MB unpacked (60 MB compressed). ffmpeg
-is built with `--enable-gpl` (x264, x265), so the image as a whole is
-distributed under the GPL; the sources are the pinned upstream releases
-listed in the [Dockerfile](../Dockerfile).
+Base: `debian:trixie-slim`, about 250 MB unpacked (63 MB compressed;
+libass, its dependencies and the font take 16 MB of it). ffmpeg is built
+with `--enable-gpl` (x264, x265), so the image as a whole is distributed
+under the GPL; the sources are the pinned upstream releases listed in the
+[Dockerfile](../Dockerfile).
 
 ### Building the image
 
@@ -210,6 +216,10 @@ installed into a directory the loader does not search. Run `sudo ldconfig`
 `qc version --check`): your ffmpeg was built without that encoder. Use the
 Docker image, Homebrew's ffmpeg, or point qc at another build with
 `--ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe`.
+
+**`--overlay: ffmpeg has no subtitles filter`** (`- libass` in `qc version
+--check`): your ffmpeg was built without libass. Use the Docker image,
+Homebrew's ffmpeg, or a build configured with `--enable-libass`.
 
 **Docker: `permission denied` writing a report**: on Linux the image user
 cannot write into your directory. Add `--user "$(id -u):$(id -g)"`.

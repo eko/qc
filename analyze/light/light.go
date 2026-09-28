@@ -9,6 +9,7 @@
 package light
 
 import (
+	"github.com/eko/qc/analyze"
 	"github.com/eko/qc/frame"
 	"github.com/eko/qc/internal/colorimetry"
 	"github.com/eko/qc/internal/stats"
@@ -81,15 +82,23 @@ type Result struct {
 	AverageSummary stats.Summary `json:"average"`
 }
 
-// Analyzer implements analyze.Analyzer on the frames of a sampling pool.
+// Analyzer implements analyze.Analyzer and analyze.Forker on the frames
+// of a sampling pool.
 type Analyzer struct {
 	decoder *colorimetry.Decoder
 	pq      *colorimetry.PQTable
-	hist    []int
-	// nits and bins receive the light and PQ bin of each grid point.
-	nits []float32
-	bins []uint16
-	res  Result
+	res     Result
+	series  analyze.Series[levels]
+	// seq is the run of a sequential pass (Consume).
+	seq *run
+}
+
+// levels are the light levels of one frame, in cd/m².
+type levels struct {
+	peak, robust, average float64
+	// step is the sample grid spacing, 0 for a frame without grid.
+	step  int
+	index int
 }
 
 // New returns an Analyzer of a PQ or HLG signal with the given colour
@@ -102,9 +111,8 @@ func New(
 		decoder: colorimetry.NewDecoder(colorimetry.Signal{
 			Transfer: color.Transfer, BitDepth: 10, FullRange: color.FullRange(), Peak: media.HLGNominalPeak,
 		}),
-		pq:   colorimetry.NewPQTable(),
-		hist: make([]int, histogramBins),
-		res:  Result{Transfer: color.Transfer, ActiveShare: 1},
+		pq:  colorimetry.NewPQTable(),
+		res: Result{Transfer: color.Transfer, ActiveShare: 1},
 	}
 
 	if color.Transfer == media.TransferHLG {
@@ -118,85 +126,140 @@ func New(
 func (a *Analyzer) Consume(
 	f *frame.Frame,
 ) error {
+	if a.seq == nil {
+		a.seq = a.fork()
+	}
+
+	return a.seq.Consume(f)
+}
+
+// Close implements analyze.Analyzer.
+func (a *Analyzer) Close() error {
+	if a.seq != nil {
+		return a.seq.Close()
+	}
+
+	return nil
+}
+
+// Fork implements analyze.Forker.
+func (a *Analyzer) Fork() analyze.Analyzer {
+	return a.fork()
+}
+
+func (a *Analyzer) fork() *run {
+	return &run{parent: a, first: -1, hist: make([]int, histogramBins)}
+}
+
+// Result returns the light levels. It must be called after Close.
+func (a *Analyzer) Result() Result {
+	res := a.res
+
+	for _, lv := range a.series.Merge() {
+		if lv.step > 0 {
+			res.SampleStep = lv.step
+			res.add(lv)
+		}
+	}
+
+	res.AverageSummary = stats.Summarize(res.Average)
+
+	return res
+}
+
+// add records the light levels of a frame.
+func (r *Result) add(
+	lv levels,
+) {
+	if lv.peak > r.MaxCLL || len(r.Peak) == 0 {
+		r.MaxCLL, r.MaxCLLFrame = lv.peak, lv.index
+	}
+
+	if lv.average > r.MaxFALL || len(r.Average) == 0 {
+		r.MaxFALL, r.MaxFALLFrame = lv.average, lv.index
+	}
+
+	r.MaxCLLRobust = max(r.MaxCLLRobust, lv.robust)
+	r.Peak = append(r.Peak, lv.peak)
+	r.Robust = append(r.Robust, lv.robust)
+	r.Average = append(r.Average, lv.average)
+}
+
+// run measures the frames of one run.
+type run struct {
+	parent *Analyzer
+	first  int
+	frames []levels
+	hist   []int
+	// nits and bins receive the light and PQ bin of each grid point.
+	nits []float32
+	bins []uint16
+}
+
+// Consume implements analyze.Analyzer.
+func (r *run) Consume(
+	f *frame.Frame,
+) error {
+	if r.first < 0 {
+		r.first = f.Index
+	}
+
 	s := &f.Samples
 	if s.Step == 0 {
+		r.frames = append(r.frames, levels{})
+
 		return nil
 	}
 
-	a.res.SampleStep = s.Step
-	clear(a.hist)
+	clear(r.hist)
 
 	ys := s.Y.Uint16()
-	if len(a.nits) != len(ys) {
-		a.nits, a.bins = make([]float32, len(ys)), make([]uint16, len(ys))
+	if len(r.nits) != len(ys) {
+		r.nits, r.bins = make([]float32, len(ys)), make([]uint16, len(ys))
 	}
 
-	a.decoder.MaxLights(ys, s.Cb.Uint16(), s.Cr.Uint16(), a.nits, a.bins, a.pq)
+	r.parent.decoder.MaxLights(ys, s.Cb.Uint16(), s.Cr.Uint16(), r.nits, r.bins, r.parent.pq)
 
 	var (
 		sum  float64
 		peak float32
 	)
 
-	for i, nits := range a.nits {
+	for i, nits := range r.nits {
 		peak = max(peak, nits)
 		sum += float64(nits)
-		a.hist[a.bins[i]]++
+		r.hist[r.bins[i]]++
 	}
 
-	a.add(f.Index, float64(peak), a.robustPeak(len(ys)), sum/float64(max(len(ys), 1)))
+	r.frames = append(r.frames, levels{
+		peak: float64(peak), robust: r.robustPeak(len(ys)), average: sum / float64(max(len(ys), 1)),
+		step: s.Step, index: f.Index,
+	})
+
+	return nil
+}
+
+// Close implements analyze.Analyzer.
+func (r *run) Close() error {
+	r.parent.series.Add(r.first, r.frames)
 
 	return nil
 }
 
 // robustPeak reads the RobustPercentile of the frame's histogram, in cd/m².
-func (a *Analyzer) robustPeak(
+func (r *run) robustPeak(
 	points int,
 ) float64 {
 	above := int(float64(points) * (100 - RobustPercentile) / 100)
 
-	for bin := len(a.hist) - 1; bin > 0; bin-- {
-		above -= a.hist[bin]
+	for bin := len(r.hist) - 1; bin > 0; bin-- {
+		above -= r.hist[bin]
 		if above < 0 {
 			return colorimetry.PQEOTF(float64(bin) / (histogramBins - 1))
 		}
 	}
 
 	return 0
-}
-
-// add records the light levels of a frame.
-func (a *Analyzer) add(
-	index int,
-	peak, robust, average float64,
-) {
-	r := &a.res
-
-	if peak > r.MaxCLL || len(r.Peak) == 0 {
-		r.MaxCLL, r.MaxCLLFrame = peak, index
-	}
-
-	if average > r.MaxFALL || len(r.Average) == 0 {
-		r.MaxFALL, r.MaxFALLFrame = average, index
-	}
-
-	r.MaxCLLRobust = max(r.MaxCLLRobust, robust)
-	r.Peak = append(r.Peak, peak)
-	r.Robust = append(r.Robust, robust)
-	r.Average = append(r.Average, average)
-}
-
-// Close implements analyze.Analyzer.
-func (a *Analyzer) Close() error {
-	return nil
-}
-
-// Result returns the light levels. It must be called after Close.
-func (a *Analyzer) Result() Result {
-	res := a.res
-	res.AverageSummary = stats.Summarize(res.Average)
-
-	return res
 }
 
 // Active returns r with its averages taken over the active picture, share

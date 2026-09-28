@@ -29,6 +29,12 @@ flowchart TB
     html --> svg["internal/htmlreport/svg<br/>charts"]
     findings --> ladder
     pipeline --> ladder
+    pipeline --> overlay["overlay<br/>ASS debug overlay"]
+    cmd --> overlay
+    overlay --> analysis
+    overlay --> analyze
+    overlay --> quality
+    overlay --> encode
     pipeline --> analysis
     ladder --> analysis
     ladder --> encode
@@ -41,7 +47,7 @@ flowchart TB
     nvidia --> decode
     analysis --> probe
     analysis --> bitstream
-    analysis --> analyze["analyze/*<br/>siti, scene, black,<br/>freeze, crop, levels, light"]
+    analysis --> analyze["analyze/*<br/>siti, scene, black,<br/>freeze, crop, levels, light, motion"]
     analyze --> colorimetry["internal/colorimetry<br/>PQ, HLG, BT.2020, ICtCp"]
     analysis --> quality
     analysis --> decode
@@ -73,8 +79,8 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `frame` | Reference-counted frames, pooled by geometry; luma, optional 4:2:0 chroma, optional thumbnail, 8 or 16-bit samples, optional grid of 10-bit Y′CbCr samples (HDR light levels) |
 | `probe` | Container and stream information through `ffprobe -show_format -show_streams`, and the first frame's HDR side data for PQ, HLG and Dolby Vision streams |
 | `bitstream` | Packet-level analysis: bitrate series, sliding peak, frame sizes, GOP structure — no decoding |
-| `decode` | `Source` interface; ffmpeg implementation piping raw planes (seek, frame selection, scaling), optionally decoding with NVDEC (`WithHWAccel`, reported through `HWAccelReporter`) |
-| `analyze` | Fan-out runner and the per-frame analyzers (`siti`, `scene`, `black`, `freeze`, `crop`, `levels`, and `light` for HDR: MaxCLL, MaxFALL) |
+| `decode` | `Source` interface; ffmpeg implementation piping raw planes (seek, frame selection, scaling), optionally decoding with NVDEC or VideoToolbox (`WithHWAccel`, reported through `HWAccelReporter`; `SegmentDecoders` tells how many segments to decode at once) |
+| `analyze` | Runners (`Run`: one decode fanned out; `RunSegments`: concurrent segments fed to analyzer forks, `Forker`, merged with `Series`) and the per-frame analyzers (`siti`, `scene`, `black`, `freeze`, `crop`, `levels`, `motion` (camera motion per frame, camera work per shot), and `light` for HDR: MaxCLL, MaxFALL); `analyze/analyzetest` checks that forks give a sequential pass's results |
 | `analyze/grain` | Pure film grain (noise) estimator behind `encode.FFmpeg.Noise` and the ladder's grain checks |
 | `analysis` | Orchestrates inspection and frame analysis (`Analyze`) and comparisons (`Compare`, through its `Meter`) into reports |
 | `vmaf` | Pure Go: model and device resolution, extractors, backend resolution, and the scoring contract (`Models`, `Scorer`) |
@@ -82,12 +88,13 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `quality` | Quality measurement engine: stratified sampling, confidence intervals for VMAF and every extra metric, per-device VMAF, banding segments, decoding plans |
 | `quality/xpsnr` | Pure-Go XPSNR, matching ffmpeg's `xpsnr` filter |
 | `quality/hdr` | Pure-Go HDR metrics on decoded frames: wPSNR (JVET HDR CTC) and ΔE ITP (ITU-R BT.2124) |
-| `encode` | Codec settings, one encoder family each (x264, x265, SVT-AV1, NVENC) behind `Codec` and its features (`Codec.Supports`), ffmpeg encoding, digest extraction |
+| `encode` | Codec settings, one encoder family each (x264, x265, SVT-AV1, NVENC) behind `Codec` and its features (`Codec.Supports`), ffmpeg encoding, digest extraction, subtitle burns (`Burn`, libass) |
+| `overlay` | The debug overlay of annotated videos: an ASS script written from a report and a comparison (`Write`, pure, frame-accurate timing, coalesced events), burnt into a copy by `Renderer` through its `Burner` port, in concurrent segments with a hardware encoder ([overlay.md](overlay.md)) |
 | `ladder` | Per-title ladder engine: validation, then digest, grain, probe, selection, verification and per-shot stages |
 | `ladder/internal/shotalloc` | Pure per-shot math: shot rate-quality models, their prediction from shot features, equal-slope allocation |
 | `pipeline` | Chains every stage of a run and reports progress through hooks |
 | `nvidia` | GPU preflight: what an ffmpeg binary and the machine can do on an NVIDIA GPU (NVDEC, NVENC, device), checked before any work (`Check`) |
-| `internal/ffexec` | Runs ffmpeg and ffprobe: streamed stdout (and a second output pipe for two-output decodes), bounded stderr tail, cancellation |
+| `internal/ffexec` | Runs ffmpeg and ffprobe: streamed stdout (and a second output for two-output decodes) through Unix sockets with large buffers, bounded stderr tail, cancellation |
 | `internal/stats` | Summaries, percentiles and confidence intervals shared by the analyzers and the sampler |
 | `internal/segments` | Merges per-frame flags into time segments (black, frozen) |
 | `internal/colorimetry` | BT.2100 colour science as lookup tables: PQ and HLG transfer functions, BT.2020 Y′CbCr, ICtCp, for the light analyzer and the HDR metrics |
@@ -98,7 +105,7 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `internal/htmlreport/svg` | The charts of the HTML reports: static SVG readable without script, and their data for the page script (tooltips, zoom, legend toggles) |
 | `internal/testutil` | Test helpers: tiny synthetic clips generated with ffmpeg's lavfi sources, fake ffmpeg binaries |
 | `cmd/qc` | The CLI and its composition root |
-| `bench/vmafsim`, `bench/ladderval`, `bench/gpuval` | Validation tools (`gpuval`: the GPU validation kit) |
+| `bench/vmafsim`, `bench/ladderval`, `bench/motionval`, `bench/gpuval` | Validation tools (`motionval`: camera motion against synthetic moves of known speed; `gpuval`: the GPU validation kit) |
 
 ### Ports
 
@@ -117,6 +124,8 @@ importers are not forced into a DI container.
 | `ladder.Inspector` | `ladder.Engine` | `analysis.Analyzer` |
 | `ladder.Encoder` (encodes, chunked encodes), `ladder.Digester`, optional `ladder.GrainLab` (film grain synthesis, `WithGrainLab`) | `ladder.Engine` | `encode.FFmpeg` |
 | `pipeline.Analyzer`, `pipeline.LadderBuilder` | `pipeline.Runner` | `analysis.Analyzer`, `ladder.Engine` |
+| `overlay.Burner` | `overlay.Renderer` | `encode.FFmpeg` |
+| `pipeline.Overlayer` (optional, `WithOverlayer`) | `pipeline.Runner` | `overlay.Renderer` |
 
 ### The CLI's composition root
 
@@ -126,16 +135,18 @@ importers are not forced into a DI container.
 the ports of its consumers (`fx.As`): the prober, packet reader and decoder,
 `libvmaf.Engine` as `quality.Engine`, `quality.Meter` as `analysis.Meter`,
 `analysis.Analyzer` as itself, `ladder.Inspector` and `pipeline.Analyzer`,
-`encode.FFmpeg` as the three ladder ports, `ladder.Engine` as
-`pipeline.LadderBuilder`, and `pipeline.Runner`. The GPU preflight runs as
-an `fx.Invoke` while the application is built, so a missing GPU fails
-before anything starts, and the CPU profile (`--cpuprofile`) is a lifecycle
+`encode.FFmpeg` as the three ladder ports and `overlay.Burner`,
+`ladder.Engine` as `pipeline.LadderBuilder`, `overlay.Renderer` as
+`pipeline.Overlayer`, and `pipeline.Runner`. The GPU preflight and the
+check of ffmpeg's libass and overlay encoder (with `--overlay`) run as
+`fx.Invoke`s while the application is built, so a missing GPU, libass or
+hardware encoder fails before anything starts, and the CPU profile (`--cpuprofile`) is a lifecycle
 hook around the run. fx logs through the command's logger at debug level
 only.
 
 The configuration is one struct of groups (`ToolsConfig`, `OutputConfig`,
 `AnalysisConfig`, `QualityConfig`, `LadderConfig`, `RunConfig`,
-`GPUConfig`), squashed so that keys stay the flag names. Flags win over
+`GPUConfig`, `OverlayConfig`), squashed so that keys stay the flag names. Flags win over
 `QC_*` environment variables, which win over the `--config` file; both are
 applied through the flag parsers, so an invalid value is reported with where
 it came from.
@@ -170,6 +181,11 @@ Only what consumers need crosses the pipe:
 - VMAF receives full 4:2:0 frames, scaled by ffmpeg to the model resolution,
   in 8 or 10 bits.
 
+The "pipes" are Unix socket pairs with 1 MiB buffers: a pipe moves at most
+64 KiB per system call, and a 2 MB luma plane then costs dozens of wake-ups
+on each side. Sockets move a 1080p luma plane with about a third less CPU
+on both sides, and the segmented frame analysis runs 9% faster.
+
 Frames come from a `frame.Pool` (`sync.Pool` per geometry) and are
 reference-counted: a decoded frame is `Retain`ed once per consumer and returns
 to the pool when the last consumer `Release`s it, so steady-state processing
@@ -184,8 +200,15 @@ does not allocate.
   memory (a bug caught during development: an unbounded queue grew to 11 GB
   on a 10-minute exact VMAF run).
 - CPU is split explicitly: VMAF clips run on `NumCPU/2` workers with
-  `NumCPU/workers` libvmaf threads each; ladder probes run two at a time; SI/TI
-  uses a worker pool of `NumCPU` goroutines.
+  `NumCPU/workers` libvmaf threads each; ladder probes run two at a time; the
+  frame analysis decodes up to `NumCPU` segments at once, each analysed by
+  its own goroutine (a single-pass analysis runs SI/TI on a pool of
+  `NumCPU` goroutines).
+- The hot loops of the frame analysis (Sobel, SI's square roots, TI, luma
+  statistics, thumbnails) have NEON versions on arm64 (`*_arm64.s`, with
+  their encodings generated from the mnemonics in comments) next to the
+  portable Go loops, which other architectures and the `purego` build tag
+  use; tests check both give the same bits.
 
 ## Library usage
 

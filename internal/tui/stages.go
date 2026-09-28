@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/eko/qc/analysis"
@@ -25,6 +26,8 @@ func StageSummary(
 		return vmafSummary(r.Comparison.VMAF)
 	case pipeline.KindLadder:
 		return ladderSummary(r.Ladder)
+	case pipeline.KindOverlay:
+		return "annotated copy · " + filepath.Base(r.Overlay)
 	}
 
 	return ""

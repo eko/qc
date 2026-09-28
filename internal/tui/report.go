@@ -40,7 +40,7 @@ func RenderReport(
 
 	if report.Video != nil {
 		if report.Frames != nil {
-			blocks = append(blocks, complexitySection(report, width), lightSection(report, width))
+			blocks = append(blocks, complexitySection(report, width), lightSection(report, width), cameraSection(report, width))
 		}
 
 		blocks = append(blocks,
@@ -235,13 +235,13 @@ func shotsSection(
 
 	lines := []string{
 		section.Render("Hardest shots") + Subtle.Render(fmt.Sprintf("  (%d total)", len(shots))),
-		Subtle.Render(fmt.Sprintf("  %-4s %-19s %7s %7s %7s %11s", "#", "time", "frames", "SI", "TI", "bitrate")),
+		Subtle.Render(fmt.Sprintf("  %-4s %-19s %7s %7s %7s %11s  %s", "#", "time", "frames", "SI", "TI", "bitrate", "camera")),
 	}
 
 	for _, i := range order[:min(len(order), maxShotRows)] {
 		s := shots[i]
-		lines = append(lines, fmt.Sprintf("  %-4d %-19s %7d %7.1f %7.1f %11s",
-			i+1, Clock(s.Start, true)+" → "+Clock(s.End, true), s.Frames, s.SIMean, s.TIMean, Bitrate(float64(s.Bitrate))))
+		lines = append(lines, fmt.Sprintf("  %-4d %-19s %7d %7.1f %7.1f %11s  %s",
+			i+1, Clock(s.Start, true)+" → "+Clock(s.End, true), s.Frames, s.SIMean, s.TIMean, Bitrate(float64(s.Bitrate)), cameraLabel(s.Camera)))
 	}
 
 	return strings.Join(lines, "\n")

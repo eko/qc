@@ -133,6 +133,10 @@ func analysisFinding(
 		return worded(f, nil, "Interlaced source (%s)", f.Text), true
 	}
 
+	if w, ok := motionFinding(f); ok {
+		return w, true
+	}
+
 	return hdrFinding(f)
 }
 

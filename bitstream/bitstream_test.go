@@ -39,6 +39,11 @@ func TestAnalyze(
 	reordered := constantStream(50, 1000, 25)
 	reordered[1], reordered[2] = reordered[2], reordered[1]
 
+	delayed := constantStream(25, 1000, 25)
+	for i := range delayed {
+		delayed[i].PTS += 80 * time.Millisecond
+	}
+
 	irregular := constantStream(100, 1000, 1000)
 	for _, i := range []int{0, 10, 60, 70} {
 		irregular[i].Keyframe = true
@@ -89,6 +94,15 @@ func TestAnalyze(
 			check: func(t *testing.T, r Report) {
 				assert.Equal(t, media.Seconds(2), r.Duration)
 				assert.Equal(t, []media.Duration{0, media.Seconds(1)}, r.Keyframes)
+				assert.Equal(t, media.Duration(frame), r.PTS[1])
+			},
+		},
+		{
+			name:  "a delayed first frame is the start, pts stay relative",
+			input: delayed,
+			check: func(t *testing.T, r Report) {
+				assert.Equal(t, media.Duration(80*time.Millisecond), r.Start)
+				assert.Zero(t, r.PTS[0])
 				assert.Equal(t, media.Duration(frame), r.PTS[1])
 			},
 		},

@@ -19,7 +19,8 @@ func newRunCommand(
 		Short: "Run everything: technical analysis, VMAF against a reference, ladders",
 		Long: "Run everything on one source, behind one live dashboard: the technical analysis,\n" +
 			"the VMAF of the source against a reference (with -r) and one ladder per codec.\n" +
-			"-o and --html write one combined report.",
+			"-o and --html write one combined report; --overlay a copy of the source with the\n" +
+			"analysis (and the VMAF of each scored frame) burnt in.",
 		Example: "  qc run mezzanine.mov --codecs h264,av1 --html report.html\n" +
 			"  qc run encode.mp4 --reference mezzanine.mov --codecs=\n" +
 			"  qc run mezzanine.mov --skip-analysis --codecs hevc -o ladders.json",
@@ -32,6 +33,7 @@ func newRunCommand(
 	addOutputFlags(cmd)
 	addQualityFlags(cmd)
 	addLadderFlags(cmd)
+	addOverlayFlags(cmd)
 	addGPUFlags(cmd, gpuDecode|gpuEncode|gpuVMAF)
 
 	flags := cmd.Flags()
@@ -54,7 +56,12 @@ func runEverything(
 		return err
 	}
 
-	report, err := executePipeline(cmd, env, config, "run", runOptions(config, source))
+	opts, err := runOptions(config, source)
+	if err != nil {
+		return err
+	}
+
+	report, err := executePipeline(cmd, env, config, "run", opts)
 	if err != nil {
 		return err
 	}
@@ -68,7 +75,12 @@ func runEverything(
 func runOptions(
 	config Config,
 	source string,
-) pipeline.Options {
+) (pipeline.Options, error) {
+	overlayOpts, err := overlayOptions(config, source)
+	if err != nil {
+		return pipeline.Options{}, err
+	}
+
 	return pipeline.Options{
 		Source:       source,
 		Reference:    config.Run.Reference,
@@ -76,7 +88,8 @@ func runOptions(
 		Codecs:       config.Run.Codecs,
 		Quality:      qualityOptions(config),
 		Ladder:       ladderOptions(config),
-	}
+		Overlay:      overlayOpts,
+	}, nil
 }
 
 // renderRun prints every result of a run as text.

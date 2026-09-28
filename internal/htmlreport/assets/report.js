@@ -1023,6 +1023,16 @@
       });
     });
 
+    // A link straight to a collapsed section (report.html#s-encoding-commands)
+    // opens it, on load and when the anchor changes.
+    function openTarget() {
+      var target = location.hash && doc.getElementById(location.hash.slice(1));
+      if (target && target.tagName === 'DETAILS') target.open = true;
+    }
+
+    openTarget();
+    window.addEventListener('hashchange', openTarget);
+
     if ('IntersectionObserver' in window) {
       var links = {};
       doc.querySelectorAll('.navlinks a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });

@@ -39,7 +39,11 @@ func emit[T any](
 		return err
 	}
 
-	return tui.RenderWritten(w, config.Output, config.HTML)
+	if err := tui.RenderWritten(w, config.Output, config.HTML); err != nil {
+		return err
+	}
+
+	return tui.RenderWrittenVideo(w, config.Overlay)
 }
 
 // writeFile creates path and fills it with write.

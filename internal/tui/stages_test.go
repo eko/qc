@@ -89,6 +89,11 @@ func TestStageSummary(
 			want:   "no rung",
 		},
 		{
+			name:   "overlay",
+			result: pipeline.StageResult{Stage: stage(pipeline.KindOverlay), Overlay: "out/annotated.mp4"},
+			want:   "annotated copy · annotated.mp4",
+		},
+		{
 			name:   "unknown stage",
 			result: pipeline.StageResult{Stage: stage("teleport")},
 			want:   "",

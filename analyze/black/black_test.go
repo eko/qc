@@ -115,8 +115,11 @@ func TestPictureRatio(
 	copy(f.Luma.Pix, []byte{16, 16, 16, 16, 16, 16, 16, 16, 16, 200})
 	require.NoError(t, a.Consume(f))
 	f.Release()
+	require.NoError(t, a.Close())
 
-	assert.Equal(t, []bool{false}, a.flags, "90% of dark pixels is below the 98% default")
+	frames := a.series.Merge()
+	require.Len(t, frames, 1)
+	assert.False(t, frames[0].black, "90% of dark pixels is below the 98% default")
 }
 
 func TestNewClampsThreshold(

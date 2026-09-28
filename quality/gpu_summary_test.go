@@ -16,6 +16,7 @@ func TestGPUSummary(
 	}{
 		{name: "cpu", result: Result{}, want: ""},
 		{name: "nvdec", result: Result{HWAccel: "cuda"}, want: "NVDEC decoding (cuda)"},
+		{name: "videotoolbox", result: Result{HWAccel: "videotoolbox"}, want: "VideoToolbox decoding"},
 		{name: "cuda features", result: Result{Backend: "cuda"}, want: "VMAF features on CUDA"},
 		{
 			name:   "nvdec and a cuda fallback",

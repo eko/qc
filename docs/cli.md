@@ -75,7 +75,9 @@ single-width, so layouts stay aligned in every terminal.
 6. when an NVIDIA GPU is usable with the ffmpeg in use (`QC_FFMPEG`, the
    `QC_CONFIG` file or `PATH`; see [GPU](#nvidia-gpu)), whether to use it
    (`--gpu`);
-7. optionally name an HTML report.
+7. optionally name an HTML report;
+8. when the source is analysed or compared, whether to produce an annotated
+   video, and where (`--overlay`, see [annotated videos](overlay.md)).
 
 It prints the equivalent `qc run` command, only with the options that differ
 from the defaults, and runs exactly that command with the dashboard.
@@ -135,6 +137,7 @@ file counts as given, like `--precision`, and conflicts with `--sample`.
 | `--fast` | off | container and bitstream only, no decoding (< 1 s) |
 | `--bitrate-interval` | 1s | bucket of the bitrate series |
 | `--peak-window` | 1s | sliding window of the peak bitrate |
+| `--no-motion` | off | skip the camera motion analysis ([analysis](analysis.md#camera-motion-analyzemotion)) |
 
 ### VMAF (`vmaf`, `run`)
 
@@ -181,16 +184,35 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 | `--metrics`, `--av2-ctc`, `--devices` (ladder only; `run` shares the VMAF ones) | xpsnr,cambi,psnr | measured on the verification encodes of the rungs, next to VMAF: flags banding-limited rungs and rungs VMAF and XPSNR order differently — see [rung quality](ladder.md#rung-quality) |
 | `--hdr-metric` (ladder only; `run` shares the VMAF one) | pq | how VMAF scores the probes and rungs of an HDR source; HDR sources are always encoded in 10 bits with their colour description and HDR10 metadata — see [HDR ladders](hdr.md#5-hdr-ladders) |
 
-### NVIDIA GPU
+### Annotated video (`analyze`, `vmaf`, `run`)
+
+A copy of the video with the analysis burnt in: [overlay.md](overlay.md).
+`vmaf` annotates the distorted video, `analyze` and `run` the source.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--overlay file` | none | write the annotated copy (H.264; MP4, MOV or MKV); ffmpeg's `subtitles` filter (libass) is checked before any work, and the copy cannot overwrite the video it annotates |
+| `--overlay-items` | all | parts shown: `time`, `bitrate`, `shots`, `motion`, `siti`, `levels`, `hdr`, `flags`, `quality` (or `vmaf`), `timeline`; items without data are left out |
+| `--overlay-height` | 0 (the source's) | height of the copy, even (`720` encodes faster, with the same layout) |
+| `--overlay-encoder` | auto | H.264 encoder of the copy: `auto` (VideoToolbox on macOS when it encodes a test frame, NVENC with `--gpu`, x264 otherwise), `x264`, `videotoolbox`, `nvenc`; an explicit hardware encoder is checked before any work ([performance](overlay.md#performance)) |
+| `--overlay-workers` | 0 (the encoder's) | segments of the copy rendered at once: 6 with VideoToolbox, 4 with NVENC, a single pass with x264; `1` renders in a single pass |
+
+Per-frame VMAF exists on scored frames only: use `--exact` for a value on
+every frame. With `analyze --fast`, the copy shows what the bitstream tells
+(time, bitrate, timeline).
+
+### Hardware decoding and NVIDIA GPU
 
 `analyze` takes `--gpu` and `--hwaccel`, `vmaf` adds `--vmaf-backend`,
 `ladder` and `run` take all four. Requirements, what runs where and the
-validation kit: [gpu.md](gpu.md).
+validation kit: [gpu.md](gpu.md). VideoToolbox (macOS) needs nothing but
+an ffmpeg built with it, as ffmpeg is on macOS
+([frame analysis speed](analysis.md#segments-and-hardware-decoding)).
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--gpu` | off | use the GPU where available: `--hwaccel cuda`, `--encoder nvenc` for ladders, `--vmaf-backend auto`; flags set explicitly win. ffmpeg's NVIDIA support, the device and each NVENC encoder are checked before any work |
-| `--hwaccel` | none | `cuda`: NVDEC decoding, frames identical to a CPU decode; `cuda-scale`: NVDEC and GPU scaling (not bit-exact); falls back to the CPU per file |
+| `--hwaccel` | auto | `auto`: on macOS, VideoToolbox decodes the concurrent segments of a frame analysis, the CPU everything else; elsewhere the CPU. `videotoolbox`: VideoToolbox for every decode it can do exactly (H.264 and HEVC in 4:2:0 8/10-bit); `none`: CPU; `cuda`: NVDEC decoding. All give frames identical to a CPU decode, but `cuda-scale`: NVDEC and GPU scaling (not bit-exact). Falls back to the CPU per file |
 | `--encoder` | cpu | `nvenc`: ladders with `h264_nvenc`, `hevc_nvenc`, `av1_nvenc` (CQ probes, same engine); not with `--per-shot` or AV1 `--film-grain` |
 | `--vmaf-backend` | cpu | `cuda`: VMAF features on the GPU (binaries built with `-tags cuda`; VMAF v0.6.1 family only, VMAF v1 has no CUDA features); `auto`: CUDA when possible, the CPU otherwise, with the reason in the report |
 
@@ -198,7 +220,7 @@ validation kit: [gpu.md](gpu.md).
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--check` | off | also check ffmpeg and ffprobe, the libx264, libx265 and libsvtav1 encoders, NVENC (optional) and that the default VMAF v1 model loads; exits with an error when a requirement is missing |
+| `--check` | off | also check ffmpeg and ffprobe, the libx264, libx265 and libsvtav1 encoders, NVENC, VideoToolbox and libass for `--overlay` (all optional) and that the default VMAF v1 model loads; exits with an error when a requirement is missing |
 | `-f`, `--format` | `text` | `text` or `json` |
 | `--model-dir` | the libvmaf model directories | directories searched for the VMAF models |
 

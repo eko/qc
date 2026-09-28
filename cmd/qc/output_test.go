@@ -74,6 +74,40 @@ func TestEmit(
 	}
 }
 
+func TestEmitWrittenFiles(
+	t *testing.T,
+) {
+	report := filepath.Join(t.TempDir(), "report.json")
+	quiet := func(io.Writer) error { return nil }
+
+	testCases := []struct {
+		name    string
+		output  OutputConfig
+		w       io.Writer
+		want    string
+		wantErr error
+	}{
+		{name: "annotated copy", output: OutputConfig{Overlay: "a.mp4"}, w: &bytes.Buffer{}, want: "annotated video written to a.mp4"},
+		{name: "report line failure", output: OutputConfig{Output: report}, w: failingWriter{}, wantErr: os.ErrClosed},
+		{name: "annotated copy line failure", output: OutputConfig{Overlay: "a.mp4"}, w: failingWriter{}, wantErr: os.ErrClosed},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := emit(testCase.w, testCase.output, map[string]int{"score": 1}, quiet, nil)
+
+			if testCase.wantErr != nil {
+				require.ErrorIs(t, err, testCase.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Contains(t, testCase.w.(*bytes.Buffer).String(), testCase.want)
+		})
+	}
+}
+
 func TestWriteFile(
 	t *testing.T,
 ) {

@@ -15,7 +15,9 @@ reliability you ask for allows.
 
 - **Technical analysis in seconds**: bitrate, peaks and GOP structure without
   decoding. Then one decode fanned out to SI/TI (ITU-T P.910), shot detection,
-  black and frozen segments, letterbox/pillarbox and luma levels.
+  black and frozen segments, letterbox/pillarbox, luma levels and camera
+  motion (each shot static, pan, tilt, zoom, tracking or handheld, with a
+  shake measure).
 - **VMAF with a confidence interval**: short clips sampled across shots until
   the 95% interval is narrower than your target. The intervals really cover
   the truth 95% of the time, measured by replaying thousands of runs.
@@ -35,6 +37,10 @@ reliability you ask for allows.
   VMAF/XPSNR disagreements.
 - **HDR aware**: HDR10/HLG checked, MaxCLL/MaxFALL measured, wPSNR and ΔE ITP
   next to VMAF, 10-bit ladders carrying the HDR10 metadata ([HDR](docs/hdr.md)).
+- **See what was measured**: `--overlay annotated.mp4` burns the analysis
+  into a copy of the video, frame by frame: timecode, bitrate, shots,
+  camera motion, SI/TI, levels, VMAF of each scored frame and a timeline
+  ([annotated videos](docs/overlay.md)).
 - **A terminal UI you'll enjoy**: a live dashboard with progress, ETA and
   panels that show VMAF converging and probes landing on a braille chart. There
   is also an interactive wizard, plus JSON and self-contained HTML reports.
@@ -78,6 +84,7 @@ qc run encode.mp4 -r source.mov                           # + VMAF against the s
 qc analyze video.mp4 [--fast]                             # technical analysis (--fast: no decoding)
 qc vmaf reference.mov distorted.mp4 [--exact]             # VMAF ± 95% CI, or every frame
 qc vmaf reference.mov distorted.mp4 --sample 5%           # fixed budget (or 2/scene), one pass, CI reported
+qc vmaf reference.mov distorted.mp4 --exact --overlay annotated.mp4   # + a copy with per-frame VMAF burnt in
 qc ladder source.mov -c av1 --encode-bit-depth 10         # per-title Main10 AV1 ladder
 qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93   # impose the rungs, bitrates computed
 ```
@@ -91,6 +98,7 @@ Apple M2 Max, real 1080p25 H.264 sources:
 
 | Task | Exact / exhaustive | qc |
 |---|---|---|
+| Frame analysis of a 59 min title (every frame: SI/TI, shots, black, freeze, crop, levels, camera motion) | 225 s (one CPU decode) | 62–71 s at 26 Mbit/s, 49–52 s at 6 Mbit/s, same report to the bit (VideoToolbox segments, [details](docs/analysis.md#performance)) |
 | VMAF of a 10:36 title (x264 720p rendition) | 147 s | ~30 s at ±0.5 (real 95% CI coverage: 94.5%) |
 | H.264 ladder of a 10:36 title | ≈ 2 h (dense grid on the full title) | 1 min 39 s, every rung verified |
 | H.264 ladder of a 1 min title vs the exhaustive optimum | 13 min | 2 min, −0.04 VMAF / −0.7% bitrate from the optimum |
@@ -110,12 +118,13 @@ content: [docs/validation.md](docs/validation.md).
 - [Validation](docs/validation.md)
 - [CLI](docs/cli.md)
 - [NVIDIA GPUs](docs/gpu.md): NVDEC decoding, NVENC ladders and CUDA VMAF with `--gpu`
+- [Annotated videos](docs/overlay.md): the analysis burnt into a copy of the video with `--overlay`
 - [Innovation landscape and roadmap](docs/innovation.md): beyond VMAF
 
 ## Library
 
 ```go
-dec := decode.NewFFmpeg("ffmpeg", 0) // decode.WithHWAccel(decode.HWAccelCUDA): NVDEC
+dec := decode.NewFFmpeg("ffmpeg", 0) // decode.WithHWAccel(decode.HWAccelAuto): VideoToolbox segments on macOS; HWAccelCUDA: NVDEC
 analyzer := analysis.New(logger,
 	probe.NewFFprobe("ffprobe"),
 	bitstream.NewFFprobeReader("ffprobe"),
@@ -195,8 +204,8 @@ fmt.Println(cmp.VMAF.GPUSummary()) // e.g. "NVDEC decoding (cuda) · VMAF featur
 `quality/xpsnr` also works on its own, on decoded frames, and matches
 ffmpeg's `xpsnr` filter. Runnable examples are on
 [pkg.go.dev](https://pkg.go.dev/github.com/eko/qc) for `analysis`,
-`quality`, `quality/xpsnr`, `quality/hdr`, `ladder`, `pipeline`, `nvidia` and
-`vmaf/libvmaf`. To run everything with progress hooks, use
+`quality`, `quality/xpsnr`, `quality/hdr`, `ladder`, `pipeline`, `nvidia`,
+`overlay` and `vmaf/libvmaf`. To run everything with progress hooks, use
 `pipeline.Runner` as described in
 [docs/architecture.md](docs/architecture.md#library-usage).
 

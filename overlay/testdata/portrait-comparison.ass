@@ -1,0 +1,154 @@
+[Script Info]
+; Debug overlay written by qc (github.com/eko/qc)
+ScriptType: v4.00+
+PlayResX: 608
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: qc,DejaVu Sans Mono,26,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: badge,DejaVu Sans Mono,24,&H0008101A,&H0008101A,&H00439FFF,&H00439FFF,-1,0,0,0,100,100,0,0,3,5,0,7,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,24)\bord0\shad0\1c&H000000&\1a&H50&\p1}m 0 0 l 500 0 500 346 0 346 {\p0}
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,24)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 0 l 4 0 4 346 0 346 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.000{\fs26\b0}{\c&HA8B0B8&}  #0
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.040{\fs26\b0}{\c&HA8B0B8&}  #1
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.080{\fs26\b0}{\c&HA8B0B8&}  #2
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.120{\fs26\b0}{\c&HA8B0B8&}  #3
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.160{\fs26\b0}{\c&HA8B0B8&}  #4
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.200{\fs26\b0}{\c&HA8B0B8&}  #5
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.240{\fs26\b0}{\c&HA8B0B8&}  #6
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.280{\fs26\b0}{\c&HA8B0B8&}  #7
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.320{\fs26\b0}{\c&HA8B0B8&}  #8
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.360{\fs26\b0}{\c&HA8B0B8&}  #9
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.400{\fs26\b0}{\c&HA8B0B8&}  #10
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,38)}{\fs36\b1}00:00:00.440{\fs26\b0}{\c&HA8B0B8&}  #11
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}90.0 kB  {\c&H439FFF&}{\b1}KEY{\b0}
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}800 B
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}20.0 kB
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}21.0 kB
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}19.5 kB
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}22.0 kB
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}85.0 kB  {\c&H439FFF&}{\b1}KEY{\b0}
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}30.0 kB
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}31.0 kB
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}30.5 kB
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}29.0 kB
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,84)}{\c&HA8B0B8&}SIZE  {\c&HFFFFFF&}28.0 kB
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}720 kb/s
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}726 kb/s
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}886 kb/s
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}1.05 Mb/s
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}1.21 Mb/s
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}1.39 Mb/s
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.07 Mb/s
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.31 Mb/s
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.55 Mb/s
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}2.80 Mb/s
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}3.03 Mb/s
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,118)}{\c&HA8B0B8&}RATE  {\c&HFFFFFF&}3.25 Mb/s
+Dialogue: 1,0:00:00.00,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,152)}{\c&HA8B0B8&}SHOT  {\c&HFFFFFF&}1{\c&HA8B0B8&}/2
+Dialogue: 1,0:00:00.26,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,152)}{\c&HA8B0B8&}SHOT  {\c&HFFFFFF&}2{\c&HA8B0B8&}/2  {\c&H439FFF&}{\b1}CUT{\b0}
+Dialogue: 1,0:00:00.00,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,186)}{\c&HA8B0B8&}CAM   {\c&HFFFFFF&}pan right
+Dialogue: 1,0:00:00.26,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,186)}{\c&HA8B0B8&}CAM   {\c&HFFFFFF&}handheld  {\c&H5A5AF8&}{\b1}SHAKY{\b0}
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}8.0{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}8.5{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}8.5{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+1.3
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}20.0{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+1.3
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}20.0{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}–
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}0.2{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}0.4{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}0.2{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.42,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,220)}{\c&HA8B0B8&}MOVE  {\c&HFFFFFF&}0.0{\c&HA8B0B8&} %/s  ZOOM {\c&HFFFFFF&}+0.0
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}52   {\c&HA8B0B8&}TI {\c&HFFFFFF&}0
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}10   {\c&HA8B0B8&}TI {\c&HFFFFFF&}40
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}49   {\c&HA8B0B8&}TI {\c&HFFFFFF&}12
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}49   {\c&HA8B0B8&}TI {\c&HFFFFFF&}11
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}50   {\c&HA8B0B8&}TI {\c&HFFFFFF&}10
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}51   {\c&HA8B0B8&}TI {\c&HFFFFFF&}9
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}30   {\c&HA8B0B8&}TI {\c&HFFFFFF&}60
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}31   {\c&HA8B0B8&}TI {\c&HFFFFFF&}5
+Dialogue: 1,0:00:00.34,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}31   {\c&HA8B0B8&}TI {\c&HFFFFFF&}0
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}32   {\c&HA8B0B8&}TI {\c&HFFFFFF&}4
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,254)}{\c&HA8B0B8&}SI    {\c&HFFFFFF&}33   {\c&HA8B0B8&}TI {\c&HFFFFFF&}3
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}16–235  {\c&HA8B0B8&}avg {\c&HFFFFFF&}98
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}16–16   {\c&HA8B0B8&}avg {\c&HFFFFFF&}16
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}16–235  {\c&HA8B0B8&}avg {\c&HFFFFFF&}97
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}{\c&H5A5AF8&}4–250   {\c&HA8B0B8&}avg {\c&HFFFFFF&}96
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}16–235  {\c&HA8B0B8&}avg {\c&HFFFFFF&}95
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}16–235  {\c&HA8B0B8&}avg {\c&HFFFFFF&}94
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}20–230  {\c&HA8B0B8&}avg {\c&HFFFFFF&}120
+Dialogue: 1,0:00:00.30,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}20–230  {\c&HA8B0B8&}avg {\c&HFFFFFF&}121
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}20–230  {\c&HA8B0B8&}avg {\c&HFFFFFF&}122
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,288)}{\c&HA8B0B8&}LUMA  {\c&HFFFFFF&}20–230  {\c&HA8B0B8&}avg {\c&HFFFFFF&}123
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}850  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}120{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}0    {\c&HA8B0B8&}peak  {\c&HFFFFFF&}0{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}840  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}118{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}830  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}117{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}820  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}116{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}810  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}115{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.26,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}400  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}80{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}410  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}81{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,322)}{\c&HA8B0B8&}NITS  {\c&HFFFFFF&}420  {\c&HA8B0B8&}peak  {\c&HFFFFFF&}82{\c&HA8B0B8&} avg
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(478,220)\bord2\shad0\3c&HA8B0B8&\1a&HFF&\p1}m 26 0 b 26 14 14 26 0 26 b -14 26 -26 14 -26 0 b -26 -14 -14 -26 0 -26 b 14 -26 26 -14 26 0{\p0}
+Dialogue: 2,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(478,220)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 2 l 10 2 10 7 19 0 10 -7 10 -2 0 -2 {\p0}
+Dialogue: 2,0:00:00.10,0:00:00.18,qc,,0,0,0,,{\an7\pos(478,220)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 1 2 l 10 -1 11 4 18 -5 8 -9 9 -5 -1 -2 {\p0}
+Dialogue: 2,0:00:00.18,0:00:00.26,qc,,0,0,0,,{\an7\pos(478,220)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 2 l 15 2 15 7 24 0 15 -7 15 -2 0 -2 {\p0}
+Dialogue: 2,0:00:00.30,0:00:00.52,qc,,0,0,0,,{\an7\pos(478,220)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m -3 -3 l 3 -3 3 3 -3 3 {\p0}
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,386)\bord0\shad0\1c&H000000&\1a&H50&\p1}m 0 0 l 380 0 380 224 0 224 {\p0}
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,386)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 0 l 4 0 4 224 0 224 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,400)}{\c&HA8B0B8&}VMAF
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}95.2
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}91.0
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H24BFFB&}88.4
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H24BFFB&}85.0
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H5A5AF8&}79.9
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H5A5AF8&}70.0
+Dialogue: 1,0:00:00.26,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}96.0
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}96.1
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}97.0
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}98.0
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,434)}{\fs56\b1}{\c&H80D34A&}99.0
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.52{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.10{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}38.84{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}38.50{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}37.99{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}37.00{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.26,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.60{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.61{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.70{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.80{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,500)}{\c&HA8B0B8&}XPSNR Y   {\c&HFFFFFF&}39.90{\c&HA8B0B8&} dB
+Dialogue: 1,0:00:00.00,0:00:00.06,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}0.00
+Dialogue: 1,0:00:00.06,0:00:00.10,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}0.50
+Dialogue: 1,0:00:00.10,0:00:00.14,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}1.00
+Dialogue: 1,0:00:00.14,0:00:00.18,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}1.50
+Dialogue: 1,0:00:00.18,0:00:00.22,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}2.00
+Dialogue: 1,0:00:00.22,0:00:00.26,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}2.50
+Dialogue: 1,0:00:00.26,0:00:00.30,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}3.00
+Dialogue: 1,0:00:00.30,0:00:00.34,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}3.50
+Dialogue: 1,0:00:00.34,0:00:00.38,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}4.00
+Dialogue: 1,0:00:00.38,0:00:00.42,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}4.50
+Dialogue: 1,0:00:00.42,0:00:00.46,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}5.00
+Dialogue: 1,0:00:00.46,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,534)}{\c&HA8B0B8&}CAMBI     {\c&HFFFFFF&}5.50
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(42,568)}{\fs20}{\c&HA8B0B8&}every frame scored
+Dialogue: 1,0:00:00.00,0:00:00.52,badge,,0,0,0,,{\an7\pos(24,640)}LETTERBOX
+Dialogue: 1,0:00:00.06,0:00:00.14,badge,,0,0,0,,{\an7\pos(254,640)}BLACK
+Dialogue: 1,0:00:00.14,0:00:00.18,badge,,0,0,0,,{\an7\pos(254,640)}OUT OF RANGE
+Dialogue: 1,0:00:00.18,0:00:00.26,badge,,0,0,0,,{\an7\pos(254,640)}BANDING
+Dialogue: 1,0:00:00.34,0:00:00.42,badge,,0,0,0,,{\an7\pos(254,640)}FROZEN
+Dialogue: 0,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(24,954)\bord0\shad0\1c&H000000&\1a&H50&\p1}m 0 0 l 560 0 560 102 0 102 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,968)\fs20}{\c&H439FFF&}VMAF  {\c&HA8B0B8&}70–100
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an9\pos(570,968)\fs20}{\c&HA8B0B8&}my \{clip\}.mp4
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,998)\bord0\shad0\1c&HA8B0B8&\1a&H90&\p1}m 0 7 l 44 7 44 44 0 44 m 44 13 l 88 13 88 44 44 44 m 88 17 l 133 17 133 44 88 44 m 133 22 l 177 22 177 44 133 44 m 177 29 l 221 29 221 44 177 44 m 221 43 l 266 43 266 44 221 44 m 266 6 l 310 6 310 44 266 44 m 310 6 l 354 6 354 44 310 44 m 354 6 l 399 6 399 44 354 44 m 399 4 l 443 4 443 44 399 44 m 443 3 l 487 3 487 44 443 44 m 487 1 l 532 1 532 44 487 44 {\p0}
+Dialogue: 1,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,998)\bord0\shad0\1c&H439FFF&\clip(38,998,38,1042)\t(40,520,\clip(38,998,570,1042))\p1}m 0 7 l 44 7 44 44 0 44 m 44 13 l 88 13 88 44 44 44 m 88 17 l 133 17 133 44 88 44 m 133 22 l 177 22 177 44 133 44 m 177 29 l 221 29 221 44 177 44 m 221 43 l 266 43 266 44 221 44 m 266 6 l 310 6 310 44 266 44 m 310 6 l 354 6 354 44 310 44 m 354 6 l 399 6 399 44 354 44 m 399 4 l 443 4 443 44 399 44 m 443 3 l 487 3 487 44 443 44 m 487 1 l 532 1 532 44 487 44 {\p0}
+Dialogue: 2,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\pos(38,988)\bord0\shad0\1c&HFFFFFF&\1a&H00&\p1}m 265 0 l 267 0 267 8 265 8 {\p0}
+Dialogue: 2,0:00:00.00,0:00:00.52,qc,,0,0,0,,{\an7\move(38,990,570,990,40,520)\bord0\shad0\1c&HFFFFFF&\p1}m -1 0 l 2 0 2 52 -1 52 {\p0}
+Dialogue: 2,0:00:00.26,0:00:00.34,qc,,0,0,0,,{\an7\pos(0,0)\bord0\shad0\1c&H439FFF&\1a&H00&\p1}m 0 0 l 608 0 608 6 0 6 m 0 1074 l 608 1074 608 1080 0 1080 m 0 0 l 6 0 6 1080 0 1080 m 602 0 l 608 0 608 1080 602 1080 {\p0}

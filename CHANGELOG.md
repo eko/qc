@@ -18,6 +18,51 @@ First public release: a Go library and the `qc` CLI.
   bitstream without decoding (`--fast`, under a second). Then one decode
   fanned out to SI/TI (ITU-T P.910), shot detection, black and frozen
   segments, letterbox/pillarbox detection and luma levels.
+- **Camera motion** (`analyze/motion`, on by default, `--no-motion` to skip):
+  the global motion of every frame estimated on the shared thumbnails
+  (integral-projection predictor, block matching with a Lucas–Kanade
+  sub-pixel step, robust similarity fit), and each shot's camera work:
+  static, pan, tilt, zoom, tracking (parallax), handheld, mixed, with its
+  direction and a shake measure. JSON columns (`motionPan`, `motionTilt`,
+  `motionZoom`, `motionRoll`, `motionShake`, `motionConfidence`),
+  `video.motion` and `shots[].camera`; a camera section and a shot column in
+  the terminal report; a camera motion chart, card and shot column in the
+  HTML report; a note on shaky shots. About 0.17 ms of one core per frame;
+  validated on synthetic moves of known speed (`bench/motionval`).
+- **Annotated videos** (`--overlay annotated.mp4` on `analyze`, `vmaf` and
+  `run`, and a question of the wizard): a copy of the video with the
+  analysis burnt in as a debug overlay: timecode, frame number, size and
+  keyframes, bitrate, shot and cut markers, camera work with a motion
+  vector, SI/TI, luma levels, HDR light levels, black/frozen/banded/
+  out-of-range badges, the VMAF and other metrics of each scored frame
+  (`--exact` for every frame), and a timeline with a playhead
+  (`--overlay-items` to choose, `--overlay-height` for a smaller, faster
+  copy). Package `overlay` writes an ASS script, frame-accurate at any
+  frame rate below 100 fps, that libass draws in the H.264 encode of the
+  copy (`encode.FFmpeg.Burn`); same frames, timestamps and audio as the
+  source. The copy is encoded by the media engine when there is one
+  (`--overlay-encoder auto`: VideoToolbox on macOS after a test encode,
+  NVENC with `--gpu`, x264 otherwise), in segments split at keyframes and
+  rendered concurrently (`--overlay-workers`), each with its slice of the
+  script, joined without re-encoding (a segment that does not render the
+  frames planned falls back to one pass): 59 minutes of 1080p25 annotated
+  in 217 s on an M2 Max (778 s with x264, 6371 s of CPU against 387 s).
+  ffmpeg's libass, and an explicit hardware encoder, are checked before any
+  work; `qc version --check` lists VideoToolbox; the Docker images ship
+  libass with DejaVu Sans Mono.
+- **Fast frame analysis**: on macOS the video is split at keyframes into
+  segments decoded concurrently by VideoToolbox (`--hwaccel auto`, the
+  default; `videotoolbox` and `none` also accepted), each fed to forks of
+  every analyzer (`analyze.Forker`, `analyze.RunSegments`) whose per-frame
+  series are merged in order: the report is identical to a single pass, to
+  the bit, and a segment that does not start where planned falls back to
+  one. NEON loops on arm64 for SI, TI, luma statistics and thumbnails
+  (checked against the portable Go ones), and Unix sockets instead of pipes
+  for the raw frames. 59 minutes of 1080p25 H.264 analysed in 62–71 s at
+  26 Mbit/s (225 s before) and 49–52 s at 6 Mbit/s (230 s) on an M2 Max; the
+  single CPU pass (other systems, `--hwaccel none`) is 1.1× to 2.7× faster
+  too, depending on the share of the decode. See
+  [analysis.md](docs/analysis.md#performance).
 - **VMAF with a confidence interval** (`qc vmaf`): short clips sampled
   across shots (stratified, two-stage) until the 95% interval is narrower
   than `--precision`, with a real coverage validated by replaying thousands

@@ -29,8 +29,8 @@ const (
 )
 
 // gpuFlagHelp describes --gpu: what it turns on, and what stays on the CPU.
-const gpuFlagHelp = "use an NVIDIA GPU where available: NVDEC decoding (--hwaccel cuda), NVENC ladders (--encoder nvenc), " +
-	"CUDA VMAF when the model allows it (--vmaf-backend auto); fails early without a usable GPU"
+const gpuFlagHelp = "use an NVIDIA GPU where available: NVDEC decoding (--hwaccel cuda), NVENC ladders (--encoder nvenc) " +
+	"and annotated copies (--overlay-encoder nvenc), CUDA VMAF when the model allows it (--vmaf-backend auto); fails early without a usable GPU"
 
 // addGPUFlags registers --gpu and the fine-grained flags of what the
 // command uses. Their defaults are empty, so that --gpu only fills what was
@@ -43,7 +43,8 @@ func addGPUFlags(
 	flags.Bool("gpu", false, gpuFlagHelp)
 
 	if use&gpuDecode != 0 {
-		flags.String("hwaccel", "", "hardware decoding: none (default), cuda (NVDEC, identical frames) or cuda-scale (NVDEC + GPU scaling, not bit-exact)")
+		flags.String("hwaccel", "", "hardware decoding: auto (default: VideoToolbox for the segments of a frame analysis on macOS, CPU otherwise), "+
+			"none, videotoolbox, cuda (NVDEC) — all with identical frames — or cuda-scale (NVDEC + GPU scaling, not bit-exact)")
 	}
 
 	if use&gpuEncode != 0 {
@@ -73,6 +74,10 @@ func (c Config) withGPU() Config {
 
 	if c.GPU.VMAFBackend == "" {
 		c.GPU.VMAFBackend = string(vmaf.BackendAuto)
+	}
+
+	if c.Overlay.Encoder == "" && c.Output.Overlay != "" {
+		c.Overlay.Encoder = string(encode.BurnNVENC)
 	}
 
 	return c
@@ -112,7 +117,10 @@ func gpuSettingsOf(
 ) gpuSettings {
 	s := gpuSettings{bitDepth: config.Ladder.EncodeBitDepth}
 
-	s.hwaccel, _ = decode.ParseHWAccel(config.GPU.HWAccel)
+	s.hwaccel = decode.HWAccelAuto
+	if config.GPU.HWAccel != "" {
+		s.hwaccel, _ = decode.ParseHWAccel(config.GPU.HWAccel)
+	}
 	s.encoder, _ = encode.ParseHardware(config.GPU.Encoder)
 	s.backend, _ = vmaf.ParseBackend(config.GPU.VMAFBackend)
 

@@ -74,6 +74,10 @@ type section struct {
 	Notes    []string
 	// Commands are shell commands, shown with a copy button.
 	Commands []string
+	// Collapsed renders the section closed: reference material, such as the
+	// encoding commands, that would push the analysis down the page. The
+	// navigation, finding links and printing still open it.
+	Collapsed bool
 	// Topic lets findings link to the section's chart.
 	Topic findings.Topic
 	// Anchor is the section's id, set by link.

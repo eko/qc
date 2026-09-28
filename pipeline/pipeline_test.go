@@ -28,6 +28,11 @@ func TestStages(
 			opts: Options{Source: "a.mp4", Reference: "r.mp4", SkipAnalysis: true},
 			want: []string{KindInspect, KindVMAF},
 		},
+		{
+			name: "the annotated copy comes before the ladders",
+			opts: Options{Source: "a.mp4", Reference: "r.mp4", Codecs: []string{"h264"}, Overlay: OverlayOptions{Output: "o.mp4"}},
+			want: []string{KindInspect, KindAnalysis, KindVMAF, KindOverlay, KindLadder},
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -332,7 +332,8 @@ func TestLoadConfigFromEnvironment(
 	assert.True(t, config.Ladder.NoVerify)
 	assert.Equal(t, formatText, config.Output.Format)
 
-	opts := runOptions(config, "source.mov")
+	opts, err := runOptions(config, "source.mov")
+	require.NoError(t, err)
 	assert.Equal(t, "source.mov", opts.Source)
 	assert.Equal(t, ladder.Options{
 		Constraints: ladder.Constraints{TopVMAF: 95, MinVMAF: 30, Step: 6, MaxRungs: 8, MinBitrate: 145_000},

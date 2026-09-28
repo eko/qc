@@ -48,13 +48,20 @@ type Result struct {
 	Segments []media.Interval `json:"segments"`
 }
 
-// Analyzer implements analyze.Analyzer.
+// Analyzer implements analyze.Analyzer and analyze.Forker.
 type Analyzer struct {
 	opts Options
 	// threshold is the brightest code value still counted as dark.
 	threshold byte
-	flags     []bool
-	pts       []media.Duration
+	series    analyze.Series[flagged]
+	// seq is the run of a sequential pass (Consume).
+	seq *run
+}
+
+// flagged is the measure of one frame.
+type flagged struct {
+	black bool
+	pts   media.Duration
 }
 
 // New returns an Analyzer for a signal with the given nominal levels.
@@ -72,29 +79,78 @@ func New(
 func (a *Analyzer) Consume(
 	f *frame.Frame,
 ) error {
-	pix := analyze.Thumbnail(f)
-
-	dark := 0
-	for _, v := range pix {
-		if v <= a.threshold {
-			dark++
-		}
+	if a.seq == nil {
+		a.seq = a.fork()
 	}
 
-	a.flags = append(a.flags, len(pix) > 0 && float64(dark) >= a.opts.PictureRatio*float64(len(pix)))
-	a.pts = append(a.pts, f.PTS)
-
-	return nil
+	return a.seq.Consume(f)
 }
 
 // Close implements analyze.Analyzer.
 func (a *Analyzer) Close() error {
+	if a.seq != nil {
+		return a.seq.Close()
+	}
+
 	return nil
+}
+
+// Fork implements analyze.Forker.
+func (a *Analyzer) Fork() analyze.Analyzer {
+	return a.fork()
+}
+
+func (a *Analyzer) fork() *run {
+	return &run{parent: a, first: -1}
 }
 
 // Result returns the black segments. end is the end time of the last frame.
 func (a *Analyzer) Result(
 	end media.Duration,
 ) Result {
-	return Result{Segments: segments.Detect(a.flags, a.pts, end, a.opts.MinDuration)}
+	frames := a.series.Merge()
+	flags, pts := make([]bool, len(frames)), make([]media.Duration, len(frames))
+
+	for i, fr := range frames {
+		flags[i], pts[i] = fr.black, fr.pts
+	}
+
+	return Result{Segments: segments.Detect(flags, pts, end, a.opts.MinDuration)}
+}
+
+// run flags the frames of one run.
+type run struct {
+	parent *Analyzer
+	first  int
+	frames []flagged
+}
+
+// Consume implements analyze.Analyzer.
+func (r *run) Consume(
+	f *frame.Frame,
+) error {
+	if r.first < 0 {
+		r.first = f.Index
+	}
+
+	pix := analyze.Thumbnail(f)
+
+	dark := 0
+	for _, v := range pix {
+		if v <= r.parent.threshold {
+			dark++
+		}
+	}
+
+	black := len(pix) > 0 && float64(dark) >= r.parent.opts.PictureRatio*float64(len(pix))
+	r.frames = append(r.frames, flagged{black: black, pts: f.PTS})
+
+	return nil
+}
+
+// Close implements analyze.Analyzer.
+func (r *run) Close() error {
+	r.parent.series.Add(r.first, r.frames)
+
+	return nil
 }

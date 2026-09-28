@@ -19,6 +19,7 @@ func TestGenerate(
 		{name: "defaults", clip: Clip{}},
 		{name: "fixed gop with filter", clip: Clip{GOP: 10, Filter: "hflip", Seconds: 1, Name: "x.mkv"}},
 		{name: "other codec", clip: Clip{Codec: "mpeg4", Seconds: 0.5, Args: []string{"-q:v", "5"}}},
+		{name: "with audio", clip: Clip{Seconds: 0.5, Audio: true}},
 	}
 
 	for _, testCase := range testCases {
@@ -28,6 +29,37 @@ func TestGenerate(
 			info, err := os.Stat(path)
 			require.NoError(t, err)
 			assert.Positive(t, info.Size())
+		})
+	}
+}
+
+func TestRequireFilter(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name     string
+		filter   string
+		wantSkip bool
+	}{
+		{name: "known filter", filter: "scale"},
+		{name: "unknown filter", filter: "qc-no-such-filter", wantSkip: true},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			RequireFFmpeg(t)
+
+			skipped := true
+
+			// The check runs in its own test, whose skip is observed here.
+			ok := t.Run("check", func(t *testing.T) {
+				RequireFilter(t, testCase.filter)
+
+				skipped = false
+			})
+
+			assert.True(t, ok)
+			assert.Equal(t, testCase.wantSkip, skipped)
 		})
 	}
 }

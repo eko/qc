@@ -26,8 +26,13 @@ type Options struct {
 
 // Report is the result of a bitstream analysis.
 type Report struct {
-	PacketCount    int              `json:"packetCount"`
-	Duration       media.Duration   `json:"duration"`
+	PacketCount int            `json:"packetCount"`
+	Duration    media.Duration `json:"duration"`
+	// Start is the presentation time of the first frame on the container's
+	// timeline: ffmpeg shifts it by the container's start time, which
+	// timelines built on PTS (relative to the first frame) need to match
+	// what ffmpeg filters see.
+	Start          media.Duration   `json:"start"`
 	TotalBytes     int64            `json:"totalBytes"`
 	AverageBitrate int64            `json:"averageBitrate"`
 	PeakBitrate    int64            `json:"peakBitrate"`
@@ -94,6 +99,7 @@ func Analyze(
 	})
 
 	start := sorted[0].PTS
+	report.Start = media.Duration(start)
 	last := sorted[len(sorted)-1]
 	duration := last.PTS + last.Duration - start
 	report.Duration = media.Duration(duration)

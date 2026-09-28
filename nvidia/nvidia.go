@@ -89,11 +89,11 @@ func Probe(
 
 // RequireDecoding checks that ffmpeg can decode in mode: NVDEC for
 // decode.HWAccelCUDA, plus the GPU scaler for decode.HWAccelCUDAScale.
-// decode.HWAccelNone requires nothing.
+// Other modes (none, VideoToolbox) require nothing from the GPU.
 func (c Capabilities) RequireDecoding(
 	mode decode.HWAccel,
 ) error {
-	if mode == decode.HWAccelNone {
+	if !mode.CUDA() {
 		return nil
 	}
 

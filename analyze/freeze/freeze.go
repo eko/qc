@@ -45,13 +45,18 @@ type Result struct {
 	Segments []media.Interval `json:"segments"`
 }
 
-// Analyzer implements analyze.Analyzer.
+// Analyzer implements analyze.Analyzer and analyze.Forker.
 type Analyzer struct {
-	opts Options
-	// prev is a copy of the previous thumbnail (frames are recycled).
-	prev  []byte
-	flags []bool
-	pts   []media.Duration
+	opts   Options
+	series analyze.Series[still]
+	// seq is the run of a sequential pass (Consume).
+	seq *run
+}
+
+// still is the measure of one frame: whether it repeats its predecessor.
+type still struct {
+	repeats bool
+	pts     media.Duration
 }
 
 // New returns an Analyzer.
@@ -65,35 +70,78 @@ func New(
 func (a *Analyzer) Consume(
 	f *frame.Frame,
 ) error {
-	thumb := analyze.Thumbnail(f)
-
-	frozen := false
-	if a.prev != nil {
-		frozen = scene.MeanAbsDiff(a.prev, thumb) <= a.opts.MaxDiff
-	} else {
-		a.prev = make([]byte, len(thumb))
+	if a.seq == nil {
+		a.seq = &run{parent: a}
 	}
 
-	// A frozen frame also freezes its predecessor, which starts the run.
-	if frozen {
-		a.flags[len(a.flags)-1] = true
-	}
-
-	copy(a.prev, thumb)
-	a.flags = append(a.flags, frozen)
-	a.pts = append(a.pts, f.PTS)
-
-	return nil
+	return a.seq.Consume(f)
 }
 
 // Close implements analyze.Analyzer.
 func (a *Analyzer) Close() error {
+	if a.seq != nil {
+		return a.seq.Close()
+	}
+
 	return nil
+}
+
+// Fork implements analyze.Forker.
+func (a *Analyzer) Fork() analyze.Analyzer {
+	return &run{parent: a}
 }
 
 // Result returns the frozen segments. end is the end time of the last frame.
 func (a *Analyzer) Result(
 	end media.Duration,
 ) Result {
-	return Result{Segments: segments.Detect(a.flags, a.pts, end, a.opts.MinDuration)}
+	frames := a.series.Merge()
+	flags, pts := make([]bool, len(frames)), make([]media.Duration, len(frames))
+
+	for i, fr := range frames {
+		// A frame repeating its predecessor freezes both: the predecessor
+		// starts the run.
+		if fr.repeats {
+			flags[i], flags[i-1] = true, true
+		}
+
+		pts[i] = fr.pts
+	}
+
+	return Result{Segments: segments.Detect(flags, pts, end, a.opts.MinDuration)}
+}
+
+// run compares the frames of one run with their predecessors.
+type run struct {
+	parent *Analyzer
+	// prev is a copy of the previous thumbnail (frames are recycled).
+	prev   []byte
+	first  int
+	frames []still
+}
+
+// Consume implements analyze.Analyzer.
+func (r *run) Consume(
+	f *frame.Frame,
+) error {
+	thumb := analyze.Thumbnail(f)
+
+	repeats := false
+	if r.prev != nil {
+		repeats = scene.MeanAbsDiff(r.prev, thumb) <= r.parent.opts.MaxDiff
+	} else {
+		r.prev, r.first = make([]byte, len(thumb)), f.Index
+	}
+
+	copy(r.prev, thumb)
+	r.frames = append(r.frames, still{repeats: repeats, pts: f.PTS})
+
+	return nil
+}
+
+// Close implements analyze.Analyzer.
+func (r *run) Close() error {
+	r.parent.series.Add(r.first, r.frames)
+
+	return nil
 }

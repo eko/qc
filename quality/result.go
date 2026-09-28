@@ -53,8 +53,8 @@ type Result struct {
 	// BackendNote explains why a GPU measurement ran on the CPU instead.
 	BackendNote string `json:"backendNote,omitempty"`
 	// HWAccel is the hardware decoding mode of the decoder ("cuda",
-	// "cuda-scale"), empty on the CPU. Files NVDEC cannot decode still
-	// fall back to the CPU.
+	// "cuda-scale", "videotoolbox"), empty on the CPU. Files the hardware
+	// cannot decode still fall back to the CPU.
 	HWAccel string         `json:"hwaccel,omitempty"`
 	Elapsed media.Duration `json:"elapsed"`
 }
@@ -77,13 +77,17 @@ type FrameScore struct {
 	Metrics map[string]float64 `json:"metrics,omitempty"`
 }
 
-// GPUSummary says in a few words what ran on an NVIDIA GPU: NVDEC
+// GPUSummary says in a few words what ran on a GPU: NVDEC or VideoToolbox
 // decoding, CUDA feature extraction, or a CUDA request that fell back to
 // the CPU (BackendNote says why). It is empty for a CPU-only measurement.
 func (r *Result) GPUSummary() string {
 	var parts []string
 
-	if r.HWAccel != "" {
+	switch r.HWAccel {
+	case "":
+	case string(decode.HWAccelVideoToolbox):
+		parts = append(parts, "VideoToolbox decoding")
+	default:
 		parts = append(parts, "NVDEC decoding ("+r.HWAccel+")")
 	}
 

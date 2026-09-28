@@ -18,7 +18,7 @@ func TestWizardFormGroups(
 
 	for _, offerGPU := range []bool{false, true} {
 		groups := answers.formGroups(wizardContext{offerGPU: offerGPU})
-		require.Len(t, groups, 16)
+		require.Len(t, groups, 18)
 
 		for i, group := range groups {
 			assert.NotNil(t, group, "group %d", i)
@@ -86,6 +86,32 @@ func TestWizardHiddenGroups(
 			})
 		})
 	}
+}
+
+func TestWizardOverlayHidden(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name         string
+		answers      wizardAnswers
+		wantAsked    bool
+		wantPathAsks bool
+	}{
+		{name: "ladder only", answers: wizardAnswers{Actions: []string{actionLadder}, Overlay: true}},
+		{name: "analysis, declined", answers: wizardAnswers{Actions: []string{actionAnalysis}}, wantAsked: true},
+		{name: "vmaf, accepted", answers: wizardAnswers{Actions: []string{actionVMAF}, Overlay: true}, wantAsked: true, wantPathAsks: true},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			a := testCase.answers
+			assert.Equal(t, testCase.wantAsked, !a.overlayHidden())
+			assert.Equal(t, testCase.wantPathAsks, !a.overlayPathHidden())
+		})
+	}
+
+	require.NoError(t, requireName("annotated.mp4"))
+	require.Error(t, requireName("  "))
 }
 
 func TestWizardHDRDetected(

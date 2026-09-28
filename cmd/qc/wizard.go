@@ -69,6 +69,11 @@ type wizardAnswers struct {
 	Metrics   []string
 	Devices   []string
 	HTML      string
+	// Overlay asks for an annotated copy of the source, written to
+	// OverlayPath; both are asked only when the source is analysed or
+	// compared (see overlayHidden).
+	Overlay     bool
+	OverlayPath string
 	// GPU is asked only when an NVIDIA GPU is usable (see wizardOffersGPU).
 	GPU bool
 	// HDRMetric is asked only for an HDR source: how VMAF scores it.
@@ -129,6 +134,10 @@ func (a wizardAnswers) runArgs() []string {
 
 	if html := strings.TrimSpace(a.HTML); html != "" {
 		args = append(args, "--html", notFlag(html))
+	}
+
+	if path := strings.TrimSpace(a.OverlayPath); a.Overlay && path != "" && !a.overlayHidden() {
+		args = append(args, "--overlay", notFlag(path))
 	}
 
 	return args
@@ -545,6 +554,8 @@ func (a *wizardAnswers) formGroups(
 		a.filmGrainGroup(),
 		a.gpuGroup(ctx.offerGPU),
 		a.htmlGroup(),
+		a.overlayGroup(),
+		a.overlayPathGroup(),
 	}
 }
 
@@ -583,6 +594,12 @@ func (a *wizardAnswers) shapeHidden(
 // per-shot rungs, which exclude it.
 func (a *wizardAnswers) filmGrainHidden() bool {
 	return a.advancedHidden() || !slices.Contains(a.Codecs, av1Codec) || a.PerShot
+}
+
+// overlayHidden hides the annotated copy unless the source is analysed or
+// compared: it would only show what the bitstream tells.
+func (a *wizardAnswers) overlayHidden() bool {
+	return !a.wants(actionAnalysis) && !a.wants(actionVMAF)
 }
 
 // advancedHidden hides the ladder customisation unless it was asked for.
@@ -880,6 +897,48 @@ func (a *wizardAnswers) htmlGroup() *huh.Group {
 			Placeholder("report.html").
 			Value(&a.HTML),
 	)
+}
+
+// overlayGroup asks whether to write an annotated copy of the source.
+func (a *wizardAnswers) overlayGroup() *huh.Group {
+	return huh.NewGroup(
+		huh.NewConfirm().
+			Title("Produce an annotated video?").
+			Description("A copy of the source with the analysis (and the VMAF of each scored frame) burnt in: timecode, " +
+				"bitrate, shots, camera motion, SI/TI, levels, timeline. Every frame has a VMAF with the exact mode.").
+			Affirmative("Yes").
+			Negative("No").
+			Value(&a.Overlay),
+	).WithHideFunc(a.overlayHidden)
+}
+
+// overlayPathGroup asks where to write the annotated copy.
+func (a *wizardAnswers) overlayPathGroup() *huh.Group {
+	return huh.NewGroup(
+		huh.NewInput().
+			Title("Annotated video").
+			Description("An H.264 file (MP4, MKV or MOV).").
+			Placeholder("annotated.mp4").
+			Validate(requireName).
+			Value(&a.OverlayPath),
+	).WithHideFunc(a.overlayPathHidden)
+}
+
+// overlayPathHidden hides the path of the annotated copy unless one was
+// asked for.
+func (a *wizardAnswers) overlayPathHidden() bool {
+	return a.overlayHidden() || !a.Overlay
+}
+
+// requireName rejects an empty file name.
+func requireName(
+	name string,
+) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("enter a file name")
+	}
+
+	return nil
 }
 
 // videoPicker is a file picker restricted to video files.

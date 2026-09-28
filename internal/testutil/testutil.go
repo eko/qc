@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,6 +22,27 @@ func RequireFFmpeg(
 			t.Skipf("%s not available", bin)
 		}
 	}
+}
+
+// RequireFilter skips the test when ffmpeg is not installed or lacks the
+// named filter (subtitles needs an ffmpeg built with libass).
+func RequireFilter(
+	t testing.TB,
+	name string,
+) {
+	t.Helper()
+	RequireFFmpeg(t)
+
+	out, err := exec.CommandContext(t.Context(), "ffmpeg", "-hide_banner", "-filters").Output()
+	require.NoError(t, err)
+
+	for line := range strings.Lines(string(out)) {
+		if fields := strings.Fields(line); len(fields) >= 2 && fields[1] == name {
+			return
+		}
+	}
+
+	t.Skipf("ffmpeg has no %s filter", name)
 }
 
 // Clip describes a synthetic clip generated with ffmpeg's lavfi sources.
@@ -44,6 +66,8 @@ type Clip struct {
 	Name string
 	// Args are extra output arguments.
 	Args []string
+	// Audio adds a sine tone as an AAC audio stream.
+	Audio bool
 }
 
 // Generate encodes the clip into t.TempDir and returns its path. It skips
@@ -62,6 +86,10 @@ func Generate(
 		":rate=" + strconv.Itoa(c.Rate) + ":duration=" + strconv.FormatFloat(c.Seconds, 'f', -1, 64)
 
 	args := []string{"-v", "error", "-y", "-f", "lavfi", "-i", source}
+	if c.Audio {
+		tone := "sine=frequency=440:sample_rate=48000:duration=" + strconv.FormatFloat(c.Seconds, 'f', -1, 64)
+		args = append(args, "-f", "lavfi", "-i", tone, "-c:a", "aac")
+	}
 
 	filter := "format=" + c.PixelFormat
 	if c.Filter != "" {

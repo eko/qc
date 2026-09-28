@@ -47,6 +47,7 @@ type Config struct {
 	Ladder   LadderConfig   `mapstructure:",squash"`
 	Run      RunConfig      `mapstructure:",squash"`
 	GPU      GPUConfig      `mapstructure:",squash"`
+	Overlay  OverlayConfig  `mapstructure:",squash"`
 }
 
 // ToolsConfig locates the external tools and sets the log level: the
@@ -57,12 +58,14 @@ type ToolsConfig struct {
 	LogLevel string `mapstructure:"log-level"`
 }
 
-// OutputConfig is where and how reports are written (addOutputFlags).
+// OutputConfig is where and how reports are written (addOutputFlags), and
+// the annotated copy of the video (addOverlayFlags).
 type OutputConfig struct {
 	Format     string `mapstructure:"format"`
 	Output     string `mapstructure:"output"`
 	HTML       string `mapstructure:"html"`
 	CPUProfile string `mapstructure:"cpuprofile"`
+	Overlay    string `mapstructure:"overlay"`
 }
 
 // AnalysisConfig tunes the technical analysis (addAnalysisFlags).
@@ -70,6 +73,7 @@ type AnalysisConfig struct {
 	Fast            bool          `mapstructure:"fast"`
 	BitrateInterval time.Duration `mapstructure:"bitrate-interval"`
 	PeakWindow      time.Duration `mapstructure:"peak-window"`
+	NoMotion        bool          `mapstructure:"no-motion"`
 }
 
 // QualityConfig tunes VMAF measurements (addQualityFlags): the model and
@@ -133,6 +137,15 @@ type GPUConfig struct {
 	VMAFBackend string `mapstructure:"vmaf-backend"`
 }
 
+// OverlayConfig tunes the annotated copy written by --overlay
+// (addOverlayFlags).
+type OverlayConfig struct {
+	Items   []string `mapstructure:"overlay-items"`
+	Height  int      `mapstructure:"overlay-height"`
+	Encoder string   `mapstructure:"overlay-encoder"`
+	Workers int      `mapstructure:"overlay-workers"`
+}
+
 // validate rejects invalid values before any work starts, so that a typo
 // does not surface after a long run.
 func (c Config) validate() error {
@@ -142,6 +155,7 @@ func (c Config) validate() error {
 		c.Quality.validate,
 		c.Ladder.validate,
 		c.GPU.validate,
+		c.Overlay.validate,
 		c.validateCodecs,
 		c.validateFilmGrain,
 	}

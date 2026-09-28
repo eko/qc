@@ -11,6 +11,7 @@ import (
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/pipeline"
 	"github.com/eko/qc/quality"
 )
@@ -151,6 +152,7 @@ func hooks(
 				e.Panel(i, tui.VMAFPanel{Progress: p})
 			}
 		},
+		Overlay: func(i int, p overlay.Progress) { e.Progress(i, p.Done, p.Total, "") },
 		Ladder: func(i int, p ladder.Progress) {
 			mu.Lock()
 			defer mu.Unlock()

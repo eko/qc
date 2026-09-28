@@ -81,6 +81,22 @@ func TestWithGPU(
 			want:   Config{GPU: GPUConfig{GPU: true, HWAccel: "cuda", VMAFBackend: "auto"}},
 		},
 		{
+			name:   "an annotated copy with NVENC",
+			config: Config{Output: OutputConfig{Overlay: "o.mp4"}, GPU: GPUConfig{GPU: true}},
+			want: Config{
+				Output: OutputConfig{Overlay: "o.mp4"}, Overlay: OverlayConfig{Encoder: "nvenc"},
+				GPU: GPUConfig{GPU: true, HWAccel: "cuda", VMAFBackend: "auto"},
+			},
+		},
+		{
+			name:   "an annotated copy with the encoder asked for",
+			config: Config{Output: OutputConfig{Overlay: "o.mp4"}, Overlay: OverlayConfig{Encoder: "x264"}, GPU: GPUConfig{GPU: true}},
+			want: Config{
+				Output: OutputConfig{Overlay: "o.mp4"}, Overlay: OverlayConfig{Encoder: "x264"},
+				GPU: GPUConfig{GPU: true, HWAccel: "cuda", VMAFBackend: "auto"},
+			},
+		},
+		{
 			name:   "explicit settings win",
 			config: Config{Run: RunConfig{Codecs: []string{"hevc"}}, GPU: GPUConfig{GPU: true, HWAccel: "cuda-scale", Encoder: "cpu", VMAFBackend: "cpu"}},
 			want:   Config{Run: RunConfig{Codecs: []string{"hevc"}}, GPU: GPUConfig{GPU: true, HWAccel: "cuda-scale", Encoder: "cpu", VMAFBackend: "cpu"}},

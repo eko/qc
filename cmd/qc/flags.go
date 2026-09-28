@@ -38,6 +38,7 @@ func addAnalysisFlags(
 	flags.Bool("fast", false, "container and bitstream only, no frame decoding (< 1s)")
 	flags.Duration("bitrate-interval", time.Second, "bucket size of the bitrate series")
 	flags.Duration("peak-window", time.Second, "sliding window of the peak bitrate")
+	flags.Bool("no-motion", false, "skip the camera motion analysis (pan, tilt, zoom, shake per shot)")
 }
 
 // addModelFlag registers --model and --model-dir, shared by VMAF
@@ -116,6 +117,7 @@ func analysisOptions(
 			Interval:   config.BitrateInterval,
 			PeakWindow: config.PeakWindow,
 		},
+		Video: analysis.VideoOptions{SkipMotion: config.NoMotion},
 	}
 }
 

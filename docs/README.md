@@ -15,6 +15,7 @@ is not exact comes with its uncertainty.
 | [Validation](validation.md) | How speed-ups are proven: replay simulation, exhaustive ladder optimum, measured results |
 | [CLI](cli.md) | Commands, flags, live dashboard, wizard, JSON and HTML reports |
 | [NVIDIA GPUs](gpu.md) | NVDEC decoding, NVENC ladders, CUDA VMAF: what runs where, the CUDA image, the validation kit |
+| [Annotated videos](overlay.md) | `--overlay`: the analysis and per-frame VMAF burnt into a copy of the video with libass, frame-accurate |
 
 The landscape beyond VMAF (newer metrics, per-shot and network-aware
 encoding, AI models) and the proposed roadmap are in

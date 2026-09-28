@@ -2,7 +2,8 @@
 #
 # qc, NVIDIA image: qc built with the cuda tag + libvmaf 3.2.1 built with its
 # CUDA feature extractors (and the VMAF v1 models) + ffmpeg 9.0.2 with
-# NVDEC/NVENC (nv-codec-headers), scale_cuda, libx264, libx265 and SVT-AV1 4.2.
+# NVDEC/NVENC (nv-codec-headers), scale_cuda, libx264, libx265, SVT-AV1 4.2
+# and libass (the annotated videos of --overlay).
 # See docs/gpu.md.
 #
 #   docker build -f Dockerfile.cuda -t qc:cuda .
@@ -34,7 +35,7 @@ FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_RELEASE} AS toolchain
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential ca-certificates clang cmake curl meson nasm ninja-build pkg-config xxd \
-        libdav1d-dev libx264-dev libx265-dev zlib1g-dev \
+        libass-dev libdav1d-dev libx264-dev libx265-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # install-nv-codec-headers VERSION SHA256: libvmaf and ffmpeg reach the
@@ -139,10 +140,11 @@ RUN ./configure \
         --prefix=/opt/ffmpeg \
         --disable-autodetect --disable-doc --disable-ffplay --disable-debug \
         --enable-gpl --enable-zlib \
-        --enable-libx264 --enable-libx265 --enable-libsvtav1 --enable-libdav1d --enable-libvmaf \
+        --enable-libx264 --enable-libx265 --enable-libsvtav1 --enable-libdav1d --enable-libvmaf --enable-libass \
         --enable-ffnvcodec --enable-cuda-llvm --enable-nvdec --enable-nvenc --enable-cuvid \
     && make -j"$(nproc)" \
     && make install \
+    && /opt/ffmpeg/bin/ffmpeg -hide_banner -filters | grep -q " subtitles " \
     && /opt/ffmpeg/bin/ffmpeg -hide_banner -hwaccels | grep -qx cuda \
     && /opt/ffmpeg/bin/ffmpeg -hide_banner -encoders | grep -q av1_nvenc \
     && /opt/ffmpeg/bin/ffmpeg -hide_banner -filters | grep -q scale_cuda \
@@ -181,7 +183,7 @@ FROM build AS test
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go vet -tags cuda ./... \
-    && go test -tags cuda -count=1 ./vmaf/... ./decode/... ./encode/... ./nvidia/... ./bench/gpuval/...
+    && go test -tags cuda -count=1 ./vmaf/... ./decode/... ./encode/... ./nvidia/... ./overlay/... ./bench/gpuval/...
 
 # ---------------------------------------------------------------------------
 # Runtime: CUDA base image (no toolkit; the driver comes from the host),
@@ -202,9 +204,10 @@ ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
     PATH=/opt/ffmpeg/bin:${PATH}
 
+# libass draws the --overlay in DejaVu Sans Mono (overlay.DefaultFont).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        libdav1d7 libx264-164 libx265-199 zlib1g \
+        fonts-dejavu-mono libass9 libdav1d7 libx264-164 libx265-199 zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /opt/ffmpeg/bin/

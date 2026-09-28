@@ -2,6 +2,8 @@ package analysis
 
 import (
 	"context"
+	"errors"
+	"runtime"
 
 	"github.com/eko/qc/analyze"
 	"github.com/eko/qc/analyze/black"
@@ -9,6 +11,7 @@ import (
 	"github.com/eko/qc/analyze/freeze"
 	"github.com/eko/qc/analyze/levels"
 	"github.com/eko/qc/analyze/light"
+	"github.com/eko/qc/analyze/motion"
 	"github.com/eko/qc/analyze/scene"
 	"github.com/eko/qc/analyze/siti"
 	"github.com/eko/qc/bitstream"
@@ -27,8 +30,21 @@ type VideoOptions struct {
 	Black  black.Options
 	Freeze freeze.Options
 	Crop   crop.Options
-	// Workers is the SI/TI worker count (0 = NumCPU).
+	Motion motion.Options
+	// SkipMotion leaves the camera motion analysis out.
+	SkipMotion bool
+	// Workers is the SI/TI worker count of a single-pass analysis (0 =
+	// NumCPU).
 	Workers int
+	// Decoders is how many segments of the video are decoded and analysed
+	// at once. 1 decodes the video in a single pass whose frames are
+	// fanned out to the analyzers. 0 asks the decoder
+	// (decode.SegmentDecoders), 1 when it cannot tell.
+	Decoders int
+	// DecoderThreads is the ffmpeg thread count of each segment's decoder
+	// (0 = NumCPU / Decoders, at least 2). Hardware sessions do not use
+	// them; a segment decoded on the CPU does.
+	DecoderThreads int
 }
 
 // VideoReport summarises the decoded-frame analysis.
@@ -44,6 +60,9 @@ type VideoReport struct {
 	// Light holds the light levels of a PQ or HLG video (MaxCLL, MaxFALL),
 	// nil for SDR.
 	Light *light.Result `json:"light,omitempty"`
+	// Motion sums up the camera work of the shots (nil when the motion
+	// analysis was skipped).
+	Motion *motion.Summary `json:"motion,omitempty"`
 }
 
 // ShotReport enriches a shot with its complexity and cost. Shots are the
@@ -54,6 +73,9 @@ type ShotReport struct {
 	SIMean  float64 `json:"siMean"`
 	TIMean  float64 `json:"tiMean"`
 	Bitrate int64   `json:"bitrate"`
+	// Camera is the camera work of the shot (nil when the motion analysis
+	// was skipped).
+	Camera *motion.Shot `json:"camera,omitempty"`
 }
 
 // ComplexityHint is a coarse encoding difficulty classification from SI/TI.
@@ -80,6 +102,19 @@ type FrameSeries struct {
 	PeakNits       []float64 `json:"peakNits,omitempty"`
 	RobustPeakNits []float64 `json:"robustPeakNits,omitempty"`
 	AverageNits    []float64 `json:"averageNits,omitempty"`
+	// MotionPan and MotionTilt (% of the width per second, positive when
+	// the camera turns right or up), MotionZoom (% per second, positive
+	// when zooming in) and MotionRoll (° per second, clockwise) are the
+	// low-passed camera move; MotionShake is the jitter of the camera path
+	// (% of the width) and MotionConfidence the confidence (0-1) of each
+	// frame's estimate. They are absent when the motion analysis was
+	// skipped.
+	MotionPan        []float64 `json:"motionPan,omitempty"`
+	MotionTilt       []float64 `json:"motionTilt,omitempty"`
+	MotionZoom       []float64 `json:"motionZoom,omitempty"`
+	MotionRoll       []float64 `json:"motionRoll,omitempty"`
+	MotionShake      []float64 `json:"motionShake,omitempty"`
+	MotionConfidence []float64 `json:"motionConfidence,omitempty"`
 }
 
 // videoAnalyzers are the analyzers fed by the single decode of stage 2.
@@ -92,6 +127,8 @@ type videoAnalyzers struct {
 	crop   *crop.Analyzer
 	// light measures the light levels of HDR videos (nil for SDR).
 	light *light.Analyzer
+	// motion estimates the camera motion (nil when skipped).
+	motion *motion.Analyzer
 }
 
 func newVideoAnalyzers(
@@ -113,6 +150,10 @@ func newVideoAnalyzers(
 		v.light = light.New(video.Color)
 	}
 
+	if !opts.SkipMotion {
+		v.motion = motion.New(opts.Motion)
+	}
+
 	return v
 }
 
@@ -120,6 +161,10 @@ func (v videoAnalyzers) list() []analyze.Analyzer {
 	list := []analyze.Analyzer{v.siti, v.levels, v.scene, v.black, v.freeze, v.crop}
 	if v.light != nil {
 		list = append(list, v.light)
+	}
+
+	if v.motion != nil {
+		list = append(list, v.motion)
 	}
 
 	return list
@@ -166,17 +211,6 @@ func (a *Analyzer) analyzeVideo(
 ) error {
 	video, _ := report.Info.PrimaryVideo()
 	bs := report.Bitstream
-	analyzers := newVideoAnalyzers(video, opts.Video)
-
-	req := decode.Request{
-		Path:         path,
-		SourceWidth:  video.Width,
-		SourceHeight: video.Height,
-		Pool:         framePool(video),
-		PTS:          bs.PTS,
-		FrameRate:    video.AvgFrameRate,
-		Codec:        video.Codec,
-	}
 
 	decoded := 0
 	onFrame := func(frames int) {
@@ -184,7 +218,8 @@ func (a *Analyzer) analyzeVideo(
 		progress(Progress{Stage: StageDecode, Done: frames, Total: bs.PacketCount})
 	}
 
-	if err := analyze.Run(ctx, a.decoder, req, analyzers.list(), onFrame); err != nil {
+	analyzers, err := a.decodeFrames(ctx, path, video, bs, opts.Video, onFrame)
+	if err != nil {
 		return err
 	}
 
@@ -208,9 +243,88 @@ func (a *Analyzer) analyzeVideo(
 
 	report.Frames = frameSeries(decoded, bs, sitiResult, sceneResult, levelsResult)
 	report.Frames.addLight(report.Video.Light)
+	analyzers.addMotion(sceneResult.Shots, report.Video, report.Frames)
 
 	return nil
 }
+
+// decodeFrames decodes the video into new analyzers and returns them.
+func (a *Analyzer) decodeFrames(
+	ctx context.Context,
+	path string,
+	video media.VideoStream,
+	bs *bitstream.Report,
+	opts VideoOptions,
+	progress func(frames int),
+) (videoAnalyzers, error) {
+	analyzers := newVideoAnalyzers(video, opts)
+
+	req := decode.Request{
+		Path:         path,
+		SourceWidth:  video.Width,
+		SourceHeight: video.Height,
+		Pool:         framePool(video),
+		PTS:          bs.PTS,
+		FrameRate:    video.AvgFrameRate,
+		Codec:        video.Codec,
+		PixelFormat:  video.PixelFormat,
+	}
+
+	err := a.runSegments(ctx, req, bs, opts, analyzers.list(), progress)
+	if errors.Is(err, analyze.ErrSegment) {
+		// A seek that did not land where planned (unusual timestamps):
+		// the single pass does not depend on seeking.
+		a.logger.Warn("segmented frame analysis failed, analysing in one pass", "path", path, "error", err)
+
+		analyzers = newVideoAnalyzers(video, opts)
+		err = analyze.Run(ctx, a.decoder, req, analyzers.list(), progress)
+	}
+
+	return analyzers, err
+}
+
+// runSegments decodes req into the analyzers: in concurrent segments when
+// the video is long enough to be split and every analyzer can be forked,
+// in a single pass otherwise.
+func (a *Analyzer) runSegments(
+	ctx context.Context,
+	req decode.Request,
+	bs *bitstream.Report,
+	opts VideoOptions,
+	analyzers []analyze.Analyzer,
+	progress func(frames int),
+) error {
+	decoders := opts.Decoders
+	if decoders <= 0 {
+		decoders = 1
+		if sd, ok := a.decoder.(decode.SegmentDecoders); ok {
+			decoders = sd.SegmentDecoders(req)
+		}
+	}
+
+	if decoders == 1 || !analyze.Splittable(analyzers) {
+		return analyze.Run(ctx, a.decoder, req, analyzers, progress)
+	}
+
+	bounds := segmentBounds(bs.KeyFlags, decoders)
+	if len(bounds) < 2 {
+		return analyze.Run(ctx, a.decoder, req, analyzers, progress)
+	}
+
+	threads := opts.DecoderThreads
+	if threads <= 0 {
+		threads = max(minDecoderThreads, runtime.NumCPU()/decoders)
+	}
+
+	reqs := segmentRequests(req, bounds, bs, threads)
+
+	return analyze.RunSegments(ctx, a.decoder, reqs, decoders, analyzers, progress)
+}
+
+// minDecoderThreads is the least ffmpeg threads a segment decoder gets:
+// a segment VideoToolbox cannot decode (a decoding failure) goes to the
+// CPU, where one thread cannot overlap parsing and decoding.
+const minDecoderThreads = 2
 
 // shotReports enriches shots with their SI/TI means and bitrate. Frames
 // beyond the SI/TI series (never expected: both come from the same decode)
