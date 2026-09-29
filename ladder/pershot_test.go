@@ -228,7 +228,8 @@ func TestBuildPerShotVideoStartingLate(
 
 	for _, r := range res.Rungs {
 		require.NotNil(t, r.PerShot)
-		assert.Contains(t, r.PerShot.Command, "ffmpeg -seek_timestamp 1 -ss 0.000000 -i "+sourcePath+" -ss 0.180000 ")
+		assert.Contains(t, r.PerShot.Command, "ffmpeg -seek_timestamp 1 -ss 0.000000 -i "+sourcePath+" -frames:v ")
+		assert.Contains(t, r.PerShot.Command, " -vf trim=start=0.180000,setpts=PTS-STARTPTS,")
 	}
 }
 

@@ -314,7 +314,8 @@ pre-roll fix below.
   frames whose references it lacked (two frames of one chunk), the chunk
   took two later frames instead (encoded twice), and the joined file had
   timestamp gaps. Chunks now decode from 2 s before their first frame and
-  drop the frames before it (an output seek): a lossless chunked encode of
+  drop the frames before it (an output seek, since then a `trim` filter
+  restarting their timestamps at their first frame): a lossless chunked encode of
   the whole 10:36 title then matches a straight decode of the source frame
   for frame (15,903 identical checksums, 25 fps).
   The full-title check of the long cartoon now runs: per-shot rungs lose

@@ -10,7 +10,7 @@ per-title adaptive streaming ladder (H.264, HEVC, AV1) as fast as the
 reliability you ask for allows.
 
 <p align="center">
-  <img src="docs/assets/hero.png" alt="The qc wizard, the live dashboard during a ladder build, and the interactive HTML report">
+  <img src="docs/assets/hero.png" alt="The qc wizard review screen, the live dashboard during a ladder build, and the HTML report with its verdict and key numbers">
 </p>
 
 - **Technical analysis in seconds**: bitrate, peaks and GOP structure without

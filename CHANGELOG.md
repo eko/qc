@@ -211,6 +211,17 @@ First public release: a Go library and the `qc` CLI.
   (`-seek_timestamp 1 -ss origin+t`, from the video's first frame), as
   decoding's already were: the per-shot commands all carry
   `-seek_timestamp 1`.
+- **Per-shot rungs of Matroska sources at 60, 59.94, 29.97 or 23.976
+  fps** had a hole of one frame in their timestamps at some chunk joins
+  (every frame present and right, but a variable frame rate, e.g. an
+  average of 1350/23 instead of 60 fps, which players and packagers
+  mishandle). Each chunk's time was counted from its output seek, half a
+  frame before its first frame: with Matroska's millisecond timestamps,
+  the frames fell on either side of the encoder's half ticks, and a frame
+  rounded up left a gap. Chunks now trim their preroll in their filter
+  chain and restart their timestamps at their first frame
+  (`trim=start=…,setpts=PTS-STARTPTS`, replacing the output `-ss`), so the
+  concat and MPEG-TS joins are constant frame rate at the source's rate.
 
 ### Library API
 

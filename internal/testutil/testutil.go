@@ -52,6 +52,9 @@ type Clip struct {
 	// Width, Height and Rate default to 320×180 at 25 fps.
 	Width, Height int
 	Rate          int
+	// RateDen, when set, makes the frame rate Rate/RateDen: 30000/1001 is
+	// 29.97 fps.
+	RateDen int
 	// Seconds defaults to 2.
 	Seconds float64
 	// Codec is an ffmpeg encoder (default libx264).
@@ -92,7 +95,7 @@ func Generate(
 	path := filepath.Join(t.TempDir(), c.Name)
 
 	source := c.Source + "=size=" + strconv.Itoa(c.Width) + "x" + strconv.Itoa(c.Height) +
-		":rate=" + strconv.Itoa(c.Rate) + ":duration=" + strconv.FormatFloat(c.Seconds, 'f', -1, 64)
+		":rate=" + c.rate() + ":duration=" + strconv.FormatFloat(c.Seconds, 'f', -1, 64)
 
 	args := []string{"-v", "error", "-y", "-f", "lavfi", "-i", source}
 	if c.Audio {
@@ -178,6 +181,15 @@ func delayVideo(
 	require.NoError(t, err, string(out))
 
 	return delayed
+}
+
+// rate is the frame rate of the clip as lavfi takes it.
+func (c Clip) rate() string {
+	if c.RateDen > 0 {
+		return strconv.Itoa(c.Rate) + "/" + strconv.Itoa(c.RateDen)
+	}
+
+	return strconv.Itoa(c.Rate)
 }
 
 func (c Clip) withDefaults() Clip {

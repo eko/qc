@@ -4,97 +4,97 @@ settings: preset=fast crf=10..51 probes=[20 27 34] step=0.5 maxrate=0 option=crf
 ### defaults
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 23 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### fixed gop capped
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 27.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### preset 10-bit
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 30 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 21.5 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 28 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 28 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx264 -preset slow -crf 21.5 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### above the encoder's max rate
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 18 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -sc_threshold 0 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### film grain
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 35 -g 48 -keyint_min 48 -sc_threshold 0 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -sc_threshold 0 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 48 -keyint_min 48 -sc_threshold 0 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 48 -keyint_min 48 -sc_threshold 0 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 48 -keyint_min 48 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 48 -keyint_min 48 -sc_threshold 0 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### everything
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 31 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 28 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 28 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx264 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### late video chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 0.180000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.180000 -i src.mov -ss 2.000000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 4.180000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=0.180000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.180000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 4.180000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx264 -preset fast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -sc_threshold 0 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
@@ -104,15 +104,15 @@ settings: preset=veryfast crf=10..51 probes=[22 29 36] step=0.5 maxrate=0 option
 ### defaults
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 23 -x265-params log-level=error -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -x265-params log-level=error -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -x265-params log-level=error -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -120,15 +120,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### fixed gop capped
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 27.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -136,15 +136,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### preset 10-bit
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 30 -x265-params log-level=error -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 28 -x265-params log-level=error -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 28 -x265-params log-level=error -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 24 -x265-params log-level=error -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx265 -preset slow -crf 21.5 -x265-params log-level=error -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -152,15 +152,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### above the encoder's max rate
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 18 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -maxrate 150000000 -bufsize 300000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -168,15 +168,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### film grain
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 35 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 48 -keyint_min 48 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -184,23 +184,23 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### everything
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 31 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 28 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 28 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p10le -c:v libx265 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### late video chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 0.180000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.180000 -i src.mov -ss 2.000000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 4.180000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=0.180000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.180000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 4.180000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libx265 -preset veryfast -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 -x265-params log-level=error:scenecut=0 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
@@ -210,97 +210,97 @@ settings: preset=8 crf=10..63 probes=[28 40 52] step=1 maxrate=100000000 option=
 ### defaults
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 23 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### fixed gop capped
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 27.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### preset 10-bit
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 30 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 21.5 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 28 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 28 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 24 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 21.5 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 24 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset slow -crf 21.5 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### above the encoder's max rate
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 18 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -maxrate 100000000 -bufsize 200000000 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### film grain
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 35 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 48 -keyint_min 48 -svtav1-params film-grain=20:film-grain-denoise=1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### everything
 ffmpeg -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 31 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 out.mp4
 #### chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 28 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 28 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 24 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p10le -c:v libsvtav1 -preset 4 -crf 21.5 -g 50 -keyint_min 50 -maxrate 2000000 -bufsize 4000000 -svtav1-params film-grain=12:film-grain-denoise=1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### late video chunks
-ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 0.180000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part001.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 0.180000 -i src.mov -ss 2.000000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part002.mp4 && \
-ffmpeg -seek_timestamp 1 -ss 4.180000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part003.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=0.180000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 24 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part001.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 0.180000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 21.5 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part002.mp4 && \
+ffmpeg -seek_timestamp 1 -ss 4.180000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v libsvtav1 -preset 8 -crf 28 -g 50 -keyint_min 50 -maxrate 3000000 -bufsize 4000000 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
@@ -310,97 +310,97 @@ settings: preset=p5 crf=10..51 probes=[21 28 35] step=1 maxrate=0 option=cq inpu
 ### defaults
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 23 -b:v 0 -rc-lookahead 20 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### fixed gop capped
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 27.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### preset 10-bit
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 30 -b:v 0 -rc-lookahead 20 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=p010le -c:v h264_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### above the encoder's max rate
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 18 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### film grain
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 35 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### everything
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 31 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=p010le -c:v h264_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### late video chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 0.180000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.180000 -i src.mov -ss 2.000000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 4.180000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=0.180000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.180000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 4.180000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v h264_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
@@ -410,15 +410,15 @@ settings: preset=p5 crf=10..51 probes=[23 30 37] step=1 maxrate=0 option=cq inpu
 ### defaults
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 23 -b:v 0 -rc-lookahead 20 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -426,15 +426,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### fixed gop capped
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 27.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -442,15 +442,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### preset 10-bit
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 30 -b:v 0 -rc-lookahead 20 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=p010le -c:v hevc_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -458,15 +458,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### above the encoder's max rate
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 18 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -474,15 +474,15 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### film grain
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 35 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
@@ -490,23 +490,23 @@ rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### everything
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 31 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=p010le -c:v hevc_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
 ffmpeg -i rung.part001.mp4 -c copy -f mpegts rung.part001.mp4.ts && \
 ffmpeg -i rung.part002.mp4 -c copy -f mpegts rung.part002.mp4.ts && \
 ffmpeg -i 'concat:rung.part001.mp4.ts|rung.part002.mp4.ts' -c copy -tag:v hev1 rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part001.mp4.ts rung.part002.mp4.ts
 ### late video chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 0.180000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.180000 -i src.mov -ss 2.000000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 4.180000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=0.180000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.180000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 4.180000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v hevc_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 -tag:v hvc1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
@@ -516,97 +516,97 @@ settings: preset=p5 crf=10..63 probes=[28 38 48] step=1 maxrate=0 option=cq inpu
 ### defaults
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 23 -b:v 0 -rc-lookahead 20 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### fixed gop capped
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 27.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### preset 10-bit
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 30 -b:v 0 -rc-lookahead 20 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 28 -b:v 0 -rc-lookahead 20 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 24 -b:v 0 -rc-lookahead 20 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=p010le -c:v av1_nvenc -preset slow -tune hq -rc vbr -cq 21.5 -b:v 0 -rc-lookahead 20 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### above the encoder's max rate
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 18 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=3840:2160:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -maxrate 150000000 -bufsize 300000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### film grain
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 35 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1920:1080:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 48 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### everything
 ffmpeg -hwaccel cuda -i 'in put.nut' -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 31 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 out.mp4
 #### chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 3.980000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt
 #### resized chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 1.980000 -frames:v 100 -an -sn -dn -vf scale=960:540:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=1.980000,setpts=PTS-STARTPTS,scale=960:540:flags=bicubic,format=p010le -c:v av1_nvenc -preset 4 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 2000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.mp4.txt
 ### late video chunks
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -ss 0.180000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.180000 -i src.mov -ss 2.000000 -frames:v 100 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
-ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 4.180000 -i src.mov -ss 2.000000 -frames:v 50 -an -sn -dn -vf scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.000000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=0.180000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 24 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part001.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 0.180000 -i src.mov -frames:v 100 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 21.5 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part002.mp4 && \
+ffmpeg -hwaccel cuda -seek_timestamp 1 -ss 4.180000 -i src.mov -frames:v 50 -an -sn -dn -vf trim=start=2.000000,setpts=PTS-STARTPTS,scale=1280:720:flags=bicubic,format=yuv420p -c:v av1_nvenc -preset p5 -tune hq -rc vbr -cq 28 -b:v 0 -g 50 -maxrate 3000000 -bufsize 4000000 -rc-lookahead 20 -no-scenecut 1 -forced-idr 1 rung.part003.mp4 && \
 printf "file '%s'\n" rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 > rung.mp4.txt && \
 ffmpeg -f concat -safe 0 -i rung.mp4.txt -c copy rung.mp4 && \
 rm rung.part001.mp4 rung.part002.mp4 rung.part003.mp4 rung.mp4.txt

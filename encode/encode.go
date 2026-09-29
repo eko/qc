@@ -131,6 +131,11 @@ type Params struct {
 	// Signal is the colour signal the encode carries (HDR sources); the
 	// zero value leaves it to the input frames.
 	Signal Signal
+
+	// preFilter is a filter chain, ending with a comma, run before the
+	// scaling: a chunked encode trims its preroll there and restarts its
+	// timestamps at 0 (see chunkFilter).
+	preFilter string
 }
 
 // Args returns the ffmpeg output arguments for p, without input or output path.
@@ -144,7 +149,7 @@ func (c Codec) Args(
 
 	impl := c.impl()
 
-	filter := fmt.Sprintf("scale=%d:%d:flags=bicubic,format=%s", p.Width, p.Height, impl.pixelFormat(p.BitDepth))
+	filter := p.preFilter + fmt.Sprintf("scale=%d:%d:flags=bicubic,format=%s", p.Width, p.Height, impl.pixelFormat(p.BitDepth))
 	if tags := p.Signal.setParams(); tags != "" {
 		filter += "," + tags
 	}

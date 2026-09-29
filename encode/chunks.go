@@ -64,7 +64,7 @@ type ChunkSource struct {
 
 // chunkArgs builds the ffmpeg arguments encoding chunk c of src into dst.
 // The input is seeked chunkPreroll early, then decoded frames are dropped
-// up to half a frame before the chunk's first frame (an output seek): the
+// up to half a frame before the chunk's first frame (chunkFilter): the
 // chunk starts exactly on its frame whatever the rounding of timestamps,
 // with every reference decoded. Times are on the container's timeline,
 // from the video's first frame (src.Origin).
@@ -85,14 +85,31 @@ func (c Codec) chunkArgs(
 	start := max(src.Origin.Seconds()+(float64(chunk.Start)-0.5)/src.Rate.Float(), floor)
 	preroll := min(chunkPreroll, start-floor)
 
-	args := append(seekArgs(media.Seconds(start-preroll)), "-i", src.Path)
-	if preroll > 0 {
-		args = append(args, "-ss", seconds(media.Seconds(preroll)))
-	}
-
-	args = append(args, "-frames:v", strconv.Itoa(chunk.Frames))
+	args := append(seekArgs(media.Seconds(start-preroll)), "-i", src.Path, "-frames:v", strconv.Itoa(chunk.Frames))
+	p.preFilter = chunkFilter(preroll)
 
 	return append(append(args, c.Args(p)...), dst)
+}
+
+// chunkFilter drops the frames decoded during the preroll (seconds), up to
+// half a frame before the chunk's first frame, and restarts the chunk's
+// timestamps at its first frame. An output seek (-ss after -i) would drop
+// the same frames but count the chunk's time from the seek point, half a
+// frame before its first frame: with timestamps rounded by the container
+// (Matroska's milliseconds, 16 or 17 ms apart at 60 fps), the frames then
+// sit on either side of the half ticks of the encoder's time base, and a
+// frame rounded up leaves a hole of a frame in the chunk's timeline, which
+// the join keeps (a variable frame rate). From its first frame, every
+// frame is within a millisecond of its tick.
+func chunkFilter(
+	preroll float64,
+) string {
+	const restart = "setpts=PTS-STARTPTS,"
+	if preroll <= 0 {
+		return restart
+	}
+
+	return "trim=start=" + seconds(media.Seconds(preroll)) + "," + restart
 }
 
 // EncodeChunks encodes src chunk by chunk, each with its own CRF and the

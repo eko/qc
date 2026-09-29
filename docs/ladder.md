@@ -312,14 +312,21 @@ flowchart LR
   the joined file gives exactly the frames of the separate chunks for x264,
   x265 and SVT-AV1 (checked by frame checksums). Adjacent shots sharing a CRF
   are merged. Each chunk decodes its source from 2 s before its first frame
-  and drops the frames before it (an output seek): seeking straight to the
+  and drops the frames before it (`trim` in its filter chain): seeking straight to the
   chunk lands on the source keyframe before it, which in a long-GOP source
   need not be a clean random access point, and the H.264 decoder then drops
   frames whose references it lacks (see
   [validation](validation.md#per-shot-rungs-ladderval--per-shot--shot-optimum)). The
   chunks of the title (the rung's command) are seeked from the video's first
   frame with absolute seeks, like the digest's segments, so a video starting
-  after its audio or a container starting before 0 gets every frame once. The command of a per-shot rung is a short shell script.
+  after its audio or a container starting before 0 gets every frame once.
+  Each chunk's timestamps then restart at its first frame
+  (`setpts=PTS-STARTPTS`): counted from the trim point, half a frame
+  earlier, frames whose container times are rounded (Matroska's
+  milliseconds at 60, 59.94, 29.97 or 23.976 fps) fall on either side of
+  the encoder's half ticks, and one rounded up would leave a hole of a frame
+  at the join. The joined rung is constant frame rate at the source's rate.
+  The command of a per-shot rung is a short shell script.
 - **Verification**: the digest is encoded chunk by chunk with the pieces'
   CRFs and the rung's VBV cap, and measured. The gain reported is the bitrate
   saved against the per-title rung **at equal VMAF**, the VMAF difference
