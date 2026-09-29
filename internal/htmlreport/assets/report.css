@@ -141,7 +141,7 @@ kbd {
   padding: var(--sp-4) var(--sp-3) var(--sp-3) var(--sp-4); background: var(--bg-side);
 }
 .brand { display: flex; align-items: center; border-radius: var(--r-sm); }
-.logo { display: block; width: auto; height: 20px; }
+.logo { display: block; width: auto; height: 24px; }
 .tools { display: flex; gap: 2px; }
 .icon-btn {
   width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 1px solid transparent;

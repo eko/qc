@@ -303,7 +303,7 @@ func TestWizardBrand(
 	t *testing.T,
 ) {
 	banner := ansi.Strip(wizardBanner())
-	assert.Contains(t, banner, "██")
+	assert.Contains(t, banner, "▀▀  ▀▀ ▀▀ ▀▀")
 	assert.Contains(t, banner, "qc · fast video quality analysis")
 	assert.Contains(t, banner, "technical metrics · VMAF · per-title ladders")
 

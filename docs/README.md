@@ -8,7 +8,8 @@ is not exact comes with its uncertainty.
 | Document | Contents |
 |---|---|
 | [Architecture](architecture.md) | Packages, data flow, concurrency, external tools, library usage |
-| [Technical analysis](analysis.md) | Probe, bitstream analysis without decoding, single-decode fan-out, SI/TI, shots, black/freeze, crop, luma levels |
+| [Install](install.md) | Requirements (ffmpeg, libvmaf, VMAF models), Docker image, Homebrew, building from source, troubleshooting |
+| [Technical analysis](analysis.md) | Probe, bitstream analysis without decoding, single-decode fan-out, SI/TI, shots, black/freeze, crop, luma levels, camera motion and shake |
 | [VMAF engine](vmaf.md) | libvmaf binding, stratified sampling with honest confidence intervals, decoding plans, 10-bit |
 | [HDR](hdr.md) | HDR10/PQ/HLG detection and signalling checks, MaxCLL/MaxFALL, wPSNR and ΔE ITP, VMAF on HDR, HDR ladders |
 | [Audio](audio.md) | Loudness per ITU-R BS.1770-5 / EBU R 128 / ATSC A/85 (integrated, range, true peak), silence, clipping, phase and channel defects, decoded alongside the video |
@@ -27,7 +28,7 @@ encoding, AI models) and the proposed roadmap are in
 ```mermaid
 flowchart LR
     src[(source video)] --> inspect["Inspect<br/>probe + packets<br/>~0.1 s, no decoding"]
-    inspect --> analysis["Frame analysis<br/>one decode, 6 analyzers"]
+    inspect --> analysis["Frame analysis<br/>one decode, 7 analyzers<br/>+ light levels for HDR"]
     inspect --> vmaf["VMAF<br/>sampled with 95% CI<br/>or exact"]
     ref[(reference)] --> vmaf
     inspect --> ladder["Ladder per codec<br/>digest → probes → envelope<br/>→ rungs → verification"]

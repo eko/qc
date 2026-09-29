@@ -24,7 +24,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{"ic
 <div class="shell">
 <nav class="sidebar" aria-label="Report sections">
 <div class="side-head">
-<a class="brand" href="#top" aria-label="qc, back to top"><img class="logo" src="{{.Logo}}" alt="qc" width="41" height="20"></a>
+<a class="brand" href="#top" aria-label="qc, back to top"><img class="logo" src="{{.Logo}}" alt="qc" width="37" height="24"></a>
 <div class="tools">
 <button type="button" class="icon-btn" data-action="search" title="Jump to a section or finding (/)" aria-label="Jump to a section or finding" hidden>{{icon "search"}}</button>
 <button type="button" class="icon-btn" data-action="collapse" title="Collapse or expand every section" aria-label="Collapse or expand every section" hidden>{{icon "collapse"}}</button>

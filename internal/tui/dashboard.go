@@ -377,19 +377,6 @@ func GradientBar(
 	return b.String()
 }
 
-// mix interpolates linearly between two RGB colours.
-func mix(
-	from, to [3]float64,
-	t float64,
-) string {
-	var c [3]int
-	for i := range c {
-		c[i] = int(math.Round(from[i] + (to[i]-from[i])*t))
-	}
-
-	return fmt.Sprintf("#%02x%02x%02x", c[0], c[1], c[2])
-}
-
 func formatClock(
 	d time.Duration,
 ) string {

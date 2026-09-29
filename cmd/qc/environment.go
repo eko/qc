@@ -27,6 +27,9 @@ type environment struct {
 	// gpuAvailable reports whether the ffmpeg binary can use an NVIDIA GPU
 	// (nvidia.Available); nil offers no GPU.
 	gpuAvailable func(ctx context.Context, ffmpeg string) bool
+	// animate lets the wizard play its short logo animation: stderr is a
+	// terminal and neither colours nor motion were turned off.
+	animate bool
 }
 
 // detectEnvironment inspects the standard streams of the process.
@@ -44,5 +47,21 @@ func detectEnvironment() environment {
 		width:        width,
 		askWizard:    askWizard,
 		gpuAvailable: nvidia.Available,
+		animate:      stderr && motionAllowed(os.Getenv),
 	}
+}
+
+// motionAllowed reports whether animations may play: not without colours
+// (NO_COLOR, TERM=dumb), in the accessible mode, or when QC_NO_ANIMATION
+// asks for a still interface.
+func motionAllowed(
+	getenv func(string) string,
+) bool {
+	for _, name := range []string{"NO_COLOR", "ACCESSIBLE", "QC_NO_ANIMATION"} {
+		if getenv(name) != "" {
+			return false
+		}
+	}
+
+	return getenv("TERM") != "dumb"
 }

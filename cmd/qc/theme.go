@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -112,12 +114,42 @@ func utf8Locale(
 	return true
 }
 
-// wizardBanner is the pixel logo with the tagline beside the bowl of the q.
-func wizardBanner() string {
+// bannerText is the tagline beside the bowl of the q in the wizard banner.
+func bannerText() []string {
 	title := lipgloss.NewStyle().Foreground(brandOrange).Bold(true).Render("qc · fast video quality analysis")
 	subtitle := lipgloss.NewStyle().Foreground(brandMuted).Render("technical metrics · VMAF · per-title ladders")
 
-	return "\n" + tui.Logo("", "", title, subtitle) + "\n"
+	return []string{"", title, subtitle}
+}
+
+// wizardBanner is the pixel logo with its tagline, at rest.
+func wizardBanner() string {
+	return "\n" + tui.Logo(bannerText()...) + "\n"
+}
+
+// printBanner writes the banner to w, the logo lit by a passing glint when
+// animate is set (see environment.animate).
+func printBanner(
+	w io.Writer,
+	animate bool,
+) error {
+	if !animate {
+		_, err := fmt.Fprintln(w, wizardBanner())
+
+		return err //nolint:wrapcheck // a write to the terminal, reported as is
+	}
+
+	if _, err := io.WriteString(w, "\n"); err != nil {
+		return err //nolint:wrapcheck // a write to the terminal, reported as is
+	}
+
+	if err := tui.AnimateLogo(w, bannerText()...); err != nil {
+		return err
+	}
+
+	_, err := io.WriteString(w, "\n\n")
+
+	return err //nolint:wrapcheck // a write to the terminal, reported as is
 }
 
 // wizardTheme styles huh's fields like the rest of the wizard: bold

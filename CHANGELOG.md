@@ -153,7 +153,9 @@ First public release: a Go library and the `qc` CLI.
   several codecs in one command and one report.
 - **Terminal UI**: a live dashboard with progress, ETA and panels showing
   VMAF converging and probes landing on a braille rate-quality chart; an
-  interactive wizard (`qc` without arguments): full screen, with a step
+  interactive wizard (`qc` without arguments), opened by the pixel logo in
+  square half-block pixels with a light sweeping across it once (still with
+  `QC_NO_ANIMATION`, `NO_COLOR` or `ACCESSIBLE`): full screen, with a step
   indicator (Source › Analysis › Quality › Ladder › Outputs › Review) and a
   progress rail, a video browser with type-to-filter and the metadata of
   the highlighted file (codec, resolution, frame rate, bit depth, duration,

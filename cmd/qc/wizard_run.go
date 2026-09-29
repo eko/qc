@@ -25,7 +25,9 @@ func runWizard(
 	env environment,
 ) error {
 	stderr := cmd.ErrOrStderr()
-	fmt.Fprintln(stderr, wizardBanner())
+	if err := printBanner(stderr, env.animate); err != nil {
+		return fmt.Errorf("wizard: %w", err)
+	}
 
 	offerGPU, err := wizardOffersGPU(cmd, env)
 	if err != nil {

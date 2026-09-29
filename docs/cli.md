@@ -104,7 +104,9 @@ more; smaller terminals are asked to grow). Without colours (`NO_COLOR`, or
 `TERM=dumb`) or without a UTF-8 locale it draws in ASCII, with brackets
 around what is focused. With `ACCESSIBLE=1` (or `TERM=dumb`) it asks plain,
 numbered prompts that screen readers can follow, skips the questions that do
-not apply, and ends with the same review and choices.
+not apply, and ends with the same review and choices. The light that sweeps
+across the logo at launch (under half a second) stays off without colours, in
+the accessible mode, or with `QC_NO_ANIMATION=1`.
 
 Once run is chosen, the wizard prints the equivalent command, only with the
 options that differ from the defaults, and runs exactly that command with
