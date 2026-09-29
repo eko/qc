@@ -69,6 +69,14 @@ type ProbingReport struct {
 	// Converged reports whether every rung and crossover was known within
 	// the tolerance before the budget ran out (adaptive mode).
 	Converged bool `json:"converged,omitempty"`
+	// ProbePreset is the preset of the probes when it differs from the
+	// rungs' (Options.ProbePreset); Anchors then moved the probes onto the
+	// rungs' preset, and Probes carry the moved values.
+	ProbePreset string   `json:"probePreset,omitempty"`
+	Anchors     []Anchor `json:"anchors,omitempty"`
+	// Level corrected the quality level of the probes, and of the sampled
+	// rung measurements.
+	Level *Level `json:"level,omitempty"`
 }
 
 // probeBudget is the maximum number of adaptive probes: two fewer than the
@@ -119,7 +127,7 @@ func (b *build) probeAdaptive(
 	report := ProbingReport{Mode: ProbingAdaptive, Budget: budget}
 
 	for len(jobs) > 0 {
-		measured, err := b.measureAll(ctx, jobs, StageProbe, budget)
+		measured, err := b.measureAll(ctx, jobs, StageProbe, budget, b.opts.ProbePreset)
 		if err != nil {
 			return nil, err
 		}

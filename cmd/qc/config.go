@@ -111,6 +111,7 @@ type QualityConfig struct {
 type LadderConfig struct {
 	Codec             string  `mapstructure:"codec"`
 	Preset            string  `mapstructure:"preset"`
+	ProbePreset       string  `mapstructure:"probe-preset"`
 	TopVMAF           float64 `mapstructure:"top-vmaf"`
 	MinVMAF           float64 `mapstructure:"min-vmaf"`
 	Step              float64 `mapstructure:"step"`

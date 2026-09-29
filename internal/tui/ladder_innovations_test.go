@@ -135,4 +135,5 @@ func TestLadderPanelShots(
 	assert.Contains(t, out, "+2.0% at equal VMAF")
 
 	assert.Contains(t, plain(LadderPanel{Stage: ladder.StageGrain}.View(100)), "calibrating film grain synthesis")
+	assert.Contains(t, plain(LadderPanel{Stage: ladder.StageAnchor}.View(100)), "anchoring the probes")
 }

@@ -189,22 +189,23 @@ func TestLadderFindings(
 			name:   "verified h264 ladder with a calibrated rung",
 			mutate: func(*ladder.Result) {},
 			want: []string{
-				"✓ VMAF 95 reached at 3.10 Mb/s (1080p)",
+				"✓ VMAF 95.3 at 2.97 Mb/s (1080p): target 95 reached",
 				"✓ top rung 60% lighter than Apple's static 1080p rung (7.8 Mb/s)",
 				"✓ verification: measured VMAF within 2.5 of the prediction on every rung (VBV-capped encodes of the digest)",
-				"✱ 1 rung(s) missed the prediction by more than 1.5 and had their CRF corrected (secant step) and re-measured",
+				"✱ 1 rung(s) missed the prediction by more than 1.5 (0.5 for the top rung) and had their CRF corrected (secant step) and re-measured",
 			},
 		},
 		{
 			name: "title never reaching the top VMAF, verification off by more than half a step",
 			mutate: func(r *ladder.Result) {
 				r.Rungs[0].PredictedVMAF = 91
+				r.Rungs[0].Measured.VMAF = 91
 				r.Rungs[0].Bitrate = 9_000_000
 				r.Rungs[1].Calibrated = false
 				r.Rungs[2].Measured.VMAF = 70
 			},
 			want: []string{
-				"▲ the title never reaches VMAF 95 at 1080p: top rung at the best probed quality",
+				"▲ top rung at VMAF 91.0 (1080p), below the target 95",
 				"▲ verification: measured VMAF within 5.9 of the prediction on every rung (VBV-capped encodes of the digest)",
 			},
 		},
@@ -216,7 +217,7 @@ func TestLadderFindings(
 					r.Rungs[i].Measured, r.Rungs[i].Calibrated = nil, false
 				}
 			},
-			want: []string{"✓ VMAF 95 reached at 3.10 Mb/s (1080p)"},
+			want: []string{"✓ VMAF 95.0 at 3.10 Mb/s (1080p): target 95 reached"},
 		},
 		{
 			name: "rung findings grouped by kind, calibrated rungs last",
@@ -230,7 +231,7 @@ func TestLadderFindings(
 				r.Rungs[2].Measured.Metrics = map[string]float64{quality.SeriesXPSNRY: 36}
 			},
 			want: []string{
-				"✓ VMAF 95 reached at 3.10 Mb/s (1080p)",
+				"✓ VMAF 95.3 at 2.97 Mb/s (1080p): target 95 reached",
 				"✓ top rung 60% lighter than Apple's static 1080p rung (7.8 Mb/s)",
 				"✓ verification: measured VMAF within 2.5 of the prediction on every rung (VBV-capped encodes of the digest)",
 				"▲ 720p rung targets a quality outside the probed range of that resolution: its prediction is extrapolated, trust the measured value",
@@ -238,7 +239,7 @@ func TestLadderFindings(
 				"▲ 1080p rung: synthesised grain at 50% of the source's (σ 1.00 vs 2.00)",
 				"▲ rung 3 (360p): visible banding on 50% of the scored frames (CAMBI > 5): a 10-bit encode fixes it better than more bitrate",
 				"▲ rungs 2 (720p) and 3 (360p): VMAF ranks 720p higher (84.1 vs 64.5) but XPSNR ranks it lower (35.00 vs 36.00 dB)",
-				"✱ 2 rung(s) missed the prediction by more than 1.5 and had their CRF corrected (secant step) and re-measured",
+				"✱ 2 rung(s) missed the prediction by more than 1.5 (0.5 for the top rung) and had their CRF corrected (secant step) and re-measured",
 			},
 		},
 		{

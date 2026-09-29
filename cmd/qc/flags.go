@@ -108,7 +108,8 @@ func addLadderFlags(
 	cmd *cobra.Command,
 ) {
 	flags := cmd.Flags()
-	flags.String("preset", "", "encoder preset (default: a fast preset of the codec)")
+	flags.String("preset", "", "encoder preset of the rungs (default: a fast preset of the codec)")
+	flags.String("probe-preset", "", "encoder preset of the probe encodes (default: --preset); a much faster one cuts probing, the probes being anchored at --preset by encoding the top and bottom rungs")
 	flags.String("rungs", "auto", "ladder shape: auto, a rung count (6) or the rung resolutions, top first (1080,720,720,540,360)")
 	flags.Float64("top-vmaf", 95, "quality of the top rung (the highest VMAF targeted)")
 	flags.Float64("min-vmaf", 30, "lowest acceptable rung quality")
@@ -249,7 +250,8 @@ func ladderOptions(
 	gpu := gpuSettingsOf(config)
 
 	return ladder.Options{
-		Preset: l.Preset,
+		Preset:      l.Preset,
+		ProbePreset: l.ProbePreset,
 		Constraints: ladder.Constraints{
 			TopVMAF:     l.TopVMAF,
 			MinVMAF:     l.MinVMAF,

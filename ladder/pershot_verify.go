@@ -45,7 +45,7 @@ func (b *build) verifyPerShot(
 		return fmt.Errorf("ladder: per-shot: %s: measure: %w", name, err)
 	}
 
-	m := measurementOf(cmp)
+	m := b.leveled(measurementOf(cmp), scoreRung)
 	r.PerShot.Measured = &m
 	b.measureShots(r.PerShot.Shots, pieces, cmp)
 

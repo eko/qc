@@ -259,6 +259,34 @@ the optimum on every title and much closer on AV1 — but not fewer encodes on
 two titles out of three, so adaptive probing stays **opt-in**
 (`--probing adaptive`, recommended for AV1).
 
+### Probes at a faster preset (`--probe-preset`)
+
+The probes of a ladder at one preset were replayed against the probes of
+the same digest at another (same CRFs, resolutions and sampled frames), on
+both titles: rungs planned on the fast probes, moved by anchors, and read
+on the slow preset's probes. Mean |predicted − delivered| VMAF of the rungs:
+
+| Rungs ← probes | Drama | Cartoon |
+|---|---|---|
+| x264 fast ← ultrafast | 0.36–0.73 | 0.77–0.87 |
+| x264 fast ← veryfast | 0.71–1.67 | – |
+| SVT-AV1 8 ← 10 | 0.74–0.82 | 0.41–0.52 |
+| SVT-AV1 8 ← 11 | 0.90–1.30 | – |
+| x265 veryfast ← ultrafast | 0.87–2.17 | – |
+| x265 veryfast ← x264 fast (another codec) | 0.63–0.88 | 1.84–6.51 |
+
+The ranges span the anchoring models tried: a quality shift or a bitrate
+and CRF shift, one anchor per rung resolution or two interpolated. Without
+anchors, the misses were 1.3–6.9 VMAF. The replays read the slow preset
+between its own probes (linear in CRF), which blurs anything below ~0.5.
+
+On the full title against the exhaustive optimum (x264 fast, the drama),
+the ladder probed at ultrafast landed at −0.23 VMAF and −1.8% bitrate on
+average, every rung at its optimal resolution; probed at fast, −0.03 and
+−0.7%. Timings are in [ladder.md](ladder.md#faster-probes-at-another-preset):
+the option pays only for delivery presets several times slower than the
+probes'.
+
 ## Per-shot rungs (`ladderval -per-shot`, `-shot-optimum`)
 
 ```sh

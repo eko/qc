@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/analyze/grain"
 	"github.com/eko/qc/encode"
@@ -139,32 +141,43 @@ func (b *build) prepareGrain(
 }
 
 // calibrateGrain encodes the digest at its resolution and the middle probe
-// CRF with each calibration level, and keeps the level whose synthesised
-// grain comes closest to the source's.
+// CRF with each calibration level (opts.Parallel at a time), and keeps the
+// level whose synthesised grain comes closest to the source's.
 func (b *build) calibrateGrain(
 	ctx context.Context,
 	source grain.Stats,
 ) (int, []GrainTrial, error) {
 	crf := b.codec.ProbeCRFs[len(b.codec.ProbeCRFs)/2]
+	trials := make([]GrainTrial, len(calibrationLevels))
+	group, gctx := errgroup.WithContext(ctx)
+	group.SetLimit(b.opts.Parallel)
+
+	for i, level := range calibrationLevels {
+		group.Go(func() error {
+			path := filepath.Join(b.workDir, fmt.Sprintf("grain-%d.mp4", level))
+			params := b.params(Probe{Width: b.video.Width, Height: b.video.Height, CRF: crf}, encode.Params{})
+			params.FilmGrain = level
+
+			out, err := b.encodeNoise(gctx, path, params)
+			if err != nil {
+				return err
+			}
+
+			trials[i] = GrainTrial{Level: level, Ratio: out.Sigma / math.Max(source.Sigma, 1e-9)}
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return 0, nil, err
+	}
+
 	best, bestGap := 0, math.Inf(1)
 
-	trials := make([]GrainTrial, 0, len(calibrationLevels))
-
-	for _, level := range calibrationLevels {
-		path := filepath.Join(b.workDir, fmt.Sprintf("grain-%d.mp4", level))
-		params := b.params(Probe{Width: b.video.Width, Height: b.video.Height, CRF: crf}, encode.Params{})
-		params.FilmGrain = level
-
-		out, err := b.encodeNoise(ctx, path, params)
-		if err != nil {
-			return 0, nil, err
-		}
-
-		ratio := out.Sigma / math.Max(source.Sigma, 1e-9)
-		trials = append(trials, GrainTrial{Level: level, Ratio: ratio})
-
-		if gap := math.Abs(ratio - 1); gap < bestGap {
-			best, bestGap = level, gap
+	for _, t := range trials {
+		if gap := math.Abs(t.Ratio - 1); gap < bestGap {
+			best, bestGap = t.Level, gap
 		}
 	}
 

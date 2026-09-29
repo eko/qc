@@ -121,7 +121,8 @@ func TestBuildAdaptive(
 					rounds = 2
 				}
 
-				assert.Equal(t, ProbingReport{Mode: ProbingFixed, Rounds: rounds}, res.Probing)
+				require.NotNil(t, res.Probing.Level, "the probes' level is measured")
+				assert.Equal(t, ProbingReport{Mode: ProbingFixed, Rounds: rounds, Level: res.Probing.Level}, res.Probing)
 
 				for _, r := range res.Rungs {
 					assert.Zero(t, r.PredictionError, "linear interpolation has no error model")

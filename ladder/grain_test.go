@@ -63,10 +63,12 @@ func TestBuildFilmGrain(
 				assert.InDelta(t, 6, res.Grain.Source.Sigma, 1e-9)
 
 				references := 0
+				tried := make([]int, 0, len(calibrationLevels))
 
 				for i, p := range lab.params {
 					if i < len(calibrationLevels) {
-						assert.Equal(t, calibrationLevels[i], p.FilmGrain, "calibration %d", i)
+						// The calibration encodes run concurrently, in any order.
+						tried = append(tried, p.FilmGrain)
 
 						continue
 					}
@@ -78,6 +80,7 @@ func TestBuildFilmGrain(
 					}
 				}
 
+				assert.ElementsMatch(t, calibrationLevels, tried, "every calibration level")
 				assert.Equal(t, 1, references, "one denoised reference")
 
 				for _, r := range res.Rungs {

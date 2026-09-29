@@ -67,6 +67,8 @@ func (p LadderPanel) View(
 		return Subtle.Render("extracting a digest of evenly spaced segments…")
 	case p.Stage == ladder.StageGrain:
 		return Subtle.Render("measuring the grain of the digest, calibrating film grain synthesis…")
+	case p.Stage == ladder.StageAnchor:
+		return Subtle.Render("anchoring the probes at the rungs' preset: encoding the top and bottom rungs…")
 	case p.Stage == ladder.StageVerify && len(p.Rungs) > 0:
 		return p.rungsView()
 	case p.Stage == ladder.StageShots:

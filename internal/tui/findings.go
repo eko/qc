@@ -222,12 +222,11 @@ func ladderFindings(
 	var (
 		lines      []string
 		calibrated int
-		tolerance  float64
 	)
 
 	for _, f := range list {
 		if f.Code == findings.Calibrated {
-			calibrated, tolerance = calibrated+1, f.Limit
+			calibrated++
 
 			continue
 		}
@@ -238,8 +237,8 @@ func ladderFindings(
 	}
 
 	if calibrated > 0 {
-		lines = append(lines, Yellow.Render("✱ ")+fmt.Sprintf("%d rung(s) missed the prediction by more than %.1f and had their CRF corrected (secant step) and re-measured",
-			calibrated, tolerance))
+		lines = append(lines, Yellow.Render("✱ ")+fmt.Sprintf("%d rung(s) missed the prediction by more than %.1f (%.1f for the top rung) and had their CRF corrected (secant step) and re-measured",
+			calibrated, ladder.CalibrationTolerance, ladder.TopCalibrationTolerance))
 	}
 
 	return lines
@@ -279,9 +278,9 @@ func ladderLine(
 
 	switch f.Code {
 	case findings.TopVMAFMissed:
-		return findingLine(f.Level, "the title never reaches VMAF %.0f at %dp: top rung at the best probed quality", f.Limit, r.Height)
+		return findingLine(f.Level, "top rung at VMAF %.1f (%dp), below the target %.0f", f.Value, r.Height, f.Limit)
 	case findings.TopVMAFReached:
-		return findingLine(f.Level, "VMAF %.0f reached at %s (%dp)", f.Limit, Bitrate(float64(r.Bitrate)), r.Height)
+		return findingLine(f.Level, "VMAF %.1f at %s (%dp): target %.0f reached", f.Value, Bitrate(float64(rungBitrate(r))), r.Height, f.Limit)
 	case findings.LighterThanApple:
 		return findingLine(f.Level, "top rung %.0f%% lighter than Apple's static 1080p rung (%.1f Mb/s)", f.Value*100, f.Limit/bitsPerMegabit)
 	case findings.Verification:
@@ -317,3 +316,15 @@ func xpsnr(
 
 // bitsPerMegabit converts bitrates to Mb/s.
 const bitsPerMegabit = 1e6
+
+// rungBitrate is the bitrate of rung r: measured when it was verified,
+// planned otherwise.
+func rungBitrate(
+	r ladder.Rung,
+) int64 {
+	if r.Measured != nil {
+		return r.Measured.Bitrate
+	}
+
+	return r.Bitrate
+}

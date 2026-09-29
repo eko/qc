@@ -119,15 +119,24 @@ First public release: a Go library and the `qc` CLI.
     bitrate bounds, 8 or 10-bit encodes (`--encode-bit-depth`).
   - Adaptive probing (`--probing adaptive`): extra probes where the rungs
     are uncertain.
+  - Probes at a faster preset (`--probe-preset`): the rungs are planned on
+    them, then the top and bottom rungs encoded at `--preset` anchor the
+    probes onto it (bitrate ratio and CRF offset between the presets); for
+    slow delivery presets (SVT-AV1 preset 4 probed at 8: −24% time, same
+    rungs).
   - Per-shot rungs (`--per-shot`): one CRF per shot at an equal
     rate-quality slope, with the per-shot ladder view (every shot's CRF,
     bitrate and VMAF per rung, and each rung's pooled bitrate over the
-    title) in the terminal, HTML and JSON reports. Experimental per-shot
+    title) in the terminal, HTML and JSON reports. The chunks of an encode
+    and the per-shot verifications run concurrently, and the source's
+    shots come from the analysis `qc run` already made, or from one run
+    alongside the probes (per-shot stage −20% on the drama). Experimental per-shot
     resolution (`--per-shot-resolution`, implies `--per-shot`): shots also
     pick their resolution among neighbouring rung resolutions, at equal
     slope.
   - AV1 film grain synthesis (`--film-grain auto` or a level), detected and
-    calibrated, fidelity scored against a denoised reference. It cannot be
+    calibrated (the three calibration levels encoded concurrently),
+    fidelity scored against a denoised reference. It cannot be
     combined with per-shot rungs: the combination is rejected before any
     work.
   - Verified rungs checked for banding and for VMAF/XPSNR ranking
@@ -199,6 +208,22 @@ First public release: a Go library and the `qc` CLI.
   `eko/tap` tap; `go install` with version information.
 
 ### Fixed
+
+- **Ladder quality level**: every probe and rung was scored on the same
+  sampled frames, whose error the measurements shared (up to about 1 VMAF);
+  at the top of a curve that is 25–30% of bitrate. A top rung encoded once
+  and scored both sampled and exactly now puts every probe and sampled rung
+  measurement on the exact scale (`probing.level`), the top rung is verified
+  on every frame and corrected to within 0.5 VMAF of its target (a second
+  secant step when the first falls short), and the top-rung finding reports
+  the verified quality. On a 59-minute title at `--top-vmaf 94`, the AV1 top
+  rung went from 5.00 Mb/s (about 94.6) to 4.23 Mb/s (93.83), 22% below
+  H.264 instead of above it.
+
+- **An encoder freezing no longer hangs a ladder**: an encode whose output
+  stops growing for 5 minutes is stopped and run once more, then reported
+  (`encode.ErrStalled`). SVT-AV1 at its fastest presets was seen to freeze
+  with no CPU use, once in a few dozen builds.
 
 - **Ladders of a video whose first frame is not the container's start**: a
   video starting after its audio (some concatenations: the first video

@@ -303,9 +303,9 @@ func ladderFinding(
 
 	switch f.Code {
 	case findings.TopVMAFMissed:
-		return worded(f, nil, "The title never reaches VMAF %.0f at %dp: top rung at the best probed quality", f.Limit, r.Height), true
+		return worded(f, nil, "Top rung at VMAF %.1f (%dp), below the target %.0f", f.Value, r.Height, f.Limit), true
 	case findings.TopVMAFReached:
-		return worded(f, nil, "VMAF %.0f reached at %s (%dp)", f.Limit, bitrateLabel(float64(r.Bitrate)), r.Height), true
+		return worded(f, nil, "VMAF %.1f at %s (%dp): target %.0f reached", f.Value, bitrateLabel(float64(rungBitrate(r))), r.Height, f.Limit), true
 	case findings.LighterThanApple:
 		return worded(f, nil, "Top rung %.0f%% lighter than Apple's static 1080p rung (%.1f Mb/s)", f.Value*100, f.Limit/bitsPerMegabit), true
 	case findings.Verification:
@@ -332,3 +332,15 @@ func ladderFinding(
 
 // bitsPerMegabit converts bitrates to Mb/s.
 const bitsPerMegabit = 1e6
+
+// rungBitrate is the bitrate of rung r: measured when it was verified,
+// planned otherwise.
+func rungBitrate(
+	r ladder.Rung,
+) int64 {
+	if r.Measured != nil {
+		return r.Measured.Bitrate
+	}
+
+	return r.Bitrate
+}

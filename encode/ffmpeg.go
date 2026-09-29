@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/eko/qc/internal/ffexec"
 	"github.com/eko/qc/media"
@@ -31,6 +32,10 @@ type FFmpeg struct {
 	logger *slog.Logger
 	// goos is the operating system BurnAuto resolves for.
 	goos string
+
+	// stall is how long an encode may go without its output growing (see
+	// WithStallTimeout).
+	stall time.Duration
 
 	// autoOnce resolves BurnAuto once: auto is the encoder it stands for.
 	autoOnce sync.Once
@@ -57,7 +62,7 @@ func NewFFmpeg(
 	bin string,
 	opts ...Option,
 ) *FFmpeg {
-	f := &FFmpeg{bin: bin, logger: slog.New(slog.DiscardHandler), goos: runtime.GOOS}
+	f := &FFmpeg{bin: bin, logger: slog.New(slog.DiscardHandler), goos: runtime.GOOS, stall: defaultStallTimeout}
 	for _, opt := range opts {
 		opt(f)
 	}
@@ -75,7 +80,7 @@ func (f *FFmpeg) Encode(
 	args := append([]string{"-v", "error", "-nostdin", "-y", "-i", src}, codec.Args(p)...)
 	args = append(args, dst)
 
-	if err := ffexec.Stream(ctx, f.bin, args, discard); err != nil {
+	if err := f.encodeWatched(ctx, args, dst); err != nil {
 		return fmt.Errorf("encode %s with %s: %w", src, codec.Encoder, err)
 	}
 

@@ -255,7 +255,7 @@ func TestLadderSummary(
 				{"Rungs", "2"}, {"Top rung", "5.00 Mb/s"}, {"Bottom rung", "1.00 Mb/s"}, {"Probe encodes", "4"}, {"Digest", "50.0%"},
 			},
 			wantFindings: [][2]string{
-				{levelOK, "VMAF 95 reached at 5.00 Mb/s (1080p)"},
+				{levelOK, "VMAF 94.6 at 4.90 Mb/s (1080p): target 95 reached"},
 				{levelOK, "Top rung 36% lighter than Apple's static 1080p rung (7.8 Mb/s)"},
 				{levelOK, "Verification: measured VMAF within 0.4 of the prediction on every rung"},
 			},
@@ -275,7 +275,7 @@ func TestLadderSummary(
 				{"Rungs", "2"}, {"Top rung", "5.00 Mb/s"}, {"Bottom rung", "1.00 Mb/s"}, {"Probe encodes", "4"}, {"Digest", "50.0%"},
 			},
 			wantFindings: [][2]string{
-				{levelWarn, "The title never reaches VMAF 97 at 1080p: top rung at the best probed quality"},
+				{levelWarn, "Top rung at VMAF 94.6 (1080p), below the target 97"},
 				{levelWarn, "Verification: measured VMAF within 0.4 of the prediction on every rung"},
 				{levelWarn, "720p rung targets a quality outside the probed range of that resolution: trust the measured value"},
 				{levelWarn, "720p rung: synthesised grain at 50% of the source's (σ 2.00 vs 4.00)"},

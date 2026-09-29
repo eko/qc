@@ -1,6 +1,7 @@
 package ladder
 
 import (
+	"math"
 	"strconv"
 	"testing"
 
@@ -167,4 +168,83 @@ func TestVerifyWithinPrediction(
 	}
 
 	assert.Len(t, lab.params, len(rungs), "no second pass")
+}
+
+func TestRefineTop(
+	t *testing.T,
+) {
+	model := rateModel{}
+	at := func(crf float64) float64 { return model.vmaf(encode.Params{Height: 720, CRF: crf, MaxRate: 12e6}) }
+
+	testCases := []struct {
+		name string
+		// slope is the dVMAF/dCRF the probes around the rung suggest.
+		slope float64
+		// target is the CRF whose quality the top rung is predicted at.
+		target float64
+	}{
+		{name: "probes too steep: the first step falls short", slope: -4, target: 18},
+		{name: "probes too flat: the first step overshoots", slope: -0.4, target: 21},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			lab := newFakeLab(model, sourceReport(1280, 720, 8, 25, 60))
+			b := &build{
+				engine: labEngine(lab), codec: mustCodec(t, "h264"),
+				digestReport: lab.digest, referenceReport: lab.digest, workDir: t.TempDir(),
+				video: lab.source.Info.Video[0], opts: Options{GOPDuration: media.Seconds(2), Parallel: 2},
+			}
+
+			// Two probes of the rung's resolution with the misleading slope.
+			probes := []Probe{
+				{Width: 1280, Height: 720, CRF: 15, VMAF: 90},
+				{Width: 1280, Height: 720, CRF: 35, VMAF: 90 + 20*testCase.slope},
+			}
+			rungs := []Rung{{Width: 1280, Height: 720, CRF: 26, MaxRate: 12e6, BufSize: 24e6, PredictedVMAF: at(testCase.target)}}
+
+			require.NoError(t, b.verifyAndCalibrate(t.Context(), rungs, probes))
+
+			top := rungs[0]
+			require.NotNil(t, top.Measured)
+			assert.True(t, top.Calibrated)
+			require.Len(t, lab.params, 3, "the verification and two corrections")
+
+			// The model saturates far more than real curves near a rung: the
+			// second step does not land on the target, it gets closer.
+			first := lab.params[1].CRF
+			assert.Less(t, math.Abs(top.CRF-testCase.target), math.Abs(first-testCase.target), "the second step gets closer to the right CRF")
+		})
+	}
+}
+
+func TestTopStep(
+	t *testing.T,
+) {
+	half := func(v float64) float64 { return math.Round(v*2) / 2 }
+
+	testCases := []struct {
+		name       string
+		prevCRF    float64
+		prevVMAF   float64
+		crf, vmaf  float64
+		target     float64
+		wantCRF    float64
+		wantAction stepAction
+	}{
+		{name: "secant step", prevCRF: 30, prevVMAF: 93, crf: 33, vmaf: 91.5, target: 92.5, wantCRF: 31, wantAction: stepEncode},
+		{name: "same CRF twice", prevCRF: 30, prevVMAF: 93, crf: 30, vmaf: 93, target: 94, wantCRF: 30, wantAction: stepKeep},
+		{name: "quality rising with CRF: noise", prevCRF: 30, prevVMAF: 93, crf: 32, vmaf: 93.5, target: 94, wantCRF: 32, wantAction: stepKeep},
+		{name: "step rounds to the current CRF", prevCRF: 30, prevVMAF: 94, crf: 32, vmaf: 93, target: 93.1, wantCRF: 32, wantAction: stepKeep},
+		{name: "back to a closer first CRF", prevCRF: 30, prevVMAF: 94.1, crf: 32, vmaf: 92, target: 94, wantCRF: 30, wantAction: stepRestore},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			crf, action := topStep(testCase.prevCRF, testCase.prevVMAF, testCase.crf, testCase.vmaf, testCase.target, half)
+
+			assert.InDelta(t, testCase.wantCRF, crf, 1e-9)
+			assert.Equal(t, testCase.wantAction, action)
+		})
+	}
 }

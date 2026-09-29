@@ -79,8 +79,16 @@ type Options struct {
 	// Backend is where VMAF's model features are extracted for every
 	// measurement (see quality.Options.Backend).
 	Backend vmaf.Backend
-	// Preset overrides the codec's default (fast) preset.
-	Preset      string
+	// Preset overrides the codec's default (fast) preset: the preset of the
+	// rungs, their verification and their commands.
+	Preset string
+	// ProbePreset is the preset of the probe encodes, the preset of the
+	// rungs by default. A faster one cuts probing: the rungs are planned on
+	// its probes, then the top and the bottom rungs encoded at the rungs'
+	// preset anchor the probes onto it (see Anchor), and every rung is
+	// still verified at its own preset. Worth it only when the rungs' preset
+	// is several times slower than the probes' (see docs/ladder.md).
+	ProbePreset string
 	Constraints Constraints
 	// Heights are the candidate resolutions (default DefaultHeights()).
 	Heights []int
@@ -139,6 +147,11 @@ type Options struct {
 	// which ranks encodes of the title consistently, or on an SDR tone
 	// mapping.
 	HDRMetric quality.HDRMetric
+	// Analysis is the frame analysis of the source, when already done (a
+	// pipeline analyses the source before its ladders): per-shot rungs read
+	// its shots instead of decoding the source again. Without it, or
+	// without shots in it, the source is analysed alongside the probes.
+	Analysis *analysis.Report
 	// ContentLight is the content light level of an HDR10 source that
 	// signals none, typically measured by its analysis (MaxCLL, MaxFALL):
 	// the encodes then carry it.
@@ -229,13 +242,12 @@ func (e *Engine) Build(
 	}
 	defer cleanup()
 
-	run := &build{
-		engine: e, codec: codec, opts: opts, source: source, workDir: dir,
-		video: video, origin: videoOrigin(res.Source, video),
-	}
-	if res.HDR != nil {
-		run.signal = res.HDR.Signal
-	}
+	// Cancelled when the build ends, which stops a source analysis still
+	// running for per-shot rungs (see analyseShots).
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	run := e.newBuild(ctx, codec, opts, source, dir, video, res)
 
 	if res.Timings, err = run.stages(ctx, res, duration); err != nil {
 		return nil, err
@@ -244,6 +256,32 @@ func (e *Engine) Build(
 	res.Elapsed = media.Duration(time.Since(started))
 
 	return res, nil
+}
+
+// newBuild prepares the build of the ladder of source, whose usable video
+// stream is video and inspection res holds, in the work directory dir.
+func (e *Engine) newBuild(
+	ctx context.Context,
+	codec encode.Codec,
+	opts Options,
+	source, dir string,
+	video media.VideoStream,
+	res *Result,
+) *build {
+	run := &build{
+		engine: e, codec: codec, opts: opts, source: source, workDir: dir,
+		video: video, origin: videoOrigin(res.Source, video),
+	}
+
+	if opts.PerShot {
+		run.shotAnalysis = run.analyseShots(ctx)
+	}
+
+	if res.HDR != nil {
+		run.signal = res.HDR.Signal
+	}
+
+	return run
 }
 
 // validate checks opts against the codec they name and returns the codec
@@ -369,6 +407,16 @@ func (b *build) stageList(
 
 			return err
 		}},
+		{name: StageAnchor, skip: !b.transfers(), run: func(ctx context.Context, res *Result) (err error) {
+			res.Probes, err = b.anchorProbes(ctx, res.Probes)
+
+			return err
+		}},
+		{name: StageLevel, run: func(ctx context.Context, res *Result) (err error) {
+			res.Probes, err = b.levelProbes(ctx, res.Probes)
+
+			return err
+		}},
 		{run: func(_ context.Context, res *Result) (err error) {
 			curves, err = b.selectRungs(res)
 
@@ -418,6 +466,10 @@ func (o Options) withDefaults(
 ) Options {
 	if o.Preset == "" {
 		o.Preset = codec.DefaultPreset
+	}
+
+	if o.ProbePreset == "" {
+		o.ProbePreset = o.Preset
 	}
 
 	o.Constraints = o.Constraints.WithDefaults()

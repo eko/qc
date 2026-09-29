@@ -138,6 +138,85 @@ Adaptive probing is **opt-in**: on real titles it was more accurate at one
 probe fewer, but calibrations occasionally cancelled the saving (see
 [validation](validation.md#adaptive-probing)).
 
+### Faster probes at another preset
+
+`--probe-preset` encodes the probes at another preset than the rungs
+(`--preset`), a faster one, the two-step convex hull of Meta's AV1
+pipeline (Wu, Kondratenko, Katsavounidis, SPIE 2020). Two things carry
+over differently from a fast preset to a slow one:
+
+- the **shape of the envelope** (which resolution wins at which bitrate)
+  carries over well: rungs planned on x264 ultrafast probes landed on the
+  resolutions of the exhaustive optimum of x264 fast;
+- the **CRF scale** does not: at equal CRF, x264 veryfast scores 2–9 VMAF
+  below fast on the drama, x264 ultrafast about the same, SVT-AV1 preset 10
+  2–5 below preset 8.
+
+So the rungs are planned on the fast probes, then the **top and bottom
+rungs are encoded at `--preset`** (the anchors). At each anchor's quality,
+the ratio between the two presets' bitrates and the difference of their
+CRFs move the probes: a constant bitrate saving along a curve, like a
+BD-rate, and a CRF offset, interpolated in log height between the anchors.
+The rungs are planned again on the moved probes and verified at `--preset`
+as always; calibration corrects what the anchors did not. In replays of
+five preset pairs on two titles, one anchor per rung resolution and two
+interpolated anchors missed by about as much (0.5–0.9 VMAF on average for
+the pairs worth using, see [validation](validation.md#probes-at-a-faster-preset---probe-preset));
+two cost fewer slow encodes.
+
+It only pays when `--preset` encodes **several times slower** than the
+probe preset: the anchors are two encodes at `--preset`, and a probe's
+measurement costs the same at either preset. Drama, 1 min, M2 Max:
+
+| `--preset` | `--probe-preset` | Without | With | Rungs |
+|---|---|---|---|---|
+| SVT-AV1 4 | 8 | 5 min 21 s | 4 min 03 s (−24%) | same resolutions and bitrates (±1%), none calibrated |
+| x264 fast | ultrafast | 2 min 09 s | 2 min 01 s (−7%) | vs exhaustive optimum: −0.23 VMAF, −1.8% bitrate (without: −0.03, −0.7%) |
+| x264 slow | fast | 3 min 01 s | 3 min 17 s | slower: slow is only ~1.5× fast here |
+| x265 medium | veryfast | 8 min 06 s | 8 min 40 s | slower: veryfast probes are barely cheaper on ARM |
+| SVT-AV1 8 | 10 | 2 min 19 s | 2 min 52 s | slower |
+
+The x264 fast, x264 slow and SVT-AV1 8 runs anchored every rung resolution
+(3–4 anchors), before the two anchors of today; with two, they would save
+one or two encodes at `--preset`, not enough to change their verdicts.
+
+Pairs to avoid: x265 ultrafast, whose tools differ too much from the other
+x265 presets (0.9–2.2 VMAF off after anchoring in replays), and another
+codec's probes (H.264 probes for an HEVC ladder: 1.8–6.5 VMAF off on the
+cartoon), which is not offered.
+
+### Quality level of the probes
+
+Every probe and rung is scored on the **same sampled frames** of the digest
+(common random numbers): their differences are precise, but they share the
+error of those frames. Frames harder than the digest's average put every
+measurement below its exact value by the same amount. On a 59-minute
+reality-TV title, the default sample read 0.67, 0.84 and 0.91 VMAF below the
+exact value on three very different encodes (x264 1080p, SVT-AV1 1080p, x264
+720p). At the top of a rate-quality curve, which is flat, one VMAF point is
+25–30% of bitrate: the AV1 ladder aimed at VMAF 94 on that shifted scale, and
+its top rung delivered 94.9 at 5.96 Mb/s where 94.1 needed 4.58 Mb/s.
+
+So after probing, the top rung planned on the probes is encoded once at the
+rungs' preset and scored **both like a probe and on every frame**: the
+difference (`probing.level.offset` in the JSON) moves every probe, and every
+sampled rung measurement, onto the exact scale. The top rung is then
+verified on every frame and corrected until it lands within 0.5 of its
+target (a second secant step, between its own two measurements, when the
+first falls short). On that title, at `--top-vmaf 94`:
+
+| Top rung | Before | After |
+|---|---|---|
+| AV1 (SVT preset 8) | CRF 30, 5.00 Mb/s, ≈ 94.6 exact (93.6 as sampled) | CRF 31, 4.23 Mb/s, 93.83 exact |
+| H.264 (x264 fast) | CRF 24.5, 5.48 Mb/s, 92.9 as sampled | CRF 24, 5.43 Mb/s, 93.86 exact |
+
+The offsets measured were +0.99 (AV1) and +0.69 (H.264). The AV1 ladder,
+which came out above the H.264 one at their measured qualities, is 22%
+lighter at the top: the exact curves of the title put AV1 20% below H.264 at
+VMAF 94. It costs one encode and an exact scoring of the digest (about 25 s
+with a 1080p digest), plus an exact scoring of the top rung and, when the
+top rung needs one, a correction encode: 10–30% more time on that title.
+
 ## 3. Rate-quality curves
 
 For each resolution, the probes give points (bitrate, VMAF, CRF). The curve
@@ -234,9 +313,11 @@ qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93
 
 Each rung is encoded on the digest **with its final settings, VBV included**,
 and measured. The report shows predicted and measured VMAF and bitrate side by
-side.
+side. The **top rung is scored on every frame** of the digest: it is the
+quality the ladder promises (`--top-vmaf`), and its most expensive rung.
 
-When a rung misses its prediction by more than 1.5 VMAF, its CRF is corrected
+When a rung misses its prediction by more than 1.5 VMAF (0.5 for the top
+rung), its CRF is corrected
 by **one secant step**. The step uses the slope dVMAF/dCRF between the two
 probes of its resolution that surround its CRF, and the rung is then
 re-encoded and re-measured. The measured bitrate of a corrected rung replaces
@@ -281,9 +362,12 @@ flowchart LR
 ```
 
 - **Shots** come from the scene detection of the [analysis](analysis.md)
-  (one decode of the title). Each cut moves to the nearest boundary of the
-  fixed 2 s GOP grid, so every rung keeps aligned keyframes, as ABR
-  segmenting requires; cuts closer than a GOP merge.
+  (one decode of the title). `qc run` reuses the analysis it already made of
+  the source; a standalone `qc ladder` analyses the source alongside the
+  digest and the probes, so the decode overlaps them instead of following
+  them. Each cut moves to the nearest boundary of the fixed 2 s GOP grid, so
+  every rung keeps aligned keyframes, as ABR segmenting requires; cuts closer
+  than a GOP merge.
 - **Per-shot probes**: for each rung resolution, the digest is encoded at two
   CRFs bracketing that resolution's rungs, chunk by chunk as the per-shot
   rungs will be (a chunk restarts rate control and lookahead: ~3% bitrate at
@@ -311,7 +395,9 @@ flowchart LR
   the chunks are joined without re-encoding (`-f concat -c copy`). Decoding
   the joined file gives exactly the frames of the separate chunks for x264,
   x265 and SVT-AV1 (checked by frame checksums). Adjacent shots sharing a CRF
-  are merged. Each chunk decodes its source from 2 s before its first frame
+  are merged. The chunks of one encode are independent, and encode four at
+  a time: a chunk is too short for an encoder to keep every core busy, and
+  ffmpeg's start-up is a good part of it. Each chunk decodes its source from 2 s before its first frame
   and drops the frames before it (`trim` in its filter chain): seeking straight to the
   chunk lands on the source keyframe before it, which in a long-GOP source
   need not be a clean random access point, and the H.264 decoder then drops
@@ -328,7 +414,8 @@ flowchart LR
   at the join. The joined rung is constant frame rate at the source's rate.
   The command of a per-shot rung is a short shell script.
 - **Verification**: the digest is encoded chunk by chunk with the pieces'
-  CRFs and the rung's VBV cap, and measured. The gain reported is the bitrate
+  CRFs and the rung's VBV cap, and measured, two rungs at a time like the
+  per-title verification. The gain reported is the bitrate
   saved against the per-title rung **at equal VMAF**, the VMAF difference
   between the two converted to bitrate by the local slope of the rung's curve.
 
@@ -453,8 +540,8 @@ for the least perceived quality.
 - **Level calibration** (`auto`): SVT-AV1's level is a denoising strength, and
   how much grain the decoder puts back depends on the content (on synthetic
   grain of σ 2.7 and 5.8, level 30 gave back 89% and 52% of it). The digest
-  is encoded at levels 10, 25 and 50 and the level whose synthesised grain
-  comes closest to the source's is kept.
+  is encoded at levels 10, 25 and 50 (two at a time) and the level whose
+  synthesised grain comes closest to the source's is kept.
 - **Fidelity against a denoised reference**: VMAF penalises synthesised grain
   for not matching the source's grain sample by sample. Every probe and rung
   is therefore decoded **without its grain** (`-export_side_data film_grain`)
@@ -493,10 +580,12 @@ ITP. Why, and the checks of the rendered encodes: [hdr.md](hdr.md#5-hdr-ladders)
 | Cartoon, 10:36, 1080p | H.264 | 1 min 39 s | rungs on the full title: predicted VMAF within 0.86; bitrate ~7% above prediction |
 | Drama, 1 min | AV1 (SVT preset 8) | 2 min 12 s | top rung 35% lighter than H.264 |
 | Drama, 12 s, 10-bit | AV1 Main10 | 50 s | predictions within 0.4 |
-| Drama, 1 min | HEVC (x265 veryfast) | 7 min 48 s | x265 is slow on ARM; try `--preset superfast` |
+| Drama, 1 min | HEVC (x265 veryfast) | 6 min 04 s | x265 is slow on ARM; try `--preset superfast` |
 | Drama, 1 min | H.264, `--probing adaptive` | ~2–3.5 min | 22 encodes instead of 23; vs exhaustive optimum −0.12 VMAF, −1.2% bitrate |
 | Drama, 1 min | AV1, `--probing adaptive` | ~5.5 min | 22 encodes; −0.05 VMAF, −0.6% from the optimum (fixed: +1.94, +5.3%) |
 | Drama, 30 s | H.264 / AV1, `--per-shot` | +2–4 min | full title: −2.1% / −4.1% bitrate at equal VMAF |
+| Drama, 1 min | H.264, `--per-shot` | 5 min 35 s (per-shot stage 3 min 15 s) | before parallel chunks and verifications: 6 min 29 s (4 min 05 s), same allocations |
+| Drama, 1 min | AV1 preset 4, `--probe-preset 8` | 4 min 03 s | 5 min 21 s probed at preset 4, same rungs ([details](#faster-probes-at-another-preset)) |
 | Drama, 12 s + synthetic grain σ 5.8 | AV1, `--film-grain auto` | +1.5 min (calibration) | top rung 5.8 Mb/s instead of 104.6 Mb/s, 81% of the grain given back |
 
 The cost grows with the digest (capped at 40 s), not with the title length. An

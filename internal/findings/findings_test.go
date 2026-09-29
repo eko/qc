@@ -288,6 +288,7 @@ func TestLadder(
 			name: "every finding, the rungs' in rung order",
 			mutate: func(r *ladder.Result) {
 				r.Rungs[0].PredictedVMAF = 90
+				r.Rungs[0].Measured.VMAF = 94
 				r.Rungs[0].Bitrate = 9_000_000
 				r.Rungs[0].Extrapolated = true
 				r.Rungs[0].Grain = &ladder.GrainCheck{Ratio: 0.5}
@@ -342,7 +343,7 @@ func TestLadderValues(
 
 	list := Ladder(r)
 
-	assert.Equal(t, Finding{Level: OK, Code: TopVMAFReached, Limit: 95}, list[0], "within the tolerance of the target")
+	assert.Equal(t, Finding{Level: OK, Code: TopVMAFReached, Value: r.Rungs[0].Measured.VMAF, Limit: 95}, list[0], "within the tolerance of the target, as verified")
 	assert.Equal(t, LighterThanApple, list[1].Code)
 	assert.InDelta(t, 0.5, list[1].Value, 1e-9)
 	assert.InDelta(t, AppleTopH264, list[1].Limit, 1e-9)

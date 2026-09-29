@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder/internal/shotalloc"
@@ -204,19 +206,79 @@ func (b *build) perShot(
 	}
 
 	levels := b.fitLevels(plan, probes, measured)
-	total := len(plan.probes) + len(rungs)
+	picks := make([][]shotalloc.Option, len(rungs))
 
 	for i := range rungs {
-		picks := b.allocateRung(i, &rungs[i], plan, levels)
+		picks[i] = b.allocateRung(i, &rungs[i], plan, levels)
+	}
 
-		if !b.opts.SkipVerify {
-			if err := b.verifyPerShot(ctx, i, &rungs[i], plan.pieces, picks, curves, total); err != nil {
-				return nil, nil, err
-			}
+	if !b.opts.SkipVerify {
+		if err := b.verifyPerShots(ctx, rungs, plan.pieces, picks, curves, len(plan.probes)+len(rungs)); err != nil {
+			return nil, nil, err
 		}
 	}
 
 	return plan.shots, plan.probing, nil
+}
+
+// verifyPerShots verifies the per-shot version of every rung, opts.Parallel
+// at a time like the per-title rungs.
+func (b *build) verifyPerShots(
+	ctx context.Context,
+	rungs []Rung,
+	pieces []piece,
+	picks [][]shotalloc.Option,
+	curves []Curve,
+	total int,
+) error {
+	group, gctx := errgroup.WithContext(ctx)
+	group.SetLimit(b.opts.Parallel)
+
+	for i := range rungs {
+		group.Go(func() error {
+			return b.verifyPerShot(gctx, i, &rungs[i], pieces, picks[i], curves, total)
+		})
+	}
+
+	return group.Wait()
+}
+
+// analyseShots returns the frame analysis per-shot rungs read: that of
+// Options.Analysis when it has shots, otherwise an analysis of the source
+// started now, which decodes the source while the digest is probed, and
+// which the returned function waits for.
+func (b *build) analyseShots(
+	ctx context.Context,
+) func(ctx context.Context) (*analysis.Report, error) {
+	if a := b.opts.Analysis; a != nil && a.Video != nil && len(a.Video.Shots) > 0 {
+		return func(context.Context) (*analysis.Report, error) { return a, nil }
+	}
+
+	var (
+		report *analysis.Report
+		err    error
+	)
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		// The shots only: the audio has no part in the ladder.
+		report, err = b.engine.inspector.Analyze(ctx, b.source, analysis.Options{Audio: analysis.AudioOptions{Skip: true}})
+		if err != nil {
+			err = fmt.Errorf("ladder: per-shot: analyse %s: %w", b.source, err)
+		}
+	}()
+
+	return func(wait context.Context) (*analysis.Report, error) {
+		select {
+		case <-done:
+			return report, err
+		case <-wait.Done():
+			return nil, fmt.Errorf("ladder: per-shot: %w", wait.Err())
+		}
+	}
 }
 
 // planShots analyses the source into shots of whole GOPs, cuts the digest
@@ -228,10 +290,9 @@ func (b *build) planShots(
 	curves []Curve,
 	digest Digest,
 ) (*shotPlan, error) {
-	// The shots only: the audio has no part in the ladder.
-	report, err := b.engine.inspector.Analyze(ctx, b.source, analysis.Options{Audio: analysis.AudioOptions{Skip: true}})
+	report, err := b.shotAnalysis(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ladder: per-shot: analyse %s: %w", b.source, err)
+		return nil, err
 	}
 
 	if report.Video == nil || len(report.Video.Shots) == 0 {

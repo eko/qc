@@ -45,6 +45,13 @@ type build struct {
 	// probing records how the probes were placed.
 	probing ProbingReport
 
+	// level is the offset of the sampled measurements (see Level).
+	level float64
+
+	// shotAnalysis returns the frame analysis of the source per-shot
+	// rungs read (see analyseShots).
+	shotAnalysis func(ctx context.Context) (*analysis.Report, error)
+
 	// reference is what encodes are scored against: the digest, or its
 	// denoised version when film grain is synthesised (grain > 0).
 	reference       string
@@ -113,7 +120,7 @@ func (b *build) probeFixed(
 	jobs := b.probeJobs()
 	b.resetProgress()
 
-	probes, err := b.measureAll(ctx, jobs, StageProbe, len(jobs))
+	probes, err := b.measureAll(ctx, jobs, StageProbe, len(jobs), b.opts.ProbePreset)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +133,7 @@ func (b *build) probeFixed(
 	b.probing.Rounds++
 	b.resetProgress()
 
-	extended, err := b.measureAll(ctx, extra, StageProbe, len(extra))
+	extended, err := b.measureAll(ctx, extra, StageProbe, len(extra), b.opts.ProbePreset)
 	if err != nil {
 		return nil, err
 	}
@@ -287,14 +294,15 @@ func projectBitrate(
 	return 0, false
 }
 
-// measureAll encodes and measures jobs, opts.Parallel at a time. Progress
-// counts them against total, from where the current batch stands (see
-// resetProgress).
+// measureAll encodes and measures jobs at preset, opts.Parallel at a time.
+// Progress counts them against total, from where the current batch stands
+// (see resetProgress).
 func (b *build) measureAll(
 	ctx context.Context,
 	jobs []Probe,
 	stage string,
 	total int,
+	preset string,
 ) ([]Probe, error) {
 	out := make([]Probe, len(jobs))
 	group, gctx := errgroup.WithContext(ctx)
@@ -302,7 +310,7 @@ func (b *build) measureAll(
 
 	for i, job := range jobs {
 		group.Go(func() error {
-			m, err := b.measure(gctx, job, encode.Params{}, fmt.Sprintf("%s-%d", stage, i), scoreProbe, nil)
+			m, err := b.measure(gctx, job, encode.Params{Preset: preset}, fmt.Sprintf("%s-%d", stage, i), scoreProbe, nil)
 			if err != nil {
 				return err
 			}
@@ -323,8 +331,8 @@ func (b *build) measureAll(
 	return out, nil
 }
 
-// measure encodes the digest with the probe settings (plus the rate cap of
-// rate, when set) and measures its bitrate and VMAF as mode says.
+// measure encodes the digest with the probe settings (plus the rate cap and
+// preset of rate, when set) and measures its bitrate and VMAF as mode says.
 func (b *build) measure(
 	ctx context.Context,
 	p Probe,
@@ -340,21 +348,31 @@ func (b *build) measure(
 		return Measurement{}, fmt.Errorf("%s: %w", name, err)
 	}
 
-	if b.grain > 0 {
-		m, err := b.scoreGrainless(ctx, path, mode)
-		if err != nil {
-			return Measurement{}, fmt.Errorf("%s: measure: %w", name, err)
-		}
-
-		return m, b.inspect(path, name, after)
-	}
-
-	cmp, err := b.score(ctx, path, mode)
+	m, err := b.scoreFile(ctx, path, mode)
 	if err != nil {
 		return Measurement{}, fmt.Errorf("%s: measure: %w", name, err)
 	}
 
-	return measurementOf(cmp), b.inspect(path, name, after)
+	return b.leveled(m, mode), b.inspect(path, name, after)
+}
+
+// scoreFile measures the encode at path as mode says: decoded without its
+// synthesised grain when film grain is on.
+func (b *build) scoreFile(
+	ctx context.Context,
+	path string,
+	mode scoring,
+) (Measurement, error) {
+	if b.grain > 0 {
+		return b.scoreGrainless(ctx, path, mode)
+	}
+
+	cmp, err := b.score(ctx, path, mode)
+	if err != nil {
+		return Measurement{}, err
+	}
+
+	return measurementOf(cmp), nil
 }
 
 // inspect runs after on the encode at path, when set, before it is removed.
@@ -374,13 +392,13 @@ func (b *build) inspect(
 }
 
 // params are the encoding settings of probe p on the digest, with the rate
-// cap of rate when set.
+// cap and preset of rate when set (the delivery preset otherwise).
 func (b *build) params(
 	p Probe,
 	rate encode.Params,
 ) encode.Params {
 	return encode.Params{
-		Width: p.Width, Height: p.Height, CRF: p.CRF, Preset: b.opts.Preset,
+		Width: p.Width, Height: p.Height, CRF: p.CRF, Preset: cmp.Or(rate.Preset, b.opts.Preset),
 		GOP:     b.gop(),
 		MaxRate: rate.MaxRate, BufSize: rate.BufSize,
 		BitDepth: b.opts.BitDepth, FilmGrain: b.grain, Signal: b.signal,
@@ -398,6 +416,9 @@ const (
 	scoreRung
 	// scoreExact scores every frame (per-shot curves need every frame).
 	scoreExact
+	// scoreRungExact scores every frame and adds Options.Metrics and
+	// Devices: the top rung, whose quality the ladder promises.
+	scoreRungExact
 )
 
 // score measures the encode at path against the digest as mode says.
@@ -415,10 +436,14 @@ func (b *build) score(
 	switch mode {
 	case scoreRung:
 		q.Metrics, q.Devices, q.SkipHDRMetrics = b.opts.Metrics, b.opts.Devices, false
-	case scoreExact:
+	case scoreExact, scoreRungExact:
 		q = quality.Options{
 			Model: b.opts.Model, ModelDirs: b.opts.ModelDirs, Exact: true, Backend: b.opts.Backend,
 			HDRMetric: b.opts.HDRMetric, SkipHDRMetrics: true,
+		}
+
+		if mode == scoreRungExact {
+			q.Metrics, q.Devices, q.SkipHDRMetrics = b.opts.Metrics, b.opts.Devices, false
 		}
 	}
 

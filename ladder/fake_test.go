@@ -111,10 +111,13 @@ type fakeLab struct {
 	// frames is the digest's frame count.
 	frames int
 	// grain is the noise standard deviation of the source at its height.
-	grain   float64
-	params  []encode.Params
-	digests []encode.DigestSpec
-	digest  *analysis.Report
+	grain float64
+	// sampledBias is added to the VMAF of sampled measurements: the error
+	// of the sampled frames, shared by every measurement (see Level).
+	sampledBias float64
+	params      []encode.Params
+	digests     []encode.DigestSpec
+	digest      *analysis.Report
 	// compared records the quality options of every comparison.
 	compared []quality.Options
 }
@@ -200,11 +203,16 @@ func (l *fakeLab) Compare(
 		return nil, errors.New("fake: compare before encode")
 	}
 
-	if opts.Quality.Exact || chunks != nil {
+	// Chunked encodes (per-shot) are scored frame by frame; the others,
+	// sampled or exact, through the model.
+	if chunks != nil {
 		return l.perFrame(p, chunks, opts.Quality.Exact), nil
 	}
 
 	vmaf := l.model.vmaf(p)
+	if !opts.Quality.Exact {
+		vmaf += l.sampledBias
+	}
 
 	return &analysis.Comparison{
 		Distorted: &analysis.Report{Bitstream: &bitstream.Report{AverageBitrate: l.model.bitrate(p)}},

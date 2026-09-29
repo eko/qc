@@ -374,8 +374,14 @@ func (r *Runner) ladder(
 	lopts.Codec = codec
 	lopts.Progress = progress
 
-	if lopts.ContentLight == nil && opts.LadderSource == "" {
-		lopts.ContentLight = measuredLight(rep.Analysis)
+	if opts.LadderSource == "" {
+		// The ladder is built on the analysed source: its per-shot rungs
+		// read the shots of that analysis rather than decoding it again.
+		lopts.Analysis = rep.Analysis
+
+		if lopts.ContentLight == nil {
+			lopts.ContentLight = measuredLight(rep.Analysis)
+		}
 	}
 
 	res, err := r.ladders.Build(ctx, cmp.Or(opts.LadderSource, opts.Source), lopts)

@@ -225,6 +225,11 @@ func TestLadderStageLabel(
 			want:  "film grain",
 		},
 		{
+			name:  "anchoring",
+			stage: ladder.StageAnchor,
+			want:  "anchoring",
+		},
+		{
 			name:  "unknown",
 			stage: "other",
 			want:  "",

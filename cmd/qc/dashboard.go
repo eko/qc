@@ -157,7 +157,9 @@ func hooks(
 			mu.Lock()
 			defer mu.Unlock()
 
-			if p.Probe != nil {
+			// Anchors are encodes at another preset than the probes': they
+			// would not sit on the probes' curves.
+			if p.Probe != nil && p.Stage != ladder.StageAnchor {
 				probes[i] = append(probes[i], *p.Probe)
 			}
 
@@ -186,6 +188,8 @@ func ladderStageLabel(
 		return "digest"
 	case ladder.StageProbe:
 		return "probe encodes"
+	case ladder.StageAnchor:
+		return "anchoring"
 	case ladder.StageVerify:
 		return "verification"
 	case ladder.StageShots:

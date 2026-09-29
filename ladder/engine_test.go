@@ -167,7 +167,7 @@ func TestBuild(
 			check: func(t *testing.T, res *Result, lab *fakeLab) {
 				assert.Equal(t, "ultrafast", res.Preset)
 				require.Len(t, res.Probes, 7, "1080 is above the source, 720 is listed twice, plus the extra probe")
-				assert.Len(t, lab.params, 7)
+				assert.Len(t, lab.params, 7+1, "the probes and the level encode")
 				assert.True(t, res.Probes[6].Extra)
 				assert.NotContains(t, res.Timings, StageVerify)
 
@@ -219,7 +219,8 @@ func TestBuild(
 				}
 
 				assert.Positive(t, calibrated)
-				assert.Len(t, lab.params, len(res.Probes)+len(res.Rungs)+calibrated)
+				assert.InDelta(t, len(res.Probes)+1+len(res.Rungs)+calibrated, len(lab.params), 1,
+					"probes, level, verifications and corrections, and at most a second step for the top rung")
 			},
 		},
 		{
@@ -403,6 +404,24 @@ func TestBuildErrors(
 			wantMsg: "inspect digest",
 		},
 		{
+			name:    "level encode",
+			failOn:  failing(opEncode, "level.mp4", 0),
+			wantErr: errFake,
+			wantMsg: "ladder: level: encode",
+		},
+		{
+			name:    "level sampled score",
+			failOn:  failing(opCompare, "level.mp4", 0),
+			wantErr: errFake,
+			wantMsg: "ladder: level",
+		},
+		{
+			name:    "level exact score",
+			failOn:  failing(opCompare, "level.mp4", 1),
+			wantErr: errFake,
+			wantMsg: "ladder: level",
+		},
+		{
 			name:    "probe encode",
 			failOn:  failing(opEncode, "probe-3.mp4", 0),
 			wantErr: errFake,
@@ -515,7 +534,7 @@ func TestOptionsWithDefaults(
 		{
 			name: "zero value",
 			want: Options{
-				Preset: "veryfast", Constraints: Constraints{}.WithDefaults(), Heights: DefaultHeights(),
+				Preset: "veryfast", ProbePreset: "veryfast", Constraints: Constraints{}.WithDefaults(), Heights: DefaultHeights(),
 				SegmentDuration: media.Seconds(2), DigestDuration: media.Seconds(40), GOPDuration: media.Seconds(2),
 				Precision: 1, Parallel: 2, ProbeClips: 16,
 				Probing: ProbingFixed, Tolerance: 0.5, BitrateTolerance: 0.03,
@@ -530,7 +549,7 @@ func TestOptionsWithDefaults(
 				Probing: ProbingAdaptive, Tolerance: 1, BitrateTolerance: 0.05, MaxProbes: 9,
 			},
 			want: Options{
-				Preset: "slow", Constraints: Constraints{}.WithDefaults(), Heights: []int{720},
+				Preset: "slow", ProbePreset: "slow", Constraints: Constraints{}.WithDefaults(), Heights: []int{720},
 				SegmentDuration: media.Seconds(4), DigestDuration: media.Seconds(60), GOPDuration: media.Seconds(4),
 				Precision: 0.5, Parallel: 4, ProbeClips: 32,
 				Probing: ProbingAdaptive, Tolerance: 1, BitrateTolerance: 0.05, MaxProbes: 9,

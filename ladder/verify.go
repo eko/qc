@@ -14,7 +14,8 @@ import (
 
 // CalibrationTolerance is the VMAF gap between prediction and verification
 // beyond which a rung's CRF is corrected by one secant step (the rung is
-// then Calibrated). Reports quote it when they flag calibrated rungs.
+// then Calibrated), TopCalibrationTolerance for the top rung. Reports quote
+// it when they flag calibrated rungs.
 const CalibrationTolerance = 1.5
 
 // verifyAndCalibrate measures every rung with its final settings, then
@@ -30,14 +31,20 @@ func (b *build) verifyAndCalibrate(
 	}
 
 	missed := func(i int) bool {
-		return math.Abs(rungs[i].Measured.VMAF-rungs[i].PredictedVMAF) > CalibrationTolerance
+		return math.Abs(rungs[i].Measured.VMAF-rungs[i].PredictedVMAF) > calibrationTolerance(i)
 	}
+
+	first, firstCRF := *rungs[0].Measured, rungs[0].CRF
 
 	if !b.calibrate(rungs, probes, missed) {
 		return nil
 	}
 
 	if err := b.verify(ctx, rungs, func(i int) bool { return rungs[i].Calibrated }); err != nil {
+		return err
+	}
+
+	if err := b.refineTop(ctx, rungs, firstCRF, first, missed); err != nil {
 		return err
 	}
 
@@ -90,7 +97,14 @@ func (b *build) verify(
 				}
 			}
 
-			m, err := b.measure(gctx, probe, rate, fmt.Sprintf("verify-%d", i), scoreRung, after)
+			// The top rung is scored on every frame: it is the quality the
+			// ladder promises.
+			mode := scoreRung
+			if i == 0 {
+				mode = scoreRungExact
+			}
+
+			m, err := b.measure(gctx, probe, rate, fmt.Sprintf("verify-%d", i), mode, after)
 			if err != nil {
 				return err
 			}
@@ -177,4 +191,80 @@ func crfSlope(
 	}
 
 	return (hi.VMAF - lo.VMAF) / (hi.CRF - lo.CRF)
+}
+
+// refineTop corrects the top rung once more when it still misses its
+// prediction after calibration, by a secant step between its two
+// measurements (both on every frame of the digest), which know its slope
+// better than the probes around it.
+func (b *build) refineTop(
+	ctx context.Context,
+	rungs []Rung,
+	prevCRF float64,
+	prev Measurement,
+	missed func(int) bool,
+) error {
+	top := &rungs[0]
+	if !top.Calibrated || !missed(0) {
+		return nil
+	}
+
+	crf, action := topStep(prevCRF, prev.VMAF, top.CRF, top.Measured.VMAF, top.PredictedVMAF, b.roundCRF)
+
+	switch action {
+	case stepKeep:
+		return nil
+	case stepRestore:
+		top.CRF, top.Measured = prevCRF, &prev
+		top.Command = b.command(0, *top)
+
+		return nil
+	}
+
+	top.CRF = crf
+	top.Command = b.command(0, *top)
+
+	return b.verify(ctx, rungs, func(i int) bool { return i == 0 })
+}
+
+// stepAction is what the second step of the top rung does.
+type stepAction int
+
+const (
+	// stepKeep keeps the current CRF.
+	stepKeep stepAction = iota
+	// stepRestore goes back to the first CRF, already measured.
+	stepRestore
+	// stepEncode encodes and measures a new CRF.
+	stepEncode
+)
+
+// topStep is the secant step from the top rung's first measurement
+// (prevCRF, prevVMAF) and its second (crf, vmaf) towards target, rounded
+// by round: keep the current CRF when the measurements do not fall with
+// CRF or the step stays put, restore the first when the step returns to it.
+func topStep(
+	prevCRF, prevVMAF, crf, vmaf, target float64,
+	round func(float64) float64,
+) (float64, stepAction) {
+	if crf == prevCRF {
+		return crf, stepKeep
+	}
+
+	slope := (vmaf - prevVMAF) / (crf - prevCRF)
+	if slope >= 0 {
+		return crf, stepKeep
+	}
+
+	next := round(crf + (target-vmaf)/slope)
+
+	switch next {
+	case crf:
+		return crf, stepKeep
+	case prevCRF:
+		// The target lies nearer the first measurement, already made.
+		return prevCRF, stepRestore
+	}
+
+	return next, stepEncode
 }

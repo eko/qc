@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/eko/qc/internal/ffexec"
 	"github.com/eko/qc/media"
 )
@@ -137,11 +139,8 @@ func (f *FFmpeg) EncodeChunks(
 		_ = os.Remove(list)
 	}()
 
-	for i, chunk := range chunks {
-		args := append([]string{"-v", "error", "-nostdin", "-y"}, codec.chunkArgs(src, parts[i], chunk, p)...)
-		if err := ffexec.Stream(ctx, f.bin, args, discard); err != nil {
-			return fmt.Errorf("encode %s chunk %d with %s: %w", src.Path, i+1, codec.Encoder, err)
-		}
+	if err := f.encodeParts(ctx, codec, src, parts, chunks, p); err != nil {
+		return err
 	}
 
 	if codec.transportJoin(chunks) {
@@ -158,6 +157,39 @@ func (f *FFmpeg) EncodeChunks(
 	}
 
 	return nil
+}
+
+// chunkWorkers is how many chunks of one encode are encoded at once. The
+// chunks are short (a shot, or its piece of a digest), too short for an
+// encoder to keep every core busy, and ffmpeg's start-up is a good part of
+// each one: encoding them one after another left most of the machine idle.
+const chunkWorkers = 4
+
+// encodeParts encodes every chunk of src into its part, chunkWorkers at a
+// time.
+func (f *FFmpeg) encodeParts(
+	ctx context.Context,
+	codec Codec,
+	src ChunkSource,
+	parts []string,
+	chunks []Chunk,
+	p Params,
+) error {
+	group, gctx := errgroup.WithContext(ctx)
+	group.SetLimit(chunkWorkers)
+
+	for i, chunk := range chunks {
+		group.Go(func() error {
+			args := append([]string{"-v", "error", "-nostdin", "-y"}, codec.chunkArgs(src, parts[i], chunk, p)...)
+			if err := f.encodeWatched(gctx, args, parts[i]); err != nil {
+				return fmt.Errorf("encode %s chunk %d with %s: %w", src.Path, i+1, codec.Encoder, err)
+			}
+
+			return nil
+		})
+	}
+
+	return group.Wait()
 }
 
 // transportJoin tells whether chunks changing resolution must be joined

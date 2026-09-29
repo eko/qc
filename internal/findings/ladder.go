@@ -12,11 +12,11 @@ import (
 const (
 	// NoRungs: no rung could be selected; no other finding follows.
 	NoRungs Code = "no-rungs"
-	// TopVMAFMissed: the top rung stays below the targeted quality, the
-	// title's best probed quality. Limit is the target.
+	// TopVMAFMissed: the top rung stays below the targeted quality. Value
+	// is its quality (verified when it was), Limit the target.
 	TopVMAFMissed Code = "top-vmaf-missed"
-	// TopVMAFReached: the top rung reaches the targeted quality. Limit is
-	// the target.
+	// TopVMAFReached: the top rung reaches the targeted quality. Value is
+	// its quality (verified when it was), Limit the target.
 	TopVMAFReached Code = "top-vmaf-reached"
 	// LighterThanApple: an H.264 top rung lighter than Apple's static one.
 	// Value is the bitrate saved (a share), Limit AppleTopH264.
@@ -32,7 +32,8 @@ const (
 	// source's (ladder.Rung.Grain).
 	GrainMismatch Code = "grain-mismatch"
 	// Calibrated: the rung missed its prediction by more than Limit
-	// (ladder.CalibrationTolerance) and had its CRF corrected.
+	// (ladder.CalibrationTolerance, ladder.TopCalibrationTolerance for the
+	// top rung) and had its CRF corrected.
 	Calibrated Code = "calibrated"
 	// BandedRung: the rung shows visible banding on a share of its scored
 	// frames (Value) with CAMBI above Limit.
@@ -93,16 +94,23 @@ func Ladder(
 	return append(out, hdrLadderFindings(r)...)
 }
 
-// topFinding says whether the top rung reaches the targeted quality.
+// topFinding says whether the top rung reaches the targeted quality: as
+// verified (on every frame of the digest) when it was, as predicted
+// otherwise. Value is that quality.
 func topFinding(
 	top ladder.Rung,
 	target float64,
 ) Finding {
-	if top.PredictedVMAF < target-topVMAFTolerance {
-		return Finding{Level: Warn, Code: TopVMAFMissed, Limit: target}
+	quality := top.PredictedVMAF
+	if top.Measured != nil {
+		quality = top.Measured.VMAF
 	}
 
-	return Finding{Level: OK, Code: TopVMAFReached, Limit: target}
+	if quality < target-topVMAFTolerance {
+		return Finding{Level: Warn, Code: TopVMAFMissed, Value: quality, Limit: target}
+	}
+
+	return Finding{Level: OK, Code: TopVMAFReached, Value: quality, Limit: target}
 }
 
 // verificationFinding reports the worst gap between measured and predicted
@@ -144,7 +152,12 @@ func rungFindings(
 	}
 
 	if rung.Calibrated {
-		out = append(out, Finding{Level: Info, Code: Calibrated, Index: i, Limit: ladder.CalibrationTolerance})
+		limit := ladder.CalibrationTolerance
+		if i == 0 {
+			limit = ladder.TopCalibrationTolerance
+		}
+
+		out = append(out, Finding{Level: Info, Code: Calibrated, Index: i, Limit: limit})
 	}
 
 	return out

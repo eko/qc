@@ -211,7 +211,8 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 |---|---|---|
 | `-c, --codec` (ladder only) | h264 | h264, hevc or av1 |
 | `--model`, `--model-dir` (ladder only; `run` shares the VMAF ones) | auto | VMAF model of the probe measurements |
-| `--preset` | codec default | encoder preset |
+| `--preset` | codec default | encoder preset of the rungs (their verification and commands) |
+| `--probe-preset` | `--preset` | encoder preset of the probe encodes: a much faster one cuts probing, the probes being anchored at `--preset` by encoding the top and bottom rungs ([details](ladder.md#faster-probes-at-another-preset)) |
 | `--rungs` | auto | ladder shape: `auto`, a rung count (`6`) or the rung resolutions top first (`1080,720,720,540,360`) — see [ladder shapes](ladder.md#5-rung-selection) |
 | `--top-vmaf` | 95 | quality of the top rung (the highest VMAF targeted) |
 | `--step` | 6 | VMAF step between rungs |
