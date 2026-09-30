@@ -8,13 +8,15 @@ qc needs three things at run time:
   the VMAF v1 models qc uses by default;
 - the **VMAF v1.0.16 models** (`vmaf_v1.0.16_3d0h.json`…), looked up in
   `/opt/homebrew/share/libvmaf/model`, `/usr/local/share/libvmaf/model` and
-  `/usr/share/libvmaf/model` (or `--model-dir`, `QC_MODEL_DIR`).
+  `/usr/share/libvmaf/model` (or `--model-dir`, `QC_MODEL_DIR`), then among
+  the models built into libvmaf.
 
 Optionally, ffmpeg built with **libass** (its `subtitles` filter) and a
 monospaced font (Menlo on macOS, DejaVu Sans Mono elsewhere) for the
 annotated videos of `--overlay` ([overlay.md](overlay.md)).
 
-The Docker image and the Homebrew formula bring all of them. Whatever the
+The Docker image and the Homebrew formula bring all of them; the prebuilt
+binaries bring libvmaf and the models, and need ffmpeg only. Whatever the
 method, check the result with:
 
 ```sh
@@ -121,6 +123,45 @@ docker buildx build --platform linux/amd64,linux/arm64 -t qc .   # both architec
 Building for the other architecture runs under QEMU and takes much longer
 (ffmpeg, SVT-AV1 and libvmaf are compiled): the release workflow builds each
 architecture on a native runner instead.
+
+## Prebuilt binaries
+
+Every [release](https://github.com/eko/qc/releases) has self-contained
+binaries: libvmaf 3.2.1 is linked in, with the VMAF models built into it,
+so they need nothing but ffmpeg and ffprobe (with libx264, libx265 and
+libsvtav1) at run time.
+
+| Archive | Platform | Linking |
+|---|---|---|
+| `qc_<version>_linux_amd64.tar.gz` | Linux x86-64 | static (musl): any distribution |
+| `qc_<version>_linux_arm64.tar.gz` | Linux arm64 (Graviton, Ampere, Raspberry Pi 4/5 64-bit) | static (musl) |
+| `qc_<version>_darwin_arm64.tar.gz` | macOS on Apple silicon | system libraries only |
+
+```sh
+VERSION=1.0.0
+OS=linux ARCH=amd64    # or linux/arm64, darwin/arm64
+curl -fsSLO "https://github.com/eko/qc/releases/download/v$VERSION/qc_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -fsSLO "https://github.com/eko/qc/releases/download/v$VERSION/SHA256SUMS"
+sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+tar -xzf "qc_${VERSION}_${OS}_${ARCH}.tar.gz"
+sudo install "qc_${VERSION}_${OS}_${ARCH}/qc" /usr/local/bin/
+qc version --check
+```
+
+Each archive also holds the licences of qc and of libvmaf (BSD-2-Clause
+Patent), which the binary embeds.
+
+**macOS: the binary is not signed.** A binary downloaded by a browser is
+quarantined, and Gatekeeper refuses to open it ("cannot be opened because
+the developer cannot be verified"). Downloaded with `curl` as above, it is
+not quarantined. Otherwise, lift the quarantine once:
+
+```sh
+xattr -d com.apple.quarantine /usr/local/bin/qc
+```
+
+Install ffmpeg with `brew install ffmpeg` (macOS) or your distribution's
+package (Debian 13 and Ubuntu 24.04 ship the three encoders).
 
 ## Homebrew (macOS, Linux)
 

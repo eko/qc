@@ -392,8 +392,9 @@ func parseEncoders(
 	return encoders
 }
 
-// loadDefaultModel loads the default VMAF v1 model from dirs, as a 1080p
-// comparison would, and returns its path.
+// loadDefaultModel loads the default VMAF v1 model, as a 1080p comparison
+// would: from dirs, or built into libvmaf (the release binaries embed it).
+// It returns where the model came from.
 func loadDefaultModel(
 	dirs []string,
 ) (string, error) {
@@ -402,16 +403,30 @@ func loadDefaultModel(
 		return "", err
 	}
 
-	if !spec.FromPath {
-		return "", fmt.Errorf("%w: %s.json in none of %s", vmaf.ErrModelNotFound, spec.Name, strings.Join(dirs, ", "))
-	}
+	return loadModel(spec, dirs)
+}
 
+// loadModel loads spec, found in dirs or not, and returns where it came
+// from.
+func loadModel(
+	spec vmaf.ModelSpec,
+	dirs []string,
+) (string, error) {
 	model, err := libvmaf.LoadModel(spec)
 	if err != nil {
+		if !spec.FromPath {
+			return "", fmt.Errorf("%w: %s.json in none of %s, nor built into libvmaf",
+				vmaf.ErrModelNotFound, spec.Name, strings.Join(dirs, ", "))
+		}
+
 		return "", fmt.Errorf("load %s (libvmaf ≥ 3.2.1 is required): %w", spec.Source, err)
 	}
 
 	model.Close()
+
+	if !spec.FromPath {
+		return spec.Name + " (built into libvmaf)", nil
+	}
 
 	return spec.Source, nil
 }

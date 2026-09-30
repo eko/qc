@@ -9,6 +9,14 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Added
+
+- **Prebuilt binaries** on every GitHub release: Linux amd64 and arm64
+  (static, musl) and macOS arm64 (not signed), with libvmaf 3.2.1 linked in
+  and the VMAF models built into it, so they need only ffmpeg; with their
+  `SHA256SUMS` (`make binary` builds the one of the running platform).
+  `qc version --check` accepts the models built into libvmaf.
+
 ### Fixed
 
 - **Background jobs**: qc drew its dashboard whenever stderr was a

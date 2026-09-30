@@ -272,32 +272,39 @@ func TestDoctorCheck(
 func TestLoadDefaultModel(
 	t *testing.T,
 ) {
-	empty := t.TempDir()
+	path, err := loadDefaultModel([]string{t.TempDir()})
+	require.NoError(t, err, "the model is built into libvmaf")
+	assert.Equal(t, "vmaf_v1.0.16_3d0h (built into libvmaf)", path)
+}
 
-	corrupt := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(corrupt, "vmaf_v1.0.16_3d0h.json"), []byte("{}"), 0o600))
+func TestLoadModel(
+	t *testing.T,
+) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "corrupt.json"), []byte("{}"), 0o600))
 
 	testCases := []struct {
 		name      string
-		dirs      []string
+		spec      vmaf.ModelSpec
 		wantErrIs error
 		wantErr   string
 	}{
 		{
-			name:      "not in the directories",
-			dirs:      []string{empty},
+			name:      "nowhere",
+			spec:      vmaf.ModelSpec{Name: "qc_no_such_model", Source: "qc_no_such_model"},
 			wantErrIs: vmaf.ErrModelNotFound,
+			wantErr:   "nor built into libvmaf",
 		},
 		{
-			name:    "unloadable model",
-			dirs:    []string{corrupt},
+			name:    "unloadable file",
+			spec:    vmaf.ModelSpec{Name: "corrupt", Source: filepath.Join(dir, "corrupt.json"), FromPath: true},
 			wantErr: "libvmaf ≥ 3.2.1 is required",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := loadDefaultModel(testCase.dirs)
+			_, err := loadModel(testCase.spec, []string{dir})
 			require.Error(t, err)
 
 			if testCase.wantErrIs != nil {
@@ -307,6 +314,21 @@ func TestLoadDefaultModel(
 			assert.Contains(t, err.Error(), testCase.wantErr)
 		})
 	}
+}
+
+func TestLoadDefaultModelFromFile(
+	t *testing.T,
+) {
+	spec, err := vmaf.ResolveModel("", checkModelHeight, checkModelFPS, vmaf.DefaultModelDirs())
+	require.NoError(t, err)
+
+	if !spec.FromPath {
+		t.Skip("no VMAF model files installed")
+	}
+
+	path, err := loadDefaultModel(vmaf.DefaultModelDirs())
+	require.NoError(t, err)
+	assert.Equal(t, spec.Source, path)
 }
 
 func TestPrintVersion(
@@ -400,11 +422,12 @@ func TestVersionCommand(
 			},
 		},
 		{
-			name:       "missing requirements",
-			args:       []string{"version", "--check", "--ffmpeg", "no-such-ffmpeg", "--model-dir", t.TempDir()},
-			wantCode:   1,
-			wantStdout: []string{"✗ ffmpeg", "✗ vmaf model"},
-			wantStderr: "environment check failed: ffmpeg, libx264, libx265, libsvtav1, vmaf model",
+			name:     "missing requirements",
+			args:     []string{"version", "--check", "--ffmpeg", "no-such-ffmpeg", "--model-dir", t.TempDir()},
+			wantCode: 1,
+			// No model file: the one built into libvmaf passes.
+			wantStdout: []string{"✗ ffmpeg", "✓ vmaf model    vmaf_v1.0.16_3d0h (built into libvmaf)"},
+			wantStderr: "environment check failed: ffmpeg, libx264, libx265, libsvtav1 (",
 		},
 		{
 			name:       "invalid format",

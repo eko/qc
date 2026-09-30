@@ -34,3 +34,4 @@ coverage.out
 # Test binaries and Python caches
 *.test
 __pycache__/
+/dist/

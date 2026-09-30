@@ -11,13 +11,16 @@ LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DA
 IMAGE ?= qc
 IMAGE_CUDA ?= qc:cuda
 
-.PHONY: help build install test race cover cover-html lint fmt vet check nocgo clean docker docker-test docker-cuda gpu-validate
+.PHONY: binary help build install test race cover cover-html lint fmt vet check nocgo clean docker docker-test docker-cuda gpu-validate
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
 
 build: ## Build the qc binary into bin/
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/qc ./cmd/qc
+
+binary: ## Build the self-contained release binary of this platform into dist/ (needs meson, ninja, pkgconf)
+	packaging/release/build-binary.sh $(VERSION) $(COMMIT) $(DATE) dist
 
 install: ## Install qc into $GOBIN
 	go install -trimpath -ldflags "$(LDFLAGS)" ./cmd/qc

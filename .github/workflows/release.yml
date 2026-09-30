@@ -2,7 +2,8 @@ name: Release
 
 # A pushed v* tag releases qc: the checks CI runs, the multi-arch image
 # ghcr.io/eko/qc:<version> (+ :latest), the CUDA image when Dockerfile.cuda
-# exists, then the GitHub release with the notes of CHANGELOG.md.
+# exists, self-contained binaries (Linux amd64/arm64, static; macOS arm64),
+# then the GitHub release with the notes of CHANGELOG.md and the binaries.
 # See RELEASING.md.
 
 on:
@@ -270,14 +271,86 @@ jobs:
           provenance: mode=max
           sbom: true
 
+  binaries:
+    name: Binary (${{ matrix.os }}/${{ matrix.arch }})
+    needs: [check, metadata]
+    strategy:
+      matrix:
+        include:
+          - {os: linux, arch: amd64, runner: ubuntu-24.04}
+          - {os: linux, arch: arm64, runner: ubuntu-24.04-arm}
+          - {os: darwin, arch: arm64, runner: macos-latest}
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ github.ref_name }}
+      COMMIT: ${{ needs.metadata.outputs.commit }}
+      DATE: ${{ needs.metadata.outputs.date }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Linux: built with musl in golang:<go>-alpine, fully static; the
+      # smoke test then runs it on Ubuntu, with Ubuntu's ffmpeg only.
+      - name: Build (Linux, static)
+        if: matrix.os == 'linux'
+        run: |
+          go_version=$(awk '/^go /{print $2}' go.mod)
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/dist:/out" -w /src "golang:${go_version}-alpine" sh -c '
+            apk add --no-cache build-base curl file meson nasm ninja pkgconf xxd >/dev/null
+            packaging/release/build-binary.sh "$0" "$1" "$2" /out
+          ' "$VERSION" "$COMMIT" "$DATE"
+
+      - name: Smoke test (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          mkdir smoke && tar -xzf dist/*.tar.gz -C smoke --strip-components=1
+          docker run --rm -v "$PWD:/src:ro" -w /src ubuntu:24.04 sh -c '
+            apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg >/dev/null
+            packaging/release/smoke-binary.sh smoke/qc
+          '
+
+      - uses: actions/setup-go@v7
+        if: matrix.os == 'darwin'
+        with:
+          go-version-file: go.mod
+
+      # macOS: libvmaf linked statically, only system libraries stay
+      # dynamic. The binary is not signed: see docs/install.md.
+      - name: Build (macOS)
+        if: matrix.os == 'darwin'
+        run: |
+          brew update
+          brew install meson ninja pkgconf ffmpeg
+          packaging/release/build-binary.sh "$VERSION" "$COMMIT" "$DATE" dist
+
+      - name: Smoke test (macOS)
+        if: matrix.os == 'darwin'
+        run: |
+          mkdir smoke && tar -xzf dist/*.tar.gz -C smoke --strip-components=1
+          packaging/release/smoke-binary.sh smoke/qc
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   release:
     name: GitHub release
-    needs: [metadata, merge, cuda]
+    needs: [metadata, merge, cuda, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum qc_*.tar.gz > SHA256SUMS && cat SHA256SUMS
 
       - name: Create the release
         env:
@@ -294,9 +367,15 @@ jobs:
             echo '```sh'
             echo "docker run --rm -v \"\$PWD:/data\" ${IMAGE}:${VERSION} version --check"
             echo '```'
+            echo
+            echo "### Binaries"
+            echo
+            echo "Self-contained (libvmaf and the VMAF models are built in); ffmpeg is still"
+            echo "needed. Linux binaries are static; the macOS one is not signed"
+            echo "([install](https://github.com/eko/qc/blob/${TAG}/docs/install.md#prebuilt-binaries))."
           } >> notes.md
           flags=(--verify-tag --title "$TAG" --notes-file notes.md)
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
           fi
-          gh release create "$TAG" "${flags[@]}"
+          gh release create "$TAG" "${flags[@]}" dist/qc_*.tar.gz dist/SHA256SUMS

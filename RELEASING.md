@@ -12,9 +12,13 @@ Releases are cut from `main` by pushing a `vX.Y.Z` tag. The
    pre-release such as `v0.2.0-rc.1` only gets its own tag);
 4. builds `Dockerfile.cuda`, when the repository has one, as
    `ghcr.io/eko/qc:X.Y.Z-cuda` (linux/amd64);
-5. creates the GitHub release, with the `## [X.Y.Z]` section of
-   [CHANGELOG.md](CHANGELOG.md) as its notes. The workflow fails early when
-   that section is missing.
+5. builds the self-contained binaries on native runners
+   (`packaging/release/build-binary.sh`: libvmaf static with its built-in
+   models; Linux amd64/arm64 fully static with musl, macOS arm64) and
+   smoke-tests each one with ffmpeg only (`packaging/release/smoke-binary.sh`);
+6. creates the GitHub release, with the `## [X.Y.Z]` section of
+   [CHANGELOG.md](CHANGELOG.md) as its notes, the binaries and their
+   `SHA256SUMS`. The workflow fails early when that section is missing.
 
 ## Steps
 

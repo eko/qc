@@ -68,6 +68,11 @@ docker run --rm -v "$PWD:/data" ghcr.io/eko/qc ladder source.mov -c av1 --html l
 brew install eko/tap/qc
 ```
 
+**Prebuilt binaries** (Linux amd64/arm64, static; macOS arm64): on every
+[release](https://github.com/eko/qc/releases), with libvmaf and the VMAF
+models built in; only ffmpeg is needed
+([install](docs/install.md#prebuilt-binaries)).
+
 **From source**: Go (see `go.mod`) with cgo, ffmpeg and ffprobe with
 libx264, libx265 and libsvtav1, libvmaf ≥ 3.2.1 with its models and
 pkg-config:
