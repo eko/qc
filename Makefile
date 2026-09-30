@@ -8,10 +8,15 @@ COMMIT  ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
+# The release the Homebrew formula points at (make homebrew): the latest tag.
+RELEASE ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
+# The local clone of the eko/homebrew-tap repository.
+HOMEBREW_TAP ?=
+
 IMAGE ?= qc
 IMAGE_CUDA ?= qc:cuda
 
-.PHONY: binary help build install test race cover cover-html lint fmt vet check nocgo clean docker docker-test docker-cuda gpu-validate
+.PHONY: binary homebrew help build install test race cover cover-html lint fmt vet check nocgo clean docker docker-test docker-cuda gpu-validate
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
@@ -21,6 +26,11 @@ build: ## Build the qc binary into bin/
 
 binary: ## Build the self-contained release binary of this platform into dist/ (needs meson, ninja, pkgconf)
 	packaging/release/build-binary.sh $(VERSION) $(COMMIT) $(DATE) dist
+
+homebrew: ## Point the Homebrew formula at the latest tag (or RELEASE=vX.Y.Z), commit it in HOMEBREW_TAP; CHECK=1 tests it, PUSH=1 pushes
+	@test -n "$(HOMEBREW_TAP)" || { echo "set HOMEBREW_TAP to your clone of eko/homebrew-tap"; exit 1; }
+	@test -n "$(RELEASE)" || { echo "no tag: set RELEASE=vX.Y.Z"; exit 1; }
+	packaging/homebrew/update.sh $(RELEASE) $(HOMEBREW_TAP)
 
 install: ## Install qc into $GOBIN
 	go install -trimpath -ldflags "$(LDFLAGS)" ./cmd/qc

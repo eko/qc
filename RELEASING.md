@@ -51,24 +51,22 @@ Releases are cut from `main` by pushing a `vX.Y.Z` tag. The
    The first time, make the `qc` package public in the GitHub package
    settings (ghcr.io packages are private by default) and link it to the
    repository.
-5. **Homebrew**: update the formula of the
-   [eko/homebrew-tap](https://github.com/eko/homebrew-tap) repository from
-   [packaging/homebrew/qc.rb](packaging/homebrew/qc.rb):
+5. **Homebrew**: once the release is green (the tag must not move again: its
+   tarball is what the formula checks), point the formula of the
+   [eko/homebrew-tap](https://github.com/eko/homebrew-tap) repository at it:
 
    ```sh
-   VERSION=X.Y.Z
-   curl -fsSL "https://github.com/eko/qc/archive/refs/tags/v$VERSION.tar.gz" | shasum -a 256
+   export HOMEBREW_TAP=~/path/to/homebrew-tap   # your clone of eko/homebrew-tap
+   make homebrew CHECK=1 PUSH=1
    ```
 
-   Set `url` to that tarball and `sha256` to the printed checksum in
-   `packaging/homebrew/qc.rb` (commit it here too), copy it to
-   `Formula/qc.rb` in the tap, then check it:
-
-   ```sh
-   brew install --build-from-source eko/tap/qc
-   brew test eko/tap/qc
-   brew audit --strict --online eko/tap/qc
-   ```
+   It takes the latest tag (`RELEASE=vX.Y.Z` to choose), writes the tarball's
+   URL and sha256 into [packaging/homebrew/qc.rb](packaging/homebrew/qc.rb)
+   (commit it here too) and into the tap's `Formula/qc.rb`, commits it there,
+   then with `CHECK=1` builds and tests it through a temporary tap
+   (`brew install --build-from-source`, `brew test`,
+   `brew audit --strict --online`), and with `PUSH=1` pushes the tap.
+   Without them it only commits, and prints the push command.
 
 6. **Go module proxy**: `go install github.com/eko/qc/cmd/qc@vX.Y.Z` works as
    soon as the tag is public; `GOPROXY=https://proxy.golang.org go list -m
