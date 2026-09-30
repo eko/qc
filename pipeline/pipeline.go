@@ -1,5 +1,6 @@
 // Package pipeline chains every analysis of a title: technical analysis,
-// VMAF against a reference and streaming ladders, reporting each stage.
+// VMAF against a reference and streaming ladders, optionally encoded into
+// renditions (Options.Renditions, WithLadderEncoder), reporting each stage.
 package pipeline
 
 import (
@@ -8,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/eko/qc/analysis"
@@ -23,6 +26,10 @@ var ErrNothingToDo = errors.New("pipeline: nothing to do")
 // ErrNoOverlayer is returned when an overlay is requested from a Runner
 // built without an Overlayer (see WithOverlayer).
 var ErrNoOverlayer = errors.New("pipeline: no overlayer configured")
+
+// ErrNoLadderEncoder is returned when renditions are requested from a
+// Runner built without a LadderEncoder (see WithLadderEncoder).
+var ErrNoLadderEncoder = errors.New("pipeline: no ladder encoder configured")
 
 // Options selects the stages. The zero value analyses the source only.
 type Options struct {
@@ -46,6 +53,10 @@ type Options struct {
 	// Overlay, when its Output is set, writes an annotated copy of Source
 	// once it is analysed and compared: see OverlayOptions.
 	Overlay OverlayOptions
+	// Renditions, when its Dir is set, encodes every ladder on the whole
+	// title into Dir/<codec> once built (see ladder.Engine.Encode); its
+	// Progress is set by the Runner.
+	Renditions ladder.RenditionOptions
 }
 
 // OverlayOptions configures the annotated copy of the source: the frame
@@ -82,6 +93,8 @@ type StageResult struct {
 	Ladder *ladder.Result
 	// Overlay is the annotated copy written (KindOverlay).
 	Overlay string
+	// Renditions are the renditions of a ladder (KindRenditions).
+	Renditions []ladder.Rendition
 }
 
 // Stage identifies a step of the pipeline.
@@ -94,11 +107,12 @@ type Stage struct {
 
 // Stage kinds.
 const (
-	KindInspect  = "inspect"
-	KindAnalysis = "analysis"
-	KindVMAF     = "vmaf"
-	KindLadder   = "ladder"
-	KindOverlay  = "overlay"
+	KindInspect    = "inspect"
+	KindAnalysis   = "analysis"
+	KindVMAF       = "vmaf"
+	KindLadder     = "ladder"
+	KindOverlay    = "overlay"
+	KindRenditions = "renditions"
 )
 
 // Hooks receive the pipeline events. Every field is optional; i is the
@@ -117,6 +131,8 @@ type Hooks struct {
 	Ladder func(i int, p ladder.Progress)
 	// Overlay reports the progress of the annotated copy.
 	Overlay func(i int, p overlay.Progress)
+	// Renditions reports the progress of the renditions of a ladder.
+	Renditions func(i int, p ladder.RenditionProgress)
 }
 
 // Analyzer inspects, analyses and compares files. *analysis.Analyzer
@@ -143,6 +159,17 @@ type LadderBuilder interface {
 	) (*ladder.Result, error)
 }
 
+// LadderEncoder encodes the renditions of ladders. *ladder.Engine
+// implements it.
+type LadderEncoder interface {
+	Encode(
+		ctx context.Context,
+		source string,
+		res *ladder.Result,
+		opts ladder.RenditionOptions,
+	) ([]ladder.Rendition, error)
+}
+
 // Overlayer writes annotated copies of videos. *overlay.Renderer implements
 // it.
 type Overlayer interface {
@@ -160,6 +187,8 @@ type Runner struct {
 	ladders  LadderBuilder
 	// overlayer is nil unless WithOverlayer set it.
 	overlayer Overlayer
+	// encoder is nil unless WithLadderEncoder set it.
+	encoder LadderEncoder
 }
 
 // RunnerOption configures a Runner.
@@ -171,6 +200,14 @@ func WithOverlayer(
 	o Overlayer,
 ) RunnerOption {
 	return func(r *Runner) { r.overlayer = o }
+}
+
+// WithLadderEncoder lets the Runner encode the renditions of its ladders
+// (Options.Renditions).
+func WithLadderEncoder(
+	e LadderEncoder,
+) RunnerOption {
+	return func(r *Runner) { r.encoder = e }
 }
 
 // NewRunner returns a Runner. ladders is only used when ladders are
@@ -215,6 +252,10 @@ func Stages(
 
 	for _, codec := range opts.Codecs {
 		stages = append(stages, Stage{Kind: KindLadder, Label: "Ladder · " + codec, Codec: codec})
+
+		if opts.Renditions.Dir != "" {
+			stages = append(stages, Stage{Kind: KindRenditions, Label: "Renditions · " + codec, Codec: codec})
+		}
 	}
 
 	return stages
@@ -284,6 +325,8 @@ func (r *Runner) runStage(
 		return r.ladder(ctx, stage.Codec, opts, rep, func(p ladder.Progress) { hooks.ladder(i, p) })
 	case KindOverlay:
 		return r.overlay(ctx, opts, rep, func(p overlay.Progress) { hooks.overlay(i, p) })
+	case KindRenditions:
+		return r.renditions(ctx, stage.Codec, opts, rep, func(p ladder.RenditionProgress) { hooks.renditions(i, p) })
 	default:
 		return StageResult{}, fmt.Errorf("unknown stage %q", stage.Kind)
 	}
@@ -478,3 +521,47 @@ func (h Hooks) overlay(i int, p overlay.Progress) {
 		h.Overlay(i, p)
 	}
 }
+
+func (h Hooks) renditions(i int, p ladder.RenditionProgress) {
+	if h.Renditions != nil {
+		h.Renditions(i, p)
+	}
+}
+
+// renditions encodes the renditions of the ladder of codec into
+// Renditions.Dir/<codec>.
+func (r *Runner) renditions(
+	ctx context.Context,
+	codec string,
+	opts Options,
+	rep *Report,
+	progress func(ladder.RenditionProgress),
+) (StageResult, error) {
+	if r.encoder == nil {
+		return StageResult{}, ErrNoLadderEncoder
+	}
+
+	// The stage follows the ladder stage of its codec.
+	if len(rep.Ladders) == 0 {
+		return StageResult{}, fmt.Errorf("%w: %s", errNoLadder, codec)
+	}
+
+	ropts := opts.Renditions
+	ropts.Dir = filepath.Join(ropts.Dir, codec)
+	ropts.Progress = progress
+
+	if err := os.MkdirAll(ropts.Dir, 0o750); err != nil {
+		return StageResult{}, fmt.Errorf("renditions: %w", err)
+	}
+
+	renditions, err := r.encoder.Encode(ctx, cmp.Or(opts.LadderSource, opts.Source), rep.Ladders[len(rep.Ladders)-1], ropts)
+	if err != nil {
+		return StageResult{}, err
+	}
+
+	return StageResult{Renditions: renditions}, nil
+}
+
+// errNoLadder is returned for renditions of a codec whose ladder was not
+// built.
+var errNoLadder = errors.New("no ladder")

@@ -42,6 +42,16 @@
 // Options.PerShotResolution (experimental) also lets each shot pick its
 // resolution among the rung's and the neighbouring rungs'.
 //
+// # Renditions
+//
+// A ladder is planned and verified on the digest. Engine.Encode encodes its
+// renditions on the whole title (Result.RungParams: the settings of each
+// rung's command), with each per-shot version unless
+// RenditionOptions.SkipPerShot, and checks them against the source when
+// RenditionOptions.Check is set: the Rendition then carries its measured
+// VMAF and bitrate, to hold against Result.Prediction. The engine needs a
+// RenditionEncoder (encode.FFmpeg, WithRenditionEncoder).
+//
 // # Encoders and GPUs
 //
 // Options.Encoder selects the implementation of the codec's encoder: x264,

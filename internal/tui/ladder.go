@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -45,6 +46,10 @@ func RenderLadder(
 	}
 
 	if table := perShotLadder(res, width); table != "" {
+		blocks = append(blocks, table)
+	}
+
+	if table := renditionsTable(res); table != "" {
 		blocks = append(blocks, table)
 	}
 
@@ -100,6 +105,36 @@ func grainLine(
 	}
 
 	return "\n" + key.Render("grain") + Subtle.Render(text)
+}
+
+// renditionsTable lists the renditions encoded on the whole title, with
+// what the ladder predicted for them on the digest.
+func renditionsTable(
+	res *ladder.Result,
+) string {
+	if len(res.Renditions) == 0 {
+		return ""
+	}
+
+	lines := []string{
+		section.Render("Renditions") + Subtle.Render("  (the whole title; predictions made on the digest)"),
+		Subtle.Render(fmt.Sprintf("  %-24s %-11s %*s %*s %*s %*s", "file", "resolution", colBitrate, "predicted", colBitrate, "bitrate",
+			colVMAF, "predicted", colMeasured, "VMAF")),
+	}
+
+	for _, rd := range res.Renditions {
+		vmaf, bitrate := res.Prediction(rd)
+		line := fmt.Sprintf("  %-24s %-11s %*s %*s %*s", filepath.Base(rd.Path), fmt.Sprintf("%d×%d", rd.Width, rd.Height),
+			colBitrate, Bitrate(bitrate), colBitrate, Bitrate(float64(rd.Bitrate)), colVMAF, fmt.Sprintf("%.1f", vmaf))
+
+		if c := rd.Checked; c != nil {
+			line += " " + padLeft(scoreStyle(c.VMAF).Render(c.VMAFLabel()), colMeasured)
+		}
+
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // perShotTable compares every per-shot rung with its per-title version, both

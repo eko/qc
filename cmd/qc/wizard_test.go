@@ -34,6 +34,25 @@ func TestWizardAnswersRunArgs(
 			want: []string{"source.mov", "--codecs=h264"},
 		},
 		{
+			name: "ladder encoded on the whole title",
+			answers: wizardAnswers{
+				Source:     "source.mov",
+				Actions:    []string{actionLadder},
+				Codecs:     []string{"h264", "av1"},
+				Renditions: true, RenditionsDir: " renditions ",
+			},
+			want: []string{"source.mov", "--codecs=h264,av1", "--skip-analysis", "--encode-ladder", "renditions"},
+		},
+		{
+			name: "renditions asked, then no ladder",
+			answers: wizardAnswers{
+				Source:     "source.mov",
+				Actions:    []string{actionAnalysis},
+				Renditions: true, RenditionsDir: "renditions",
+			},
+			want: []string{"source.mov", "--codecs="},
+		},
+		{
 			name: "everything",
 			answers: wizardAnswers{
 				Source:    "encode.mp4",

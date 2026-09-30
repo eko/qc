@@ -34,7 +34,7 @@ func exampleEngine(
 	// the grain measurements AV1 film grain synthesis needs.
 	ffmpeg := encode.NewFFmpeg("ffmpeg")
 
-	return ladder.NewEngine(analyzer, ffmpeg, ffmpeg, ladder.WithGrainLab(ffmpeg))
+	return ladder.NewEngine(analyzer, ffmpeg, ffmpeg, ladder.WithGrainLab(ffmpeg), ladder.WithRenditionEncoder(ffmpeg))
 }
 
 // The automatic ladder: rungs one quality step apart from VMAF 95 down,
@@ -126,6 +126,40 @@ func ExampleEngine_Build_perShot() {
 		for shot, cell := range res.ShotLadder(i) {
 			fmt.Printf("  shot at %v: CRF %.1f, %d kb/s\n", res.ShotInterval(shot).Start, cell.CRF, cell.PredictedBitrate/1000)
 		}
+	}
+}
+
+// The renditions of a ladder: every rung, and its per-shot version, encoded
+// on the whole title into a folder, then checked against the source, where
+// the ladder only predicted them on the digest.
+func ExampleEngine_Encode() {
+	ctx := context.Background()
+	engine := exampleEngine()
+
+	res, err := engine.Build(ctx, "source.mov", ladder.Options{Codec: "av1", PerShot: true})
+	if err != nil {
+		fmt.Println(err)
+
+		return
+	}
+
+	renditions, err := engine.Encode(ctx, "source.mov", res, ladder.RenditionOptions{
+		Dir:   "renditions",
+		Check: &quality.Options{Precision: 0.5},
+		Progress: func(p ladder.RenditionProgress) {
+			fmt.Printf("\r%d/%d frames", p.Done, p.Total)
+		},
+	})
+	if err != nil {
+		fmt.Println(err)
+
+		return
+	}
+
+	for _, rd := range renditions {
+		vmaf, bitrate := res.Prediction(rd)
+		fmt.Printf("%s: %d kb/s (predicted %.0f), VMAF %s (predicted %.1f)\n",
+			rd.Path, rd.Bitrate/1000, bitrate/1000, rd.Checked.VMAFLabel(), vmaf)
 	}
 }
 

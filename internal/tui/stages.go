@@ -29,6 +29,8 @@ func StageSummary(
 		return ladderSummary(r.Ladder)
 	case pipeline.KindOverlay:
 		return "annotated copy · " + filepath.Base(r.Overlay)
+	case pipeline.KindRenditions:
+		return renditionsSummary(r.Renditions)
 	}
 
 	return ""
@@ -109,4 +111,28 @@ func ladderSummary(
 	}
 
 	return summary
+}
+
+// renditionsSummary counts the renditions and describes the top one on the
+// whole title, measured against the source when checked.
+func renditionsSummary(
+	renditions []ladder.Rendition,
+) string {
+	if len(renditions) == 0 {
+		return "no rendition"
+	}
+
+	top := renditions[0]
+
+	count := fmt.Sprintf("%d renditions", len(renditions))
+	if len(renditions) == 1 {
+		count = "1 rendition"
+	}
+
+	summary := fmt.Sprintf("%s · top %dp @ %.2f Mb/s", count, top.Height, float64(top.Bitrate)/bitsPerMegabit)
+	if c := top.Checked; c != nil {
+		summary += ", VMAF " + c.VMAFLabel()
+	}
+
+	return summary + " · " + filepath.Dir(top.Path)
 }

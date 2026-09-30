@@ -1,6 +1,7 @@
 package ladder
 
 import (
+	"fmt"
 	"iter"
 	"time"
 
@@ -16,10 +17,16 @@ type Result struct {
 	Source        *analysis.Report `json:"source"`
 	Codec         encode.Codec     `json:"codec"`
 	Preset        string           `json:"preset"`
-	Constraints   Constraints      `json:"constraints"`
-	Shape         Shape            `json:"shape"`
-	Digest        Digest           `json:"digest"`
-	Probing       ProbingReport    `json:"probing"`
+	// GOP is the keyframe interval of every encode, in frames; BitDepth
+	// their depth (0 or 8, or 10). With Preset, the rungs' resolution and
+	// rate cap and the ladder's grain and signal, they are the settings of
+	// the rungs' commands (see RungParams).
+	GOP         int           `json:"gop"`
+	BitDepth    int           `json:"bitDepth,omitempty"`
+	Constraints Constraints   `json:"constraints"`
+	Shape       Shape         `json:"shape"`
+	Digest      Digest        `json:"digest"`
+	Probing     ProbingReport `json:"probing"`
 	// Grain describes AV1 film grain synthesis, when requested.
 	Grain *GrainReport `json:"grain,omitempty"`
 	// HDR describes how the ladder of an HDR source keeps its signal; nil
@@ -31,9 +38,11 @@ type Result struct {
 	// Shots are the shots of the title per-shot rungs allocate (PerShot).
 	Shots []Shot `json:"shots,omitempty"`
 	// ShotProbing is the cost of the per-shot rungs in exact probes.
-	ShotProbing *ShotProbing      `json:"shotProbing,omitempty"`
-	Timings     map[string]string `json:"timings"`
-	Elapsed     media.Duration    `json:"elapsed"`
+	ShotProbing *ShotProbing `json:"shotProbing,omitempty"`
+	// Renditions are the rungs encoded on the whole title (Engine.Encode).
+	Renditions []Rendition       `json:"renditions,omitempty"`
+	Timings    map[string]string `json:"timings"`
+	Elapsed    media.Duration    `json:"elapsed"`
 }
 
 // Digest describes the representative extract the ladder is estimated on.
@@ -86,6 +95,16 @@ type Measurement struct {
 	// ScoredFrames.
 	BandedFrames int `json:"bandedFrames,omitempty"`
 	ScoredFrames int `json:"scoredFrames,omitempty"`
+}
+
+// VMAFLabel is the measured VMAF with its 95% confidence interval, or
+// "exact" when every frame was scored.
+func (m Measurement) VMAFLabel() string {
+	if m.HalfWidth == 0 {
+		return fmt.Sprintf("%.1f (exact)", m.VMAF)
+	}
+
+	return fmt.Sprintf("%.1f ± %.1f", m.VMAF, m.HalfWidth)
 }
 
 // BandedShare is the share of the scored frames with visible banding.

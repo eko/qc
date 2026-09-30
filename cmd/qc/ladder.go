@@ -22,7 +22,8 @@ func newLadderCommand(
 			"encode of the digest with its final settings.",
 		Example: "  qc ladder mezzanine.mov\n" +
 			"  qc ladder mezzanine.mov -c av1 --encode-bit-depth 10\n" +
-			"  qc ladder mezzanine.mov -c hevc --heights 1080,720,480 --commands",
+			"  qc ladder mezzanine.mov -c hevc --heights 1080,720,480 --commands\n" +
+			"  qc ladder mezzanine.mov -c av1 --encode-ladder renditions/",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, err := loadConfig(cmd)
@@ -35,6 +36,7 @@ func newLadderCommand(
 				SkipAnalysis: true,
 				Codecs:       []string{config.Ladder.Codec},
 				Ladder:       ladderOptions(config),
+				Renditions:   renditionOptions(config),
 			})
 			if err != nil {
 				return err

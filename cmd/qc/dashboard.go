@@ -139,20 +139,16 @@ func hooks(
 				e.Progress(i, p.Done, p.Total, "")
 			}
 		},
-		Quality: func(i int, p quality.Progress) {
-			// A fixed budget is a single round, named in the stage label.
-			detail := ""
-			if p.Mode == quality.ModeSampled && p.Sample.IsZero() && p.Round > 0 {
-				detail = fmt.Sprintf("round %d", p.Round)
-			}
-
-			e.Progress(i, p.FramesScored, p.FramesTotal, detail)
-
-			if p.Estimated {
-				e.Panel(i, tui.VMAFPanel{Progress: p})
-			}
-		},
+		Quality: func(i int, p quality.Progress) { qualityProgress(e, i, p) },
 		Overlay: func(i int, p overlay.Progress) { e.Progress(i, p.Done, p.Total, "") },
+		Renditions: func(i int, p ladder.RenditionProgress) {
+			detail := ""
+			if p.Rendition != nil {
+				detail = filepath.Base(p.Rendition.Path)
+			}
+
+			e.Progress(i, p.Done, p.Total, detail)
+		},
 		Ladder: func(i int, p ladder.Progress) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -176,6 +172,26 @@ func hooks(
 				Rungs:  append([]ladder.Rung(nil), rungs[i]...),
 			})
 		},
+	}
+}
+
+// qualityProgress shows the progress of VMAF stage i, and its estimate once
+// there is one.
+func qualityProgress(
+	e *tui.Emitter,
+	i int,
+	p quality.Progress,
+) {
+	// A fixed budget is a single round, named in the stage label.
+	detail := ""
+	if p.Mode == quality.ModeSampled && p.Sample.IsZero() && p.Round > 0 {
+		detail = fmt.Sprintf("round %d", p.Round)
+	}
+
+	e.Progress(i, p.FramesScored, p.FramesTotal, detail)
+
+	if p.Estimated {
+		e.Panel(i, tui.VMAFPanel{Progress: p})
 	}
 }
 

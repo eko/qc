@@ -33,8 +33,8 @@ import (
 //	gpuSettings ─┼─ newDecoder       → decode.Source ─────────┼─ analysis.New → *Analyzer, ladder.Inspector, pipeline.Analyzer
 //	             │   libvmaf.NewEngine → quality.Engine       │
 //	             │   quality.NewMeter  → analysis.Meter ──────┘
-//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab, overlay.Burner
-//	                newLadderEngine → pipeline.LadderBuilder
+//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab, ladder.RenditionEncoder, overlay.Burner
+//	                newLadderEngine → pipeline.LadderBuilder, pipeline.LadderEncoder
 //	                overlay.NewRenderer → pipeline.Overlayer
 //	                newRunner → *pipeline.Runner
 //
@@ -58,8 +58,8 @@ func module(
 				fx.As(fx.Self()), fx.As(new(ladder.Inspector)), fx.As(new(pipeline.Analyzer))),
 			fx.Annotate(newEncoder,
 				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.GrainLab)),
-				fx.As(new(overlay.Burner)), fx.As(new(burnChecker))),
-			fx.Annotate(newLadderEngine, fx.As(new(pipeline.LadderBuilder))),
+				fx.As(new(ladder.RenditionEncoder)), fx.As(new(overlay.Burner)), fx.As(new(burnChecker))),
+			fx.Annotate(newLadderEngine, fx.As(new(pipeline.LadderBuilder)), fx.As(new(pipeline.LadderEncoder))),
 			fx.Annotate(overlay.NewRenderer, fx.As(new(pipeline.Overlayer))),
 			newRunner,
 		),
@@ -144,24 +144,27 @@ func newEncoder(
 }
 
 // newLadderEngine gives the ladder engine a grain lab, so that AV1 film
-// grain synthesis is available.
+// grain synthesis is available, and a rendition encoder, so that ladders
+// can be encoded on the whole title.
 func newLadderEngine(
 	inspector ladder.Inspector,
 	encoder ladder.Encoder,
 	digester ladder.Digester,
 	lab ladder.GrainLab,
+	renditions ladder.RenditionEncoder,
 ) *ladder.Engine {
-	return ladder.NewEngine(inspector, encoder, digester, ladder.WithGrainLab(lab))
+	return ladder.NewEngine(inspector, encoder, digester, ladder.WithGrainLab(lab), ladder.WithRenditionEncoder(renditions))
 }
 
-// newRunner gives the runner the overlayer, so that --overlay can write
-// annotated copies.
+// newRunner gives the runner the ladder encoder and the overlayer, so that
+// --encode-ladder can write the renditions and --overlay annotated copies.
 func newRunner(
 	analyzer pipeline.Analyzer,
 	ladders pipeline.LadderBuilder,
+	encoder pipeline.LadderEncoder,
 	overlayer pipeline.Overlayer,
 ) *pipeline.Runner {
-	return pipeline.NewRunner(analyzer, ladders, pipeline.WithOverlayer(overlayer))
+	return pipeline.NewRunner(analyzer, ladders, pipeline.WithLadderEncoder(encoder), pipeline.WithOverlayer(overlayer))
 }
 
 // registerProfile profiles the CPU while the application runs, when

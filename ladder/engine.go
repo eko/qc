@@ -177,6 +177,8 @@ type Engine struct {
 	digester  Digester
 	// grainLab is optional: only film grain synthesis needs it.
 	grainLab GrainLab
+	// renditions is optional: only encoding the renditions needs it.
+	renditions RenditionEncoder
 }
 
 // NewEngine returns an Engine measuring with inspector, encoding with
@@ -248,6 +250,7 @@ func (e *Engine) Build(
 	defer cancel()
 
 	run := e.newBuild(ctx, codec, opts, source, dir, video, res)
+	res.GOP, res.BitDepth = run.gop(), opts.BitDepth
 
 	if res.Timings, err = run.stages(ctx, res, duration); err != nil {
 		return nil, err

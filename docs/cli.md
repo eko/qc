@@ -86,7 +86,8 @@ and more, a summary of the answers given so far sits beside the form.
      probe placement, per-shot rungs, and AV1 film grain synthesis;
 5. **Outputs**: when an NVIDIA GPU is usable with the ffmpeg in use
    (`QC_FFMPEG`, the `QC_CONFIG` file or `PATH`; see [GPU](#nvidia-gpu)),
-   whether to use it (`--gpu`); optionally an HTML report; and last, when the
+   whether to use it (`--gpu`); optionally an HTML report; when a ladder is
+   built, whether to encode it and where (`--encode-ladder`); and last, when the
    source is analysed or compared, whether to produce an annotated video, and
    where (`--overlay`, see [annotated videos](overlay.md));
 6. **Review**: every answer, section by section, with the metadata of the
@@ -229,6 +230,8 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 | `--per-shot-resolution` | off | experimental, implies `--per-shot`: each shot also picks its resolution among the rung's and the neighbouring rung resolutions; renditions change resolution mid-stream — see [per-shot resolution](ladder.md#per-shot-resolution-experimental) |
 | `--film-grain` | off | AV1 only: `off`, `auto` (detect grain, calibrate the level) or a synthesis level `1`–`50`; fidelity is then scored against a denoised reference; cannot be combined with `--per-shot` on an AV1 ladder — see [film grain](ladder.md#9-film-grain-synthesis-av1) |
 | `--metrics`, `--av2-ctc`, `--devices` (ladder only; `run` shares the VMAF ones) | xpsnr,cambi,psnr | measured on the verification encodes of the rungs, next to VMAF: flags banding-limited rungs and rungs VMAF and XPSNR order differently — see [rung quality](ladder.md#rung-quality) |
+| `--encode-ladder` | off | a folder: once built, the ladder is encoded on the whole title into `<folder>/<codec>/` (`01-1080p.mp4`, and `01-1080p-pershot.mp4` for per-shot rungs), each rendition then checked against the source — see [renditions](ladder.md#11-renditions) |
+| `--no-rendition-check` | off | skip the check of the renditions against the source (VMAF with its confidence interval, at the VMAF precision) |
 | `--hdr-metric` (ladder only; `run` shares the VMAF one) | pq | how VMAF scores the probes and rungs of an HDR source; HDR sources are always encoded in 10 bits with their colour description and HDR10 metadata — see [HDR ladders](hdr.md#5-hdr-ladders) |
 
 ### Annotated video (`analyze`, `vmaf`, `run`)

@@ -128,6 +128,8 @@ type LadderConfig struct {
 	PerShot           bool    `mapstructure:"per-shot"`
 	PerShotResolution bool    `mapstructure:"per-shot-resolution"`
 	FilmGrain         string  `mapstructure:"film-grain"`
+	EncodeLadder      string  `mapstructure:"encode-ladder"`
+	NoRenditionCheck  bool    `mapstructure:"no-rendition-check"`
 }
 
 // RunConfig holds the flags of the run command alone.

@@ -41,6 +41,27 @@ const (
 	// RankConflict: VMAF ranks rung Index above rung Other, XPSNR below
 	// (ladder.RankConflicts).
 	RankConflict Code = "rank-conflict"
+	// RenditionQuality: rendition Other (of ladder.Result.Renditions), of
+	// rung Index, measured on the whole title, strays from the quality
+	// predicted on the digest by Value (VMAF), beyond its confidence
+	// interval plus Limit.
+	RenditionQuality Code = "rendition-quality"
+	// RenditionBitrate: rendition Other, of rung Index, costs Value (a
+	// share) more or less over the whole title than predicted on the
+	// digest, beyond Limit: the manifest must declare its measured bitrate.
+	RenditionBitrate Code = "rendition-bitrate"
+)
+
+const (
+	// renditionTolerance is the VMAF a rendition may stray from its
+	// prediction beyond its confidence interval: the digest's
+	// representativeness (0.86 VMAF on average on a 10-minute title, see
+	// docs/validation.md) plus the prediction's own error.
+	renditionTolerance = ladder.CalibrationTolerance
+	// bandwidthTolerance is how far a rendition's average bitrate may stray
+	// from the one planned: Apple's HLS authoring spec wants the declared
+	// AVERAGE-BANDWIDTH within 10% of the measured average.
+	bandwidthTolerance = 0.10
 )
 
 const (
@@ -91,7 +112,35 @@ func Ladder(
 		out = append(out, Finding{Level: Warn, Code: RankConflict, Index: conflict.Higher, Other: conflict.Lower})
 	}
 
+	out = append(out, renditionFindings(r)...)
+
 	return append(out, hdrLadderFindings(r)...)
+}
+
+// renditionFindings compare every rendition encoded on the whole title with
+// what the ladder predicted on the digest.
+func renditionFindings(
+	r *ladder.Result,
+) []Finding {
+	var out []Finding
+
+	for i, rd := range r.Renditions {
+		vmaf, bitrate := r.Prediction(rd)
+
+		if c := rd.Checked; c != nil {
+			if gap := c.VMAF - vmaf; math.Abs(gap) > c.HalfWidth+renditionTolerance {
+				out = append(out, Finding{Level: Warn, Code: RenditionQuality, Index: rd.Rung, Other: i, Value: gap, Limit: renditionTolerance})
+			}
+		}
+
+		if bitrate > 0 {
+			if gap := float64(rd.Bitrate)/bitrate - 1; math.Abs(gap) > bandwidthTolerance {
+				out = append(out, Finding{Level: Warn, Code: RenditionBitrate, Index: rd.Rung, Other: i, Value: gap, Limit: bandwidthTolerance})
+			}
+		}
+	}
+
+	return out
 }
 
 // topFinding says whether the top rung reaches the targeted quality: as

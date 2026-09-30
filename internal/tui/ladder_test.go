@@ -431,3 +431,27 @@ func TestProbingLabel(
 		})
 	}
 }
+
+func TestRenderLadderRenditions(
+	t *testing.T,
+) {
+	res := sampleLadder(t)
+	res.Renditions = []ladder.Rendition{
+		{Rung: 0, Path: "out/h264/01-1080p.mp4", Width: 1920, Height: 1080, Bitrate: 3_050_000,
+			Checked: &ladder.Measurement{VMAF: 95.1, HalfWidth: 0.3}},
+		{Rung: 1, Path: "out/h264/02-720p.mp4", Width: 1280, Height: 720, Bitrate: 1_450_000,
+			Checked: &ladder.Measurement{VMAF: 81.2, HalfWidth: 0.4}},
+	}
+
+	var out strings.Builder
+	require.NoError(t, RenderLadder(&out, res, 120, "", false))
+
+	text := plain(out.String())
+	for _, want := range []string{
+		"Renditions", "01-1080p.mp4", "3.05 Mb/s", "95.1 ± 0.3",
+		"02-720p.mp4 on the whole title: VMAF 81.2 ± 0.4, -5.4 from its prediction on the digest",
+		"02-720p.mp4: +26% bitrate over the whole title against the ladder's: declare its measured 1.45 Mb/s in the manifest (Apple HLS: within 10%)",
+	} {
+		assert.Contains(t, text, want)
+	}
+}

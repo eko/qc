@@ -126,6 +126,23 @@ func addLadderFlags(
 	flags.Bool("per-shot", false, "add a per-shot version of every rung: one CRF per shot at equal rate-quality slope")
 	flags.Bool("per-shot-resolution", false, "experimental: per-shot rungs whose shots also pick their resolution among neighbouring rungs' (implies --per-shot)")
 	flags.String("film-grain", "off", "AV1 film grain synthesis: off, auto (detect and calibrate) or a level 1-50")
+	flags.String("encode-ladder", "", "encode every rung on the whole title into this directory (a subdirectory per codec), each checked against the source")
+	flags.Bool("no-rendition-check", false, "skip measuring the encoded renditions against the source (--encode-ladder)")
+}
+
+// renditionOptions maps --encode-ladder to library options: the renditions
+// are measured against the source with the VMAF settings, unless
+// --no-rendition-check.
+func renditionOptions(
+	config Config,
+) ladder.RenditionOptions {
+	opts := ladder.RenditionOptions{Dir: config.Ladder.EncodeLadder}
+	if !config.Ladder.NoRenditionCheck {
+		q := qualityOptions(config)
+		opts.Check = &q
+	}
+
+	return opts
 }
 
 // analysisOptions maps the analysis flags to library options.

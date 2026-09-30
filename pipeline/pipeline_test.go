@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/quality"
 )
 
@@ -27,6 +28,11 @@ func TestStages(
 			name: "vmaf only",
 			opts: Options{Source: "a.mp4", Reference: "r.mp4", SkipAnalysis: true},
 			want: []string{KindInspect, KindVMAF},
+		},
+		{
+			name: "renditions after each ladder",
+			opts: Options{Source: "a.mp4", Codecs: []string{"h264", "av1"}, Renditions: ladder.RenditionOptions{Dir: "out"}},
+			want: []string{KindInspect, KindAnalysis, KindLadder, KindRenditions, KindLadder, KindRenditions},
 		},
 		{
 			name: "the annotated copy comes before the ladders",

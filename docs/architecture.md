@@ -129,10 +129,11 @@ importers are not forced into a DI container.
 | `quality.Engine` | `quality.Meter` | `libvmaf.Engine` |
 | `analysis.Meter` | `analysis.Analyzer.Compare` | `quality.Meter` |
 | `ladder.Inspector` | `ladder.Engine` | `analysis.Analyzer` |
-| `ladder.Encoder` (encodes, chunked encodes), `ladder.Digester`, optional `ladder.GrainLab` (film grain synthesis, `WithGrainLab`) | `ladder.Engine` | `encode.FFmpeg` |
+| `ladder.Encoder` (encodes, chunked encodes), `ladder.Digester`, optional `ladder.GrainLab` (film grain synthesis, `WithGrainLab`), optional `ladder.RenditionEncoder` (renditions, `WithRenditionEncoder`) | `ladder.Engine` | `encode.FFmpeg` |
 | `pipeline.Analyzer`, `pipeline.LadderBuilder` | `pipeline.Runner` | `analysis.Analyzer`, `ladder.Engine` |
 | `overlay.Burner` | `overlay.Renderer` | `encode.FFmpeg` |
 | `pipeline.Overlayer` (optional, `WithOverlayer`) | `pipeline.Runner` | `overlay.Renderer` |
+| `pipeline.LadderEncoder` (optional, `WithLadderEncoder`) | `pipeline.Runner` | `ladder.Engine` |
 
 ### The CLI's composition root
 
@@ -142,8 +143,8 @@ importers are not forced into a DI container.
 the ports of its consumers (`fx.As`): the prober, packet reader and decoder,
 `libvmaf.Engine` as `quality.Engine`, `quality.Meter` as `analysis.Meter`,
 `analysis.Analyzer` as itself, `ladder.Inspector` and `pipeline.Analyzer`,
-`encode.FFmpeg` as the three ladder ports and `overlay.Burner`,
-`ladder.Engine` as `pipeline.LadderBuilder`, `overlay.Renderer` as
+`encode.FFmpeg` as the four ladder ports and `overlay.Burner`,
+`ladder.Engine` as `pipeline.LadderBuilder` and `pipeline.LadderEncoder`, `overlay.Renderer` as
 `pipeline.Overlayer`, and `pipeline.Runner`. The GPU preflight and the
 check of ffmpeg's libass and overlay encoder (with `--overlay`) run as
 `fx.Invoke`s while the application is built, so a missing GPU, libass or
@@ -233,8 +234,10 @@ analyzer := analysis.New(logger,
 report, err := analyzer.Analyze(ctx, "video.mp4", analysis.Options{})
 cmp, err := analyzer.Compare(ctx, "reference.mov", "encode.mp4", analysis.CompareOptions{})
 ffmpeg := encode.NewFFmpeg("ffmpeg")
-engine := ladder.NewEngine(analyzer, ffmpeg, ffmpeg, ladder.WithGrainLab(ffmpeg))
+engine := ladder.NewEngine(analyzer, ffmpeg, ffmpeg,
+	ladder.WithGrainLab(ffmpeg), ladder.WithRenditionEncoder(ffmpeg))
 res, err := engine.Build(ctx, "source.mov", ladder.Options{Codec: "av1"})
+renditions, err := engine.Encode(ctx, "source.mov", res, ladder.RenditionOptions{Dir: "renditions"})
 
 // Or everything, with progress hooks.
 runner := pipeline.NewRunner(analyzer, engine)

@@ -92,6 +92,7 @@ func runOptions(
 		Quality:      qualityOptions(config),
 		Ladder:       ladderOptions(config),
 		Overlay:      overlayOpts,
+		Renditions:   renditionOptions(config),
 	}, nil
 }
 

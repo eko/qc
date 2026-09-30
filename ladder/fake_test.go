@@ -189,7 +189,9 @@ func (l *fakeLab) Compare(
 	}
 
 	sampled := opts.Quality.Budget && opts.Quality.MaxShare == probeShare
-	if !l.isDigest(opts.Reference) || (!sampled && !opts.Quality.Exact) {
+	rendition := opts.Reference == l.source
+
+	if !rendition && (!l.isDigest(opts.Reference) || (!sampled && !opts.Quality.Exact)) {
 		return nil, errors.New("fake: measurement not against the inspected digest in budget or exact mode")
 	}
 
@@ -205,7 +207,7 @@ func (l *fakeLab) Compare(
 
 	// Chunked encodes (per-shot) are scored frame by frame; the others,
 	// sampled or exact, through the model.
-	if chunks != nil {
+	if chunks != nil && !rendition {
 		return l.perFrame(p, chunks, opts.Quality.Exact), nil
 	}
 
@@ -277,6 +279,31 @@ func (l *fakeLab) Encode(
 	return nil
 }
 
+// EncodeRendition records a rendition like Encode and reports every frame
+// of the title written.
+func (l *fakeLab) EncodeRendition(
+	ctx context.Context,
+	codec encode.Codec,
+	spec encode.RenditionSpec,
+) error {
+	if err := l.Encode(ctx, codec, spec.Source.Path, spec.Destination, spec.Params); err != nil {
+		return err
+	}
+
+	if spec.Chunks != nil {
+		l.mu.Lock()
+		l.chunks[spec.Destination] = spec.Chunks
+		l.mu.Unlock()
+	}
+
+	if spec.Progress != nil {
+		video, _ := l.source.Info.PrimaryVideo()
+		spec.Progress(int(l.source.Info.Duration.Seconds() * video.AvgFrameRate.Float()))
+	}
+
+	return nil
+}
+
 func (l *fakeLab) Digest(
 	_ context.Context,
 	spec encode.DigestSpec,
@@ -301,7 +328,7 @@ func (l *fakeLab) Digest(
 func labEngine(
 	lab *fakeLab,
 ) *Engine {
-	return NewEngine(lab, lab, lab, WithGrainLab(lab))
+	return NewEngine(lab, lab, lab, WithGrainLab(lab), WithRenditionEncoder(lab))
 }
 
 // sourceReport is the inspection of a source of the given geometry.

@@ -589,6 +589,39 @@ score HDR. Rungs are placed by VMAF on the HDR signal (`--hdr-metric pq`) or
 on an SDR tone mapping (`tonemap`); verified rungs also get wPSNR and ΔE
 ITP. Why, and the checks of the rendered encodes: [hdr.md](hdr.md#5-hdr-ladders).
 
+## 11. Renditions
+
+`--encode-ladder <folder>` encodes the ladder once built: every rung on the
+whole title, with the settings of its command (resolution, CRF, rate cap,
+preset, GOP, bit depth, HDR signalling, film grain level), into
+`<folder>/<codec>/01-1080p.mp4`, `02-720p.mp4`… With `--per-shot`, each rung
+also gets its per-shot version (`01-1080p-pershot.mp4`), encoded chunk by
+chunk with the CRFs (and resolutions) of its shots and joined without
+re-encoding. Two renditions are encoded at once; the dashboard follows the
+frames written.
+
+The ladder is planned on the digest; the renditions are the whole title.
+Each one is therefore checked against the source (skip with
+`--no-rendition-check`): its VMAF at the precision of `--precision`, with
+its confidence interval, and its average bitrate. The reports list them next
+to the predictions, and two findings flag the gaps:
+
+- **rendition quality**: the checked VMAF is further from the prediction
+  than the check's interval plus the calibration tolerance (1.5);
+- **rendition bitrate**: the whole-title bitrate is more than 10% off the
+  ladder's. Declare the measured bitrate as `BANDWIDTH` in the manifest:
+  Apple's HLS authoring rules want it within 10% of the real peak segment
+  bitrate.
+
+From the library, `ladder.Engine.Encode` does the same on a built
+`Result` (the engine needs `ladder.WithRenditionEncoder`, which
+`encode.FFmpeg` implements), and `pipeline.Options.Renditions` adds the
+stage to a run. `Result.RungParams` gives the settings a rung is encoded
+with, and `Result.Prediction` what the ladder predicted for a rendition.
+
+The renditions are ready to package (`shaka-packager`, `mp4box`, `ffmpeg
+-f hls`): every rung shares the GOP, so their keyframes align.
+
 ## Cost and accuracy
 
 | Title | Codec | Wall time (M2 Max) | Check |

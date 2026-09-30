@@ -94,6 +94,7 @@ qc vmaf reference.mov distorted.mp4 --sample 5%           # fixed budget (or 2/s
 qc vmaf reference.mov distorted.mp4 --exact --overlay annotated.mp4   # + a copy with per-frame VMAF burnt in
 qc ladder source.mov -c av1 --encode-bit-depth 10         # per-title Main10 AV1 ladder
 qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93   # impose the rungs, bitrates computed
+qc ladder source.mov -c av1 --encode-ladder renditions/    # + the renditions, checked on the whole title
 ```
 
 Every command accepts `-o report.json`, `--html report.html` and `-f json`.
@@ -143,8 +144,9 @@ analyzer := analysis.New(logger,
 
 report, err := analyzer.Analyze(ctx, "video.mp4", analysis.Options{})
 cmp, err := analyzer.Compare(ctx, "reference.mov", "encode.mp4", analysis.CompareOptions{})
-ffmpeg := encode.NewFFmpeg("ffmpeg") // encodes, digests, grain measurements
-engine := ladder.NewEngine(analyzer, ffmpeg, ffmpeg, ladder.WithGrainLab(ffmpeg))
+ffmpeg := encode.NewFFmpeg("ffmpeg") // encodes, digests, grain measurements, renditions
+engine := ladder.NewEngine(analyzer, ffmpeg, ffmpeg,
+	ladder.WithGrainLab(ffmpeg), ladder.WithRenditionEncoder(ffmpeg))
 res, err := engine.Build(ctx, "source.mov", ladder.Options{Codec: "av1"})
 ```
 
@@ -189,6 +191,17 @@ for shot, cell := range res.ShotLadder(0) {    // the top rung, shot by shot
 }
 if top := res.Rungs[0].PerShot; top != nil {
 	fmt.Println(top.PooledBitrate(res.Shots))  // its bitrate over the whole title
+}
+
+// The renditions: every rung (and per-shot version) encoded on the whole
+// title, each checked against the source.
+renditions, err := engine.Encode(ctx, "source.mov", res, ladder.RenditionOptions{
+	Dir:   "renditions",
+	Check: &quality.Options{Precision: 0.5},
+})
+for _, rd := range renditions {
+	vmafPredicted, bitratePredicted := res.Prediction(rd)
+	fmt.Println(rd.Path, rd.Bitrate, bitratePredicted, rd.Checked.VMAFLabel(), vmafPredicted)
 }
 ```
 

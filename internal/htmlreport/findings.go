@@ -3,6 +3,7 @@ package htmlreport
 import (
 	"cmp"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 
@@ -282,7 +283,7 @@ func ladderFindings(
 	var out []finding
 
 	for _, f := range findings.Ladder(r) {
-		if w, ok := ladderFinding(f, r.Rungs); ok {
+		if w, ok := ladderFinding(f, r); ok {
 			out = append(out, w)
 		}
 	}
@@ -293,13 +294,26 @@ func ladderFindings(
 // ladderFinding words a finding of a ladder.
 func ladderFinding(
 	f findings.Finding,
-	rungs []ladder.Rung,
+	res *ladder.Result,
 ) (finding, bool) {
 	if f.Code == findings.NoRungs {
 		return worded(f, nil, "No rung could be selected"), true
 	}
 
-	r := rungs[f.Index]
+	r := res.Rungs[f.Index]
+
+	switch f.Code {
+	case findings.RenditionQuality:
+		rd := res.Renditions[f.Other]
+
+		return worded(f, nil, "%s on the whole title: VMAF %s, %+.1f from its prediction on the digest",
+			filepath.Base(rd.Path), rd.Checked.VMAFLabel(), f.Value), true
+	case findings.RenditionBitrate:
+		rd := res.Renditions[f.Other]
+
+		return worded(f, nil, "%s: %+.0f%% bitrate over the whole title against the ladder's: declare its measured %s in the manifest (Apple HLS: within %.0f%%)",
+			filepath.Base(rd.Path), f.Value*100, bitrateLabel(float64(rd.Bitrate)), f.Limit*100), true
+	}
 
 	switch f.Code {
 	case findings.TopVMAFMissed:
@@ -321,7 +335,7 @@ func ladderFinding(
 		return worded(f, nil, "Rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
 			f.Index+1, r.Height, f.Value*100, f.Limit), true
 	case findings.RankConflict:
-		lo := rungs[f.Other]
+		lo := res.Rungs[f.Other]
 		return worded(f, nil, "Rungs %d (%dp) and %d (%dp): VMAF ranks %dp higher (%.1f vs %.1f) but XPSNR ranks it lower (%.2f vs %.2f dB)",
 			f.Index+1, r.Height, f.Other+1, lo.Height, r.Height, r.Measured.VMAF, lo.Measured.VMAF,
 			r.Measured.Metrics[quality.SeriesXPSNRY], lo.Measured.Metrics[quality.SeriesXPSNRY]), true

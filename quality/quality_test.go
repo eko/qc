@@ -397,7 +397,7 @@ func TestMeasureErrors(
 	errDecode := errors.New("decoder broke")
 
 	withRate := func(in Input, rate media.Rational) Input {
-		in.Video.AvgFrameRate = rate
+		in.Video.FrameRate, in.Video.AvgFrameRate = rate, rate
 
 		return in
 	}
@@ -611,6 +611,47 @@ func TestSameRate(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			assert.Equal(t, testCase.want, sameRate(testCase.a, testCase.b))
+		})
+	}
+}
+
+func TestSameVideoRate(
+	t *testing.T,
+) {
+	pal := media.Rational{Num: 25, Den: 1}
+
+	testCases := []struct {
+		name string
+		a, b media.VideoStream
+		want bool
+	}{
+		{
+			name: "same average rate",
+			a:    media.VideoStream{AvgFrameRate: pal},
+			b:    media.VideoStream{AvgFrameRate: pal},
+			want: true,
+		},
+		{
+			name: "a timestamp gap lowers one average rate",
+			a:    media.VideoStream{FrameRate: pal, AvgFrameRate: pal},
+			b:    media.VideoStream{FrameRate: pal, AvgFrameRate: media.Rational{Num: 37525, Den: 1503}},
+			want: true,
+		},
+		{
+			name: "another nominal rate",
+			a:    media.VideoStream{FrameRate: pal, AvgFrameRate: pal},
+			b:    media.VideoStream{FrameRate: media.Rational{Num: 50, Den: 1}, AvgFrameRate: media.Rational{Num: 50, Den: 1}},
+		},
+		{
+			name: "no nominal rate",
+			a:    media.VideoStream{AvgFrameRate: pal},
+			b:    media.VideoStream{AvgFrameRate: media.Rational{Num: 30, Den: 1}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, sameVideoRate(testCase.a, testCase.b))
 		})
 	}
 }

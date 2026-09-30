@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/analyze/black"
@@ -353,4 +354,75 @@ func TestLadderValues(
 	assert.Equal(t, Finding{Level: Info, Code: Calibrated, Index: 1, Limit: ladder.CalibrationTolerance}, list[3])
 	assert.Equal(t, Finding{Level: Warn, Code: BandedRung, Index: 2, Value: 0.5, Limit: quality.BandingThreshold}, list[4])
 	assert.Equal(t, Finding{Level: Warn, Code: RankConflict, Index: 1, Other: 2}, list[5])
+}
+
+func TestLadderRenditions(
+	t *testing.T,
+) {
+	checked := func(vmaf, halfWidth float64) *ladder.Measurement {
+		return &ladder.Measurement{VMAF: vmaf, HalfWidth: halfWidth}
+	}
+
+	testCases := []struct {
+		name       string
+		renditions []ladder.Rendition
+		perShot    *ladder.PerShot
+		want       []Finding
+	}{
+		{
+			name: "as predicted",
+			renditions: []ladder.Rendition{
+				{Rung: 0, Bitrate: 4_100_000, Checked: checked(94.1, 0.4)},
+				{Rung: 1, Bitrate: 1_900_000},
+			},
+		},
+		{
+			name: "quality off beyond its interval",
+			renditions: []ladder.Rendition{
+				{Rung: 0, Bitrate: 3_900_000, Checked: checked(92.5, 0.3)},
+			},
+			want: []Finding{{Level: Warn, Code: RenditionQuality, Index: 0, Other: 0, Value: 92.5 - 94.8, Limit: ladder.CalibrationTolerance}},
+		},
+		{
+			name: "bitrate off by more than HLS allows",
+			renditions: []ladder.Rendition{
+				{Rung: 0, Bitrate: 3_900_000},
+				{Rung: 2, Bitrate: 1_150_000},
+			},
+			want: []Finding{{Level: Warn, Code: RenditionBitrate, Index: 2, Other: 1, Value: 0.15, Limit: 0.10}},
+		},
+		{
+			name:       "per-shot rendition against its pooled prediction",
+			perShot:    &ladder.PerShot{PredictedVMAF: 94, Shots: []ladder.ShotAllocation{{PredictedBitrate: 3_000_000}}},
+			renditions: []ladder.Rendition{{Rung: 0, PerShot: true, Bitrate: 3_600_000}},
+			want:       []Finding{{Level: Warn, Code: RenditionBitrate, Index: 0, Other: 0, Value: 0.2, Limit: 0.10}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			r := verified()
+			r.Rungs[0].PerShot = testCase.perShot
+			r.Shots = []ladder.Shot{{Frames: 100}}
+			r.Renditions = testCase.renditions
+
+			var got []Finding
+
+			for _, f := range Ladder(r) {
+				if f.Code == RenditionQuality || f.Code == RenditionBitrate {
+					got = append(got, f)
+				}
+			}
+
+			require.Len(t, got, len(testCase.want))
+
+			for i, want := range testCase.want {
+				assert.Equal(t, want.Code, got[i].Code)
+				assert.Equal(t, want.Index, got[i].Index)
+				assert.Equal(t, want.Other, got[i].Other)
+				assert.InDelta(t, want.Value, got[i].Value, 1e-9)
+				assert.InDelta(t, want.Limit, got[i].Limit, 1e-9)
+			}
+		})
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -176,7 +178,39 @@ func (e *events) hooks() Hooks {
 		Quality:  func(int, quality.Progress) { e.progress = append(e.progress, KindVMAF) },
 		Ladder:   func(int, ladder.Progress) { e.progress = append(e.progress, KindLadder) },
 		Overlay:  func(int, overlay.Progress) { e.progress = append(e.progress, KindOverlay) },
+		Renditions: func(int, ladder.RenditionProgress) {
+			e.progress = append(e.progress, KindRenditions)
+		},
 	}
+}
+
+var errEncode = errors.New("rendition failed")
+
+// fakeEncoder records the renditions it is asked for.
+type fakeEncoder struct {
+	err     error
+	dirs    []string
+	sources []string
+}
+
+func (e *fakeEncoder) Encode(
+	_ context.Context,
+	source string,
+	_ *ladder.Result,
+	opts ladder.RenditionOptions,
+) ([]ladder.Rendition, error) {
+	e.dirs = append(e.dirs, opts.Dir)
+	e.sources = append(e.sources, source)
+
+	if opts.Progress != nil {
+		opts.Progress(ladder.RenditionProgress{Done: 1, Total: 2})
+	}
+
+	if e.err != nil {
+		return nil, e.err
+	}
+
+	return []ladder.Rendition{{Path: opts.Dir + "/01-1080p.mp4"}}, nil
 }
 
 func TestRun(
@@ -675,4 +709,106 @@ func TestRunInspectionAudio(
 			assert.Equal(t, testCase.want, analyzer.analyzed[0].Audio.WithInspection)
 		})
 	}
+}
+
+func TestRunRenditions(
+	t *testing.T,
+) {
+	rungs := []ladder.Rung{{Height: 1080, Bitrate: 4_500_000}}
+
+	testCases := []struct {
+		name     string
+		opts     func(dir string) Options
+		encoder  *fakeEncoder
+		wantDone []string
+		wantDirs []string
+		wantErr  error
+	}{
+		{
+			name: "every ladder encoded into its codec's directory",
+			opts: func(dir string) Options {
+				return Options{Source: "a.mp4", SkipAnalysis: true, Codecs: []string{"h264", "av1"}, Renditions: ladder.RenditionOptions{Dir: dir}}
+			},
+			encoder:  &fakeEncoder{},
+			wantDone: []string{KindInspect, KindLadder, KindRenditions, KindLadder, KindRenditions},
+			wantDirs: []string{"h264", "av1"},
+		},
+		{
+			name: "encode failure",
+			opts: func(dir string) Options {
+				return Options{Source: "a.mp4", SkipAnalysis: true, Codecs: []string{"h264"}, Renditions: ladder.RenditionOptions{Dir: dir}}
+			},
+			encoder:  &fakeEncoder{err: errEncode},
+			wantDone: []string{KindInspect, KindLadder},
+			wantErr:  errEncode,
+		},
+		{
+			name: "no encoder",
+			opts: func(dir string) Options {
+				return Options{Source: "a.mp4", SkipAnalysis: true, Codecs: []string{"h264"}, Renditions: ladder.RenditionOptions{Dir: dir}}
+			},
+			wantDone: []string{KindInspect, KindLadder},
+			wantErr:  ErrNoLadderEncoder,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			var (
+				ev      events
+				options []RunnerOption
+			)
+
+			if testCase.encoder != nil {
+				options = append(options, WithLadderEncoder(testCase.encoder))
+			}
+
+			rep, err := NewRunner(&fakeAnalyzer{}, &fakeLadders{rungs: rungs}, options...).Run(t.Context(), testCase.opts(dir), ev.hooks())
+
+			assert.Equal(t, testCase.wantDone, ev.done)
+
+			if testCase.wantErr != nil {
+				require.ErrorIs(t, err, testCase.wantErr)
+				assert.ErrorContains(t, err, "Renditions · h264: ")
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, rep.Ladders, 2)
+
+			for i, codec := range testCase.wantDirs {
+				assert.Equal(t, filepath.Join(dir, codec), testCase.encoder.dirs[i])
+				assert.DirExists(t, filepath.Join(dir, codec))
+			}
+
+			assert.Equal(t, []string{"a.mp4", "a.mp4"}, testCase.encoder.sources)
+			assert.Contains(t, ev.progress, KindRenditions)
+			assert.Equal(t, filepath.Join(dir, "av1", "01-1080p.mp4"), ev.results[len(ev.results)-1].Renditions[0].Path)
+		})
+	}
+}
+
+func TestRunRenditionsWithoutLadder(
+	t *testing.T,
+) {
+	r := NewRunner(&fakeAnalyzer{}, &fakeLadders{}, WithLadderEncoder(&fakeEncoder{}))
+
+	_, err := r.renditions(t.Context(), "h264", Options{Renditions: ladder.RenditionOptions{Dir: t.TempDir()}}, &Report{}, nil)
+	require.ErrorIs(t, err, errNoLadder)
+}
+
+func TestRunRenditionsDirectory(
+	t *testing.T,
+) {
+	// A file where the codec's directory goes.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "h264"), nil, 0o600))
+
+	r := NewRunner(&fakeAnalyzer{}, &fakeLadders{}, WithLadderEncoder(&fakeEncoder{}))
+
+	_, err := r.renditions(t.Context(), "h264", Options{Renditions: ladder.RenditionOptions{Dir: dir}}, &Report{Ladders: []*ladder.Result{{}}}, nil)
+	require.ErrorContains(t, err, "renditions")
 }

@@ -58,7 +58,15 @@ func Lines(
 	args []string,
 	fn func(line []byte) error,
 ) error {
-	return Stream(ctx, bin, args, func(r io.Reader) error {
+	return Stream(ctx, bin, args, LineReader(fn))
+}
+
+// LineReader is the consumer of Stream calling fn for every line, as Lines
+// does.
+func LineReader(
+	fn func(line []byte) error,
+) func(io.Reader) error {
+	return func(r io.Reader) error {
 		scanner := bufio.NewScanner(r)
 		scanner.Buffer(make([]byte, initialLineBuffer), maxLineSize)
 
@@ -73,7 +81,7 @@ func Lines(
 		}
 
 		return nil
-	})
+	}
 }
 
 // Stream runs bin with args and hands its stdout to consume. When consume

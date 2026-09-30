@@ -147,3 +147,24 @@ func TestLadderExtras(
 	assert.Nil(t, grainTable(res.Rungs[2:]))
 	assert.Equal(t, []string{"", "", "", "pershot", ""}, rungCommands(res.Rungs))
 }
+
+func TestRenditionSection(
+	t *testing.T,
+) {
+	res := sampleLadder(t, "h264")
+	res.Renditions = []ladder.Rendition{
+		{Rung: 0, Path: "out/h264/01-1080p.mp4", Width: 1920, Height: 1080, Bitrate: 4_700_000,
+			Checked: &ladder.Measurement{VMAF: 94.8, HalfWidth: 0.3}},
+		{Rung: 1, Path: "out/h264/02-720p.mp4", Width: 1280, Height: 720, Bitrate: 2_100_000},
+	}
+
+	sections := ladderExtras(res)
+	last := sections[len(sections)-1]
+
+	require.Equal(t, "Renditions", last.Title)
+	require.Len(t, last.Table.Rows, 2)
+	assert.Equal(t, []string{"01-1080p.mp4", "1920×1080"}, last.Table.Rows[0][:2])
+	assert.Equal(t, "4.70 Mb/s", last.Table.Rows[0][3])
+	assert.Equal(t, "94.8 ± 0.3", last.Table.Rows[0][5])
+	assert.Equal(t, "–", last.Table.Rows[1][5], "unchecked")
+}

@@ -324,6 +324,37 @@ func (a *wizardAnswers) overlayPathFields() []huh.Field {
 	}
 }
 
+// renditionsFields ask whether to encode the ladders on the whole title.
+func (a *wizardAnswers) renditionsFields() []huh.Field {
+	return []huh.Field{
+		newConfirm().
+			Title("Encode the ladder?").
+			Description("Every rung encoded on the whole title (a folder per codec), each measured against the source: " +
+				"its bitrate and VMAF on the whole title next to the ladder's prediction. Takes as long as the encodes.").
+			Affirmative("Yes").
+			Negative("No").
+			Value(&a.Renditions),
+	}
+}
+
+// renditionsDirFields ask where to write the renditions.
+func (a *wizardAnswers) renditionsDirFields() []huh.Field {
+	return []huh.Field{
+		huh.NewInput().
+			Title("Renditions folder").
+			Description("Created if missing; the renditions of each codec go into a subfolder.").
+			Placeholder("renditions").
+			Validate(requireName).
+			Value(&a.RenditionsDir),
+	}
+}
+
+// renditionsDirHidden hides the renditions folder unless the renditions
+// were asked for.
+func (a *wizardAnswers) renditionsDirHidden() bool {
+	return a.renditionsHidden() || !a.Renditions
+}
+
 // overlayPathHidden hides the path of the annotated copy unless one was
 // asked for.
 func (a *wizardAnswers) overlayPathHidden() bool {

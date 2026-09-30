@@ -124,6 +124,20 @@ func (f *FFmpeg) EncodeChunks(
 	chunks []Chunk,
 	p Params,
 ) error {
+	return f.encodeChunks(ctx, codec, src, dst, chunks, p, nil)
+}
+
+// encodeChunks is EncodeChunks reporting the frames written to progress,
+// when set.
+func (f *FFmpeg) encodeChunks(
+	ctx context.Context,
+	codec Codec,
+	src ChunkSource,
+	dst string,
+	chunks []Chunk,
+	p Params,
+	progress func(frames int),
+) error {
 	if len(chunks) == 0 {
 		return fmt.Errorf("encode %s: %w", src.Path, ErrNoChunks)
 	}
@@ -139,7 +153,7 @@ func (f *FFmpeg) EncodeChunks(
 		_ = os.Remove(list)
 	}()
 
-	if err := f.encodeParts(ctx, codec, src, parts, chunks, p); err != nil {
+	if err := f.encodeParts(ctx, codec, src, parts, chunks, p, progress); err != nil {
 		return err
 	}
 
@@ -166,7 +180,7 @@ func (f *FFmpeg) EncodeChunks(
 const chunkWorkers = 4
 
 // encodeParts encodes every chunk of src into its part, chunkWorkers at a
-// time.
+// time. progress, when set, follows the frames written by all of them.
 func (f *FFmpeg) encodeParts(
 	ctx context.Context,
 	codec Codec,
@@ -174,14 +188,22 @@ func (f *FFmpeg) encodeParts(
 	parts []string,
 	chunks []Chunk,
 	p Params,
+	progress func(frames int),
 ) error {
 	group, gctx := errgroup.WithContext(ctx)
 	group.SetLimit(chunkWorkers)
 
+	total := &partProgress{done: make([]int, len(chunks)), report: progress}
+
 	for i, chunk := range chunks {
 		group.Go(func() error {
-			args := append([]string{"-v", "error", "-nostdin", "-y"}, codec.chunkArgs(src, parts[i], chunk, p)...)
-			if err := f.encodeWatched(gctx, args, parts[i]); err != nil {
+			var report func(int)
+			if progress != nil {
+				report = func(n int) { total.update(i, n) }
+			}
+
+			args := append(progressArgs(progress != nil), codec.chunkArgs(src, parts[i], chunk, p)...)
+			if err := f.encodeWatched(gctx, args, parts[i], report); err != nil {
 				return fmt.Errorf("encode %s chunk %d with %s: %w", src.Path, i+1, codec.Encoder, err)
 			}
 

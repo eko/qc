@@ -380,6 +380,6 @@ func TestFindingWordingUnknownCode(
 
 	assert.Empty(t, comparisonFinding(unknown, sampleVMAF(quality.ModeExact)))
 
-	_, ok = ladderFinding(unknown, sampleLadder(t, "h264").Rungs)
+	_, ok = ladderFinding(unknown, sampleLadder(t, "h264"))
 	assert.False(t, ok)
 }

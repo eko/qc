@@ -141,6 +141,14 @@ First public release: a Go library and the `qc` CLI.
     work.
   - Verified rungs checked for banding and for VMAF/XPSNR ranking
     disagreements.
+  - Renditions (`--encode-ladder <folder>`, also asked by the wizard): the
+    ladder encoded on the whole title with the settings of each rung, and
+    each rung's per-shot version, with progress in the dashboard. Each
+    rendition is checked against the source (`--no-rendition-check` skips
+    it): its VMAF with its confidence interval and its bitrate, shown next
+    to the predictions in the reports, with findings when they drift from
+    them (quality beyond the check's interval, bitrate beyond Apple's 10%
+    `BANDWIDTH` rule).
 - **HDR** ([docs/hdr.md](docs/hdr.md)): HDR10, PQ and HLG detected from the
   stream and its first frame (HDR10 metadata in SEI, HDR10+), Dolby Vision
   and HDR10+ reported without processing their dynamic metadata; signalling
@@ -209,6 +217,13 @@ First public release: a Go library and the `qc` CLI.
 
 ### Fixed
 
+- **Comparisons refused for a timestamp gap**: two videos were compared only
+  if their average frame rates matched, and the average is the frame count
+  over the duration, which a gap in the timestamps lengthens. An AV1 encode
+  of a source whose last frame came two frames late averaged 24.97 fps
+  against the source's 25, and its check failed although every frame
+  matched. Videos with the same nominal frame rate now compare; frames are
+  matched by their timestamps.
 - **Rungs at a lower resolution than the optimum's**: a rung can only take a
   resolution probed at its bitrate, and fixed probe CRFs could stop a higher
   resolution well above the lower rungs (an AV1 1080p curve at 1 Mb/s on
@@ -303,7 +318,11 @@ The packages of the first release, for Go programs that embed qc:
 - **Ladders**: `ladder.Result.ShotLadder(rung)` iterates over a per-shot
   rung's allocation shot by shot, `PerShot.PooledBitrate` prices it over the
   title, and `ladder.CalibrationTolerance` is the prediction gap beyond which
-  a rung is calibrated.
+  a rung is calibrated. `ladder.Engine.Encode` encodes a ladder's
+  renditions (`ladder.WithRenditionEncoder`, `encode.FFmpeg.EncodeRendition`),
+  `Result.RungParams` gives a rung's encode settings and `Result.Prediction`
+  a rendition's predicted quality and bitrate; `pipeline.Options.Renditions`
+  adds a renditions stage after each ladder.
 - **HDR**: `media.Color.IsHDR`, `media.VideoStream.MeasurableHDR`,
   `media.MasteringDisplay` primaries and white point, `media.HDR.HDR10Plus`
   and `media.DynamicRangeHDR10Plus`; `analysis.VideoReport.Light`

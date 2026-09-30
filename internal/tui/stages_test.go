@@ -101,6 +101,24 @@ func TestStageSummary(
 			want:   "annotated copy · annotated.mp4",
 		},
 		{
+			name: "renditions checked against the source",
+			result: pipeline.StageResult{Stage: stage(pipeline.KindRenditions), Renditions: []ladder.Rendition{
+				{Path: "out/h264/01-1080p.mp4", Height: 1080, Bitrate: 5_430_000, Checked: &ladder.Measurement{VMAF: 93.86, HalfWidth: 0.31}},
+				{Path: "out/h264/02-720p.mp4", Height: 720, Bitrate: 2_300_000},
+			}},
+			want: "2 renditions · top 1080p @ 5.43 Mb/s, VMAF 93.9 ± 0.3 · out/h264",
+		},
+		{
+			name:   "renditions unchecked",
+			result: pipeline.StageResult{Stage: stage(pipeline.KindRenditions), Renditions: []ladder.Rendition{{Path: "r/01-720p.mp4", Height: 720, Bitrate: 2_000_000}}},
+			want:   "1 rendition · top 720p @ 2.00 Mb/s · r",
+		},
+		{
+			name:   "no rendition",
+			result: pipeline.StageResult{Stage: stage(pipeline.KindRenditions)},
+			want:   "no rendition",
+		},
+		{
 			name:   "unknown stage",
 			result: pipeline.StageResult{Stage: stage("teleport")},
 			want:   "",
@@ -123,5 +141,5 @@ func TestFindingWordingUnknownCode(
 
 	assert.Nil(t, analysisLines(unknown, sampleReport()))
 	assert.Empty(t, comparisonLine(unknown, sampleVMAF(quality.ModeExact)))
-	assert.Empty(t, ladderLine(unknown, sampleRungs()))
+	assert.Empty(t, ladderLine(unknown, &ladder.Result{Rungs: sampleRungs()}))
 }

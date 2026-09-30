@@ -87,7 +87,7 @@ func TestReviewSections(
 					"Codecs: HEVC, AV1", "Shape: 1080p, 720p", "Quality: VMAF 40 to 93",
 					"Encoding: cap 8000 kb/s, preset slow, 10-bit", "Rungs: not verified, adaptive probes", "Film grain: auto",
 				},
-				sectionOutputs: {"Report: terminal", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
+				sectionOutputs: {"Report: terminal", "Renditions: none", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
 			},
 		},
 		{
@@ -107,7 +107,7 @@ func TestReviewSections(
 					"Codecs: H.264", "Shape: 5 rungs", "Quality: VMAF 30 to 95",
 					"Encoding: no bitrate cap, default preset, 8-bit", "Rungs: verified, fixed probes, per-shot",
 				},
-				sectionOutputs: {"Report: terminal", "Annotated: none", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
+				sectionOutputs: {"Report: terminal", "Annotated: none", "Renditions: none", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
 			},
 		},
 	}
@@ -238,14 +238,14 @@ func TestRunAccessible(
 	}{
 		{
 			name:      "defaults, run",
-			lines:     []string{"source.mp4", "0", "0", "0", "0", "", "", "", "1"},
+			lines:     []string{"source.mp4", "0", "0", "0", "0", "", "", "", "", "1"},
 			wantShown: []string{"Review", "Command: qc run source.mp4 --codecs=h264", "Run this command?"},
 		},
 		{
 			name: "edit the outputs, then cancel",
 			lines: []string{
-				"source.mp4", "0", "0", "0", "0", "", "", "",
-				"2", "5", "report.html", "",
+				"source.mp4", "0", "0", "0", "0", "", "", "", "",
+				"2", "5", "report.html", "", "",
 				"3",
 			},
 			wantErr:   huh.ErrUserAborted,
@@ -298,7 +298,7 @@ func TestAskWizardWith(
 		{
 			name:        "accessible",
 			env:         map[string]string{"ACCESSIBLE": "1"},
-			input:       &lineReader{lines: []string{"source.mp4", "0", "0", "0", "0", "", "", "", "1"}},
+			input:       &lineReader{lines: []string{"source.mp4", "0", "0", "0", "0", "", "", "", "", "1"}},
 			wantSource:  "source.mp4",
 			wantDrawing: "Command: qc run source.mp4 --codecs=h264",
 		},

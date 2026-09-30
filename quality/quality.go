@@ -215,7 +215,7 @@ func (m *Meter) newRun(
 		return nil, fmt.Errorf("%w: missing bitstream report", ErrNoFramesToCompare)
 	}
 
-	if !sameRate(ref.Video.AvgFrameRate, dist.Video.AvgFrameRate) {
+	if !sameVideoRate(ref.Video, dist.Video) {
 		return nil, fmt.Errorf("%w: %s vs %s", ErrFrameRateMismatch, ref.Video.AvgFrameRate, dist.Video.AvgFrameRate)
 	}
 
@@ -601,6 +601,23 @@ func (r *run) pairScored() {
 	if r.opts.Progress != nil {
 		r.opts.Progress(progress)
 	}
+}
+
+// sameVideoRate reports whether two videos run at the same frame rate: the
+// same average rate, or the same nominal rate. The average rate is the
+// frame count over the stream's duration, which a gap in the timestamps
+// lengthens: a source whose last frame comes two frames late averages 25
+// fps in its container, but an encode of it, carrying the same timestamps,
+// may be written with the full span as its duration and average 24.97. The
+// frames are matched by their timestamps, so such a pair compares exactly.
+func sameVideoRate(
+	a, b media.VideoStream,
+) bool {
+	if sameRate(a.AvgFrameRate, b.AvgFrameRate) {
+		return true
+	}
+
+	return a.FrameRate.Float() > 0 && sameRate(a.FrameRate, b.FrameRate)
 }
 
 // sameRate reports whether two frame rates are equal within rateTolerance.

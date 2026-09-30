@@ -71,6 +71,8 @@ func (a *wizardAnswers) formSteps(
 		{section: sectionOutputs, fields: a.htmlFields()},
 		{section: sectionOutputs, fields: a.overlayFields(), hidden: a.overlayHidden},
 		{section: sectionOutputs, fields: a.overlayPathFields(), hidden: a.overlayPathHidden},
+		{section: sectionOutputs, fields: a.renditionsFields(), hidden: a.renditionsHidden},
+		{section: sectionOutputs, fields: a.renditionsDirFields(), hidden: a.renditionsDirHidden},
 	}
 }
 
@@ -198,6 +200,11 @@ func (a *wizardAnswers) filmGrainHidden() bool {
 // compared: it would only show what the bitstream tells.
 func (a *wizardAnswers) overlayHidden() bool {
 	return !a.wants(actionAnalysis) && !a.wants(actionVMAF)
+}
+
+// renditionsHidden hides the encoding of the ladders without a ladder.
+func (a *wizardAnswers) renditionsHidden() bool {
+	return a.ladderHidden()
 }
 
 // advancedHidden hides the ladder customisation unless it was asked for.

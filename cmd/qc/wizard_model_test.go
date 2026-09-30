@@ -48,8 +48,8 @@ func toReview(
 	require.Equal(t, sectionAnalysis, m.current(), view(m))
 
 	// Analysis, metrics, devices, codecs, customisation, HTML, annotated
-	// video.
-	for range 7 {
+	// video, renditions.
+	for range 8 {
 		send(m, keyEnter)
 	}
 

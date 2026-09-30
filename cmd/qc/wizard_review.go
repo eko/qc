@@ -255,7 +255,8 @@ func (a *wizardAnswers) rungsLabel() string {
 	return strings.Join(parts, ", ")
 }
 
-// outputRows review the HTML report, the annotated video and the hardware.
+// outputRows review the HTML report, the annotated video, the renditions
+// and the hardware.
 func (a *wizardAnswers) outputRows() []reviewRow {
 	rows := []reviewRow{{key: "Report", value: "terminal" + optionalFile(", HTML ", a.HTML)}}
 
@@ -266,6 +267,15 @@ func (a *wizardAnswers) outputRows() []reviewRow {
 		}
 
 		rows = append(rows, reviewRow{key: "Annotated", value: annotated})
+	}
+
+	if !a.renditionsHidden() {
+		renditions := "none"
+		if dir := strings.TrimSpace(a.RenditionsDir); a.Renditions && dir != "" {
+			renditions = dir
+		}
+
+		rows = append(rows, reviewRow{key: "Renditions", value: renditions})
 	}
 
 	return append(rows, reviewRow{key: "Hardware", value: wizardHardware(a.GPU, runtime.GOOS)})

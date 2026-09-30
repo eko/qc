@@ -88,7 +88,39 @@ func ladderExtras(
 		})
 	}
 
+	if len(r.Renditions) > 0 {
+		out = append(out, section{
+			Title:    "Renditions",
+			Subtitle: "the rungs encoded on the whole title, against what the ladder predicted on the digest",
+			Table:    renditionTable(r),
+		})
+	}
+
 	return out
+}
+
+// renditionTable lists the renditions with their predicted and measured
+// bitrate and quality.
+func renditionTable(
+	r *ladder.Result,
+) *table {
+	t := &table{Head: []string{"file", "resolution", "predicted bitrate", "bitrate", "predicted VMAF", "VMAF"}}
+
+	for _, rd := range r.Renditions {
+		vmaf, bitrate := r.Prediction(rd)
+
+		checked := "–"
+		if c := rd.Checked; c != nil {
+			checked = c.VMAFLabel()
+		}
+
+		t.Rows = append(t.Rows, []string{
+			filepath.Base(rd.Path), fmt.Sprintf("%d×%d", rd.Width, rd.Height),
+			bitrateLabel(bitrate), bitrateLabel(float64(rd.Bitrate)), fmt.Sprintf("%.1f", vmaf), checked,
+		})
+	}
+
+	return t
 }
 
 // perShotTable compares per-shot rungs with their per-title versions.

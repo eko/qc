@@ -18,7 +18,7 @@ func TestWizardFormSteps(
 
 	for _, offerGPU := range []bool{false, true} {
 		steps := answers.formSteps(testWizardContext(t, offerGPU))
-		require.Len(t, steps, 18)
+		require.Len(t, steps, 20)
 
 		var sections []section
 

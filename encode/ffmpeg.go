@@ -80,7 +80,7 @@ func (f *FFmpeg) Encode(
 	args := append([]string{"-v", "error", "-nostdin", "-y", "-i", src}, codec.Args(p)...)
 	args = append(args, dst)
 
-	if err := f.encodeWatched(ctx, args, dst); err != nil {
+	if err := f.encodeWatched(ctx, args, dst, nil); err != nil {
 		return fmt.Errorf("encode %s with %s: %w", src, codec.Encoder, err)
 	}
 

@@ -69,6 +69,11 @@ type wizardAnswers struct {
 	// compared (see overlayHidden).
 	Overlay     bool
 	OverlayPath string
+	// Renditions asks for the ladders encoded on the whole title, into
+	// RenditionsDir; both are asked only with a ladder (see
+	// renditionsHidden).
+	Renditions    bool
+	RenditionsDir string
 	// GPU is asked only when an NVIDIA GPU is usable (see wizardOffersGPU).
 	GPU bool
 	// HDRMetric is asked only for an HDR source: how VMAF scores it.
@@ -133,6 +138,10 @@ func (a wizardAnswers) runArgs() []string {
 
 	if path := strings.TrimSpace(a.OverlayPath); a.Overlay && path != "" && !a.overlayHidden() {
 		args = append(args, "--overlay", notFlag(path))
+	}
+
+	if dir := strings.TrimSpace(a.RenditionsDir); a.Renditions && dir != "" && !a.renditionsHidden() {
+		args = append(args, "--encode-ladder", notFlag(dir))
 	}
 
 	return args

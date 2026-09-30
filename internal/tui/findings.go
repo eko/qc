@@ -3,6 +3,7 @@ package tui
 import (
 	"cmp"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -231,7 +232,7 @@ func ladderFindings(
 			continue
 		}
 
-		if line := ladderLine(f, res.Rungs); line != "" {
+		if line := ladderLine(f, res); line != "" {
 			lines = append(lines, line)
 		}
 	}
@@ -250,6 +251,8 @@ func ladderRank(
 	code findings.Code,
 ) int {
 	switch code {
+	case findings.RenditionQuality, findings.RenditionBitrate:
+		return 6
 	case findings.Extrapolated:
 		return 1
 	case findings.GrainMismatch:
@@ -268,13 +271,23 @@ func ladderRank(
 // ladderLine words a finding of a ladder.
 func ladderLine(
 	f findings.Finding,
-	rungs []ladder.Rung,
+	res *ladder.Result,
 ) string {
 	if f.Code == findings.NoRungs {
 		return findingLine(f.Level, "no rung could be selected")
 	}
 
-	r := rungs[f.Index]
+	r := res.Rungs[f.Index]
+
+	switch f.Code {
+	case findings.RenditionQuality:
+		rd := res.Renditions[f.Other]
+		return findingLine(f.Level, "%s on the whole title: VMAF %s, %+.1f from its prediction on the digest",
+			renditionName(rd), rd.Checked.VMAFLabel(), f.Value)
+	case findings.RenditionBitrate:
+		return findingLine(f.Level, "%s: %+.0f%% bitrate over the whole title against the ladder's: declare its measured %s in the manifest (Apple HLS: within %.0f%%)",
+			renditionName(res.Renditions[f.Other]), f.Value*100, Bitrate(float64(res.Renditions[f.Other].Bitrate)), f.Limit*100)
+	}
 
 	switch f.Code {
 	case findings.TopVMAFMissed:
@@ -295,7 +308,7 @@ func ladderLine(
 		return findingLine(f.Level, "rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
 			f.Index+1, r.Height, f.Value*100, f.Limit)
 	case findings.RankConflict:
-		lo := rungs[f.Other]
+		lo := res.Rungs[f.Other]
 		return findingLine(f.Level, "rungs %d (%dp) and %d (%dp): VMAF ranks %dp higher (%.1f vs %.1f) but XPSNR ranks it lower (%.2f vs %.2f dB)",
 			f.Index+1, r.Height, f.Other+1, lo.Height, r.Height, r.Measured.VMAF, lo.Measured.VMAF, xpsnr(r), xpsnr(lo))
 	}
@@ -327,4 +340,11 @@ func rungBitrate(
 	}
 
 	return r.Bitrate
+}
+
+// renditionName names a rendition by its file.
+func renditionName(
+	rd ladder.Rendition,
+) string {
+	return filepath.Base(rd.Path)
 }

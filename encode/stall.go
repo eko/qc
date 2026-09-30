@@ -37,20 +37,23 @@ func WithStallTimeout(
 
 // encodeWatched runs ffmpeg with args writing dst, stops it when dst stops
 // growing for the stall timeout, and tries once more: a stall is an
-// encoder freezing, which does not recur on a new run.
+// encoder freezing, which does not recur on a new run. progress, when set,
+// follows the frames written (args then ask ffmpeg for -progress on
+// stdout, see progressArgs).
 func (f *FFmpeg) encodeWatched(
 	ctx context.Context,
 	args []string,
 	dst string,
+	progress func(frames int),
 ) error {
-	err := f.runWatched(ctx, args, dst)
+	err := f.runWatched(ctx, args, dst, progress)
 	if !errors.Is(err, ErrStalled) {
 		return err
 	}
 
 	f.logger.WarnContext(ctx, "encoder stalled, trying again", "output", dst, "timeout", f.stall)
 
-	return f.runWatched(ctx, args, dst)
+	return f.runWatched(ctx, args, dst, progress)
 }
 
 // runWatched runs ffmpeg with args once, stopped with ErrStalled when dst
@@ -59,6 +62,7 @@ func (f *FFmpeg) runWatched(
 	ctx context.Context,
 	args []string,
 	dst string,
+	progress func(frames int),
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -73,7 +77,14 @@ func (f *FFmpeg) runWatched(
 		cancel()
 	})
 
-	err := ffexec.Stream(ctx, f.bin, args, discard)
+	consume := discard
+	if progress != nil {
+		var last lastFrames
+
+		consume = ffexec.LineReader(last.reader(progress))
+	}
+
+	err := ffexec.Stream(ctx, f.bin, args, consume)
 	if stalled.Load() {
 		return fmt.Errorf("%s: %w", dst, ErrStalled)
 	}
