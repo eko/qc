@@ -7,8 +7,8 @@
 class Qc < Formula
   desc "Fast video analysis: technical metrics, VMAF and per-title streaming ladders"
   homepage "https://github.com/eko/qc"
-  url "https://github.com/eko/qc/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  url "https://github.com/eko/qc/archive/refs/tags/v1.0.0.tar.gz"
+  sha256 "0f3fa0adf5ed7f63b5d1fb391c92ca19f19a30f22abaf86fba3bec54091d4c02"
   license "MIT"
   head "https://github.com/eko/qc.git", branch: "main"
 
@@ -22,8 +22,8 @@ class Qc < Formula
   def install
     ENV["CGO_ENABLED"] = "1"
 
+    # std_go_args already strips the binary (-s -w).
     ldflags = %W[
-      -s -w
       -X main.version=v#{version}
       -X main.date=#{time.iso8601}
     ]
@@ -54,7 +54,9 @@ class Qc < Formula
     system ffmpeg, "-hide_banner", "-loglevel", "error",
            "-i", "source.mp4", "-c:v", "libx264", "-crf", "40", "encode.mp4"
 
-    output = shell_output("#{bin}/qc vmaf source.mp4 encode.mp4 --exact -f json #{tools.join(" ")}")
+    # stderr joins the output: were it brew's terminal, qc would draw its
+    # live dashboard there from the test's background process group.
+    output = shell_output("#{bin}/qc vmaf source.mp4 encode.mp4 --exact -f json #{tools.join(" ")} 2>&1")
     assert_match "vmaf_v1.0.16_3d0h", output
   end
 end

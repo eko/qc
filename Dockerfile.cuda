@@ -32,7 +32,11 @@ ARG GO_VERSION=1.27.1
 # ffmpeg's CUDA filters, see below), meson/nasm and the encoder libraries.
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_RELEASE} AS toolchain
 
-RUN apt-get update \
+# Every package comes from Ubuntu: NVIDIA's apt repository (the CUDA
+# toolkit, already in the image) is left out of the updates, so that its
+# mirror syncs cannot fail the build ("File has unexpected size").
+RUN rm -f /etc/apt/sources.list.d/cuda*.list \
+    && apt-get -o Acquire::Retries=3 update \
     && apt-get install -y --no-install-recommends \
         build-essential ca-certificates clang cmake curl meson nasm ninja-build pkg-config xxd \
         libass-dev libdav1d-dev libx264-dev libx265-dev zlib1g-dev \
@@ -205,7 +209,9 @@ ENV NVIDIA_VISIBLE_DEVICES=all \
     PATH=/opt/ffmpeg/bin:${PATH}
 
 # libass draws the --overlay in DejaVu Sans Mono (overlay.DefaultFont).
-RUN apt-get update \
+# Ubuntu packages only, as in the toolchain.
+RUN rm -f /etc/apt/sources.list.d/cuda*.list \
+    && apt-get -o Acquire::Retries=3 update \
     && apt-get install -y --no-install-recommends \
         fonts-dejavu-mono libass9 libdav1d7 libx264-164 libx265-199 zlib1g \
     && rm -rf /var/lib/apt/lists/*

@@ -14,8 +14,8 @@ const defaultWidth = 100
 
 // environment is what the commands need from the process they run in.
 type environment struct {
-	// dashboard is true when stderr is a terminal: commands draw the live
-	// dashboard there.
+	// dashboard is true when stderr is a terminal qc is in the foreground
+	// of: commands draw the live dashboard there.
 	dashboard bool
 	// wizard is true when stdin and stderr are terminals: qc without
 	// arguments starts the interactive wizard instead of printing the help.
@@ -42,13 +42,24 @@ func detectEnvironment() environment {
 	stderr := term.IsTerminal(int(os.Stderr.Fd()))
 
 	return environment{
-		dashboard:    stderr,
+		dashboard:    stderr && inForeground(int(os.Stderr.Fd())),
 		wizard:       stderr && term.IsTerminal(int(os.Stdin.Fd())),
 		width:        width,
 		askWizard:    askWizard,
 		gpuAvailable: nvidia.Available,
 		animate:      stderr && motionAllowed(os.Getenv),
 	}
+}
+
+// foreground reports whether the terminal's foreground process group
+// (tcgetpgrp) is the process's own.
+func foreground(
+	terminalGroup func() (int, error),
+	ownGroup func() int,
+) bool {
+	group, err := terminalGroup()
+
+	return err == nil && group == ownGroup()
 }
 
 // motionAllowed reports whether animations may play: not without colours

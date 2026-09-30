@@ -45,7 +45,8 @@ In a terminal, every command draws a live dashboard on stderr:
     is verified.
 - `q`, `esc` or `ctrl+c` cancel the run (the context is cancelled and
   subprocesses are killed).
-- Without a terminal (pipes, CI) nothing is drawn and output stays clean.
+- Without a terminal (pipes, CI), or in a background job (`qc run … &`,
+  `brew test`), nothing is drawn and output stays clean.
 
 Charts use braille characters (2×4 dots per cell) and bars use `━`: both are
 single-width, so layouts stay aligned in every terminal.

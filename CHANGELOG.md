@@ -9,6 +9,18 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Fixed
+
+- **Background jobs**: qc drew its dashboard whenever stderr was a
+  terminal, so a background job (`qc run … &`, `brew test`) was stopped by
+  the kernel (SIGTTOU) at its first terminal setting and never finished. The
+  dashboard now needs qc to be the terminal's foreground job.
+- **CUDA image builds**: the apt updates of `Dockerfile.cuda` leave NVIDIA's
+  repository out (every package comes from Ubuntu) and retry, so a mirror
+  sync of that repository no longer fails the release.
+
+## [1.0.0] - 2026-09-30
+
 First public release: a Go library and the `qc` CLI.
 
 ### Added
@@ -357,4 +369,5 @@ The packages of the first release, for Go programs that embed qc:
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before
   a long run (`nvidia.Check`, `nvidia.Available`).
 
-[Unreleased]: https://github.com/eko/qc/commits/main
+[Unreleased]: https://github.com/eko/qc/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/eko/qc/releases/tag/v1.0.0
