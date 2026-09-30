@@ -403,7 +403,11 @@ func (b *build) stageList(
 			return err
 		}},
 		{name: StageProbe, run: func(ctx context.Context, res *Result) (err error) {
-			res.Probes, err = b.probe(ctx)
+			if res.Probes, err = b.probe(ctx); err != nil {
+				return err
+			}
+
+			res.Probes, err = b.challenge(ctx, res.Probes)
 
 			return err
 		}},

@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -317,7 +318,7 @@ func TestExhaustiveEnvelope(
 		t.Run(testCase.name, func(t *testing.T) {
 			var log bytes.Buffer
 
-			hull, err := exhaustiveEnvelope(&log, testCase.fast, []float64{20, 25, 30}, testCase.measure)
+			hull, err := exhaustiveEnvelope(&log, testCase.fast, gridSpec{CRFs: []float64{20, 25, 30}}, testCase.measure)
 
 			if testCase.wantErr != nil {
 				require.ErrorIs(t, err, testCase.wantErr)
@@ -344,7 +345,7 @@ func TestCheckOptimum(
 ) {
 	var log bytes.Buffer
 
-	hull, err := exhaustiveEnvelope(&log, fakeLadder(), []float64{16, 20, 24, 28, 32}, fakeMeasure)
+	hull, err := exhaustiveEnvelope(&log, fakeLadder(), gridSpec{CRFs: []float64{16, 20, 24, 28, 32}}, fakeMeasure)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -715,4 +716,25 @@ type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) {
 	return 0, os.ErrClosed
+}
+
+func TestExhaustiveEnvelopeSpansTheRungs(
+	t *testing.T,
+) {
+	var log strings.Builder
+
+	grid := gridSpec{CRFs: []float64{20, 25, 30}, Step: 5, MinCRF: 10, MaxCRF: 51}
+
+	_, err := exhaustiveEnvelope(&log, fakeLadder(), grid, fakeMeasure)
+	require.NoError(t, err)
+
+	// 720p reaches the lowest rung (800 kb/s, with margin) at CRF 40, and
+	// 360p the highest (3 Mb/s) at CRF 15.
+	for _, want := range []string{"grid 720p crf 35:", "grid 720p crf 40:", "grid 360p crf 15:"} {
+		assert.Contains(t, log.String(), want)
+	}
+
+	for _, unwanted := range []string{"grid 720p crf 45:", "grid 720p crf 15:", "grid 360p crf 35:"} {
+		assert.NotContains(t, log.String(), unwanted, "no wider than the rungs")
+	}
 }

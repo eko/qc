@@ -421,6 +421,8 @@ func TestProbingLabel(
 		{name: "fixed", in: ladder.ProbingReport{Mode: ladder.ProbingFixed, Rounds: 1}, want: ""},
 		{name: "adaptive converged", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 4, Budget: 14, Converged: true}, want: " (adaptive: 4 rounds, budget 14, converged)"},
 		{name: "adaptive out of budget", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 5, Budget: 14}, want: " (adaptive: 5 rounds, budget 14, budget reached)"},
+		{name: "fixed with challengers", in: ladder.ProbingReport{Mode: ladder.ProbingFixed, Rounds: 3, Challengers: 5}, want: " (5 challenger probes)"},
+		{name: "adaptive with challengers", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 6, Budget: 14, Challengers: 2}, want: " (adaptive: 6 rounds, budget 14, budget reached; 2 challenger probes)"},
 	}
 
 	for _, testCase := range testCases {

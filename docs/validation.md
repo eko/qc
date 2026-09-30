@@ -177,7 +177,13 @@ go run ./bench/ladderval -rungs-only -precision 0.25 ladder.json
 
 - **Full mode** encodes the whole title on a dense grid (every probed
   resolution, CRF every 3 points) with exact VMAF, and builds the true
-  envelope. It then encodes the whole title with each rung's settings, and
+  envelope. The grid spans the probe CRFs one step wider, then extends at
+  each resolution until it covers every rung's bitrate (10% margin): a
+  resolution missing from the grid at a rung's bitrate cannot show that it
+  would have been cheaper there. Until that extension, the grid stopped at
+  the probes' range, and rungs placed at a lower resolution because a higher
+  one was never probed that low went unseen (see
+  [below](#resolutions-never-compared-ladderreplay)). It then encodes the whole title with each rung's settings, and
   reports the quality gap to the envelope at the rung's bitrate and the
   bitrate overhead at the rung's quality.
 - **Rungs-only mode** skips the grid. It re-encodes each rung on the full title
@@ -188,7 +194,8 @@ Results:
 
 | Check | Result |
 |---|---|
-| Drama 1 min, H.264, full mode | mean ΔVMAF to the optimum −0.04, mean bitrate overhead −0.7% (within measurement noise); worst rung +3.1% (540p chosen where 720p was optimal) |
+| Drama 1 min, H.264, full mode | mean ΔVMAF to the optimum −0.04, mean bitrate overhead −0.7% (within measurement noise); worst rung +3.1% (540p chosen where 720p was optimal); unchanged on the extended grid (−0.6%), −0.8% with challenger probes |
+| Drama 1 min, AV1, full mode, extended grid | +7.4% on average (the earlier grid read +0.7%): the 360p and 270p rungs belonged at 720p and 540p (+21%, +18%); with challenger probes −0.1%, worst rung +0.7% |
 | Cartoon 10:36, H.264, rungs-only | mean \|predicted − full title\| 0.86 VMAF (full title ~0.5 better: conservative); full-title bitrate 3–10% above prediction |
 
 `-cache grid.json` stores every full-title measurement (keyed by resolution,
@@ -198,6 +205,57 @@ prints the ladder's encode count (probes, verifications, calibrations).
 AV1 encodes are re-timed to a constant rate before measurement (SVT-AV1 keeps
 source timestamps, and a source with a timestamp gap yields an average frame
 rate the VMAF engine refuses).
+
+### Resolutions never compared (`ladderreplay`)
+
+```sh
+go run ./bench/ladderreplay grid.json...                     # ladderval caches
+go run ./bench/ladderreplay -codec av1 -top-vmaf 94 -bias -0.8 -noise 0.5 -runs 20 grid.txt
+```
+
+`ladderreplay` runs the real engine on an exhaustive grid instead of
+encoding: every encode it asks for is answered from the grid (interpolated
+in CRF), with, on demand, the error of sampled measurements (`-bias`, the
+level shared by the sampled frames; `-noise`, per measurement). A build
+takes milliseconds, so probing modes and engine changes are compared on
+several titles' grids; the rungs are placed on the grid and compared with
+its optimum.
+
+On a 59-minute reality-TV title that compresses well (exact grid of its
+digest: 5 resolutions × 9 CRFs, H.264 and AV1), fixed probing put the AV1
+rungs below 1 Mb/s at 720p, 540p, 360p and 270p where 1080p and 720p were
+30–78% cheaper: the 1080p probes (CRF 28, 40, 52) stopped at 1 Mb/s, and a
+rung can only take a resolution probed at its bitrate. Real ladders of the
+title, checked on the grid, agreed with the replay (+35.5% and +6.8% for
+AV1 and H.264 in fixed mode, +11.5% and +2.2% adaptive). Challenger probes
+(see [ladder.md](ladder.md#challenger-probes)), replayed without and with
+the sampling error of real measurements (bias −0.8, noise 0.5 VMAF, 20
+replays):
+
+| Grid | Probing | Before | Challengers | With sampling error (60 replays) |
+|---|---|---|---|---|
+| Reality TV, AV1 | fixed | +37.6% (worst rung +78%) | 0.0% | +0.4% |
+| Reality TV, AV1 | adaptive | +11.5% (worst +29%) | +0.2% | +0.8% |
+| Reality TV, H.264 | fixed | +6.8% (worst +25%) | +0.4% | +1.2% |
+| Reality TV, H.264 | adaptive | +2.2% | +0.9% | +1.3% |
+| Drama, H.264 / AV1 (extended grids) | both | – | 0.0–0.1% | 0.2–0.8% |
+
+A rung whose resolution was never compared with several higher ones gets
+all of them challenged at once: challenging only the nearest one climbed a
+resolution per round (270p, then 360p, then 540p) and ran out of rounds on
+the real AV1 adaptive ladder, whose lowest rung stayed 27% too expensive.
+Two cheaper variants were tried and dropped. A tie probe (probing both
+resolutions where two came within 1 VMAF across a wide gap between probes)
+changed nothing measurable over 60 noisy replays per grid, the remaining
+error being the measurements' noise. A threshold on the saving a challenger
+promises (10%) saved one or two probes on average but left a drama's top
+rung at 720p where 1080p was 13% cheaper, in a noiseless replay.
+
+Real ladders of the reality-TV title, checked on its exact grid: AV1 fixed
++35.5% → +0.1% and AV1 adaptive +11.5% → 0.0% (every rung at its optimal
+resolution), H.264 fixed +6.8% → +1.9%.
+
+They cost 7–12 more encodes per ladder on these titles (30–36 in all instead of 23–24).
 
 ### Curve extension below the top rung
 

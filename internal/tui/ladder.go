@@ -178,20 +178,31 @@ func gainStyle(
 	return Yellow
 }
 
-// probingLabel describes adaptive probing: rounds, budget, convergence.
+// probingLabel describes adaptive probing (rounds, budget, convergence)
+// and the challenger probes.
 func probingLabel(
 	p ladder.ProbingReport,
 ) string {
-	if p.Mode != ladder.ProbingAdaptive {
+	var parts []string
+
+	if p.Mode == ladder.ProbingAdaptive {
+		state := "budget reached"
+		if p.Converged {
+			state = "converged"
+		}
+
+		parts = append(parts, fmt.Sprintf("adaptive: %d rounds, budget %d, %s", p.Rounds, p.Budget, state))
+	}
+
+	if p.Challengers > 0 {
+		parts = append(parts, fmt.Sprintf("%d challenger probes", p.Challengers))
+	}
+
+	if len(parts) == 0 {
 		return ""
 	}
 
-	state := "budget reached"
-	if p.Converged {
-		state = "converged"
-	}
-
-	return fmt.Sprintf(" (adaptive: %d rounds, budget %d, %s)", p.Rounds, p.Budget, state)
+	return " (" + strings.Join(parts, "; ") + ")"
 }
 
 // shapeLabel describes how the rungs were chosen.

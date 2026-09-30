@@ -41,6 +41,8 @@ func TestProbingNote(
 		{name: "fixed", in: ladder.ProbingReport{Mode: ladder.ProbingFixed}, want: ""},
 		{name: "converged", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 3, Converged: true}, want: " (adaptive, 3 rounds, converged)"},
 		{name: "budget", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 5}, want: " (adaptive, 5 rounds, budget reached)"},
+		{name: "fixed with challengers", in: ladder.ProbingReport{Mode: ladder.ProbingFixed, Challengers: 4}, want: " (4 challenger probes)"},
+		{name: "adaptive with challengers", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 4, Converged: true, Challengers: 2}, want: " (adaptive, 4 rounds, converged, 2 challenger probes)"},
 	}
 
 	for _, testCase := range testCases {

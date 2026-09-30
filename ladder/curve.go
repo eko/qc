@@ -80,6 +80,21 @@ func (c Curve) VMAFAt(
 	return interpolate(c.logR, c.vmaf, math.Log(bitrate), false)
 }
 
+// extendedVMAF is VMAFAt, extended past the probes along the edge
+// segments.
+func (c Curve) extendedVMAF(
+	bitrate float64,
+) float64 {
+	if v, ok := c.VMAFAt(bitrate); ok || len(c.vmaf) < 2 || c.vmaf[0] == c.vmaf[len(c.vmaf)-1] {
+		return v
+	}
+
+	a, b := c.edgeSegment(math.Log(bitrate) < c.logR[0])
+	x := math.Log(bitrate)
+
+	return c.vmaf[a] + (x-c.logR[a])*(c.vmaf[b]-c.vmaf[a])/(c.logR[b]-c.logR[a])
+}
+
 // QualityRange returns the VMAF spanned by the probes.
 func (c Curve) QualityRange() (lo, hi float64) {
 	if len(c.vmaf) == 0 {

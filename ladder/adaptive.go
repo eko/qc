@@ -69,6 +69,9 @@ type ProbingReport struct {
 	// Converged reports whether every rung and crossover was known within
 	// the tolerance before the budget ran out (adaptive mode).
 	Converged bool `json:"converged,omitempty"`
+	// Challengers counts the probes of resolutions the rungs could not be
+	// compared with (see Result.Probes, and docs/ladder.md).
+	Challengers int `json:"challengers,omitempty"`
 	// ProbePreset is the preset of the probes when it differs from the
 	// rungs' (Options.ProbePreset); Anchors then moved the probes onto the
 	// rungs' preset, and Probes carry the moved values.

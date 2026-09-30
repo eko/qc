@@ -2,8 +2,11 @@
 /bin/
 /qc
 /ladderval
+/ladderreplay
 /vmafsim
 /gpuval
+/motionval
+/audioval
 
 # GPU validation kit output (make gpu-validate)
 /gpu-validation/

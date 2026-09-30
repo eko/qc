@@ -186,7 +186,9 @@ func validate(
 		return checkRungs(stdout, fast, measure)
 	}
 
-	hull, err := exhaustiveEnvelope(stderr, fast, gridCRFs(codec, opts.crfStep), measure)
+	grid := gridSpec{CRFs: gridCRFs(codec, opts.crfStep), Step: opts.crfStep, MinCRF: codec.MinCRF, MaxCRF: codec.MaxCRF}
+
+	hull, err := exhaustiveEnvelope(stderr, fast, grid, measure)
 	if err != nil {
 		return err
 	}
@@ -284,19 +286,36 @@ func gridCRFs(
 	return crfs
 }
 
+// gridSpec is the CRF grid of the exhaustive envelope: CRFs at every
+// resolution, extended by Step within MinCRF..MaxCRF until each resolution
+// spans the rungs' bitrates.
+type gridSpec struct {
+	CRFs                 []float64
+	Step, MinCRF, MaxCRF float64
+}
+
+// spanMargin is how far past the lowest and highest rung bitrates each
+// resolution's grid reaches.
+const spanMargin = 1.1
+
 // exhaustiveEnvelope encodes the full title at every probed resolution and
-// every CRF, and returns the upper envelope of the rate-quality curves.
-// Progress is logged on log.
+// every CRF of the grid, extended until every resolution spans the rungs'
+// bitrates: a resolution missing from the grid at a rung's bitrate cannot
+// show that it would have been cheaper there (a 1080p rung below the 1080p
+// grid would go unchallenged). It returns the upper envelope of the
+// rate-quality curves. Progress is logged on log.
 func exhaustiveEnvelope(
 	log io.Writer,
 	fast *ladder.Result,
-	crfs []float64,
+	grid gridSpec,
 	measure measureFunc,
 ) ([]ladder.HullPoint, error) {
 	var (
 		heights []int
 		curves  []ladder.Curve
 	)
+
+	low, high := rungSpan(fast.Rungs)
 
 	for _, fp := range fast.Probes {
 		if slices.Contains(heights, fp.Height) {
@@ -305,16 +324,9 @@ func exhaustiveEnvelope(
 
 		heights = append(heights, fp.Height)
 
-		var probes []ladder.Probe
-
-		for _, crf := range crfs {
-			p, err := measure(encode.Params{Width: fp.Width, Height: fp.Height, CRF: crf})
-			if err != nil {
-				return nil, err
-			}
-
-			fmt.Fprintf(log, "grid %dp crf %.0f: %d b/s VMAF %.2f\n", p.Height, crf, p.Bitrate, p.VMAF)
-			probes = append(probes, p)
+		probes, err := gridCurve(log, fp, grid, low, high, measure)
+		if err != nil {
+			return nil, err
 		}
 
 		curves = append(curves, ladder.NewCurve(probes))
@@ -326,6 +338,92 @@ func exhaustiveEnvelope(
 	}
 
 	return hull, nil
+}
+
+// rungSpan is the range of bitrates the grid must span: the rungs', with
+// spanMargin on each side (none without rungs).
+func rungSpan(
+	rungs []ladder.Rung,
+) (float64, float64) {
+	low, high := math.Inf(1), 0.0
+
+	for _, r := range rungs {
+		low, high = min(low, float64(r.Bitrate)), max(high, float64(r.Bitrate))
+	}
+
+	return low / spanMargin, high * spanMargin
+}
+
+// gridCurve measures the resolution of fp at every CRF of the grid, then
+// at higher CRFs while its lowest bitrate stays above low and lower CRFs
+// while its highest stays below high.
+func gridCurve(
+	log io.Writer,
+	fp ladder.Probe,
+	grid gridSpec,
+	low, high float64,
+	measure measureFunc,
+) ([]ladder.Probe, error) {
+	var probes []ladder.Probe
+
+	at := func(crf float64) (ladder.Probe, error) {
+		p, err := measure(encode.Params{Width: fp.Width, Height: fp.Height, CRF: crf})
+		if err != nil {
+			return ladder.Probe{}, err
+		}
+
+		fmt.Fprintf(log, "grid %dp crf %.0f: %d b/s VMAF %.2f\n", p.Height, crf, p.Bitrate, p.VMAF)
+		probes = append(probes, p)
+
+		return p, nil
+	}
+
+	for _, crf := range grid.CRFs {
+		if _, err := at(crf); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(grid.CRFs) == 0 || grid.Step <= 0 {
+		return probes, nil
+	}
+
+	for crf := grid.CRFs[len(grid.CRFs)-1] + grid.Step; crf <= grid.MaxCRF && lowest(probes) > low; crf += grid.Step {
+		if _, err := at(crf); err != nil {
+			return nil, err
+		}
+	}
+
+	for crf := grid.CRFs[0] - grid.Step; crf >= grid.MinCRF && highest(probes) < high; crf -= grid.Step {
+		if _, err := at(crf); err != nil {
+			return nil, err
+		}
+	}
+
+	return probes, nil
+}
+
+// lowest and highest are the extreme bitrates of probes.
+func lowest(
+	probes []ladder.Probe,
+) float64 {
+	out := math.Inf(1)
+	for _, p := range probes {
+		out = min(out, float64(p.Bitrate))
+	}
+
+	return out
+}
+
+func highest(
+	probes []ladder.Probe,
+) float64 {
+	out := 0.0
+	for _, p := range probes {
+		out = max(out, float64(p.Bitrate))
+	}
+
+	return out
 }
 
 // checkOptimum encodes the full title with each rung's settings and reports

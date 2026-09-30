@@ -456,16 +456,26 @@ func predictedLabel(
 func probingNote(
 	p ladder.ProbingReport,
 ) string {
-	if p.Mode != ladder.ProbingAdaptive {
+	var parts []string
+
+	if p.Mode == ladder.ProbingAdaptive {
+		state := "budget reached"
+		if p.Converged {
+			state = "converged"
+		}
+
+		parts = append(parts, fmt.Sprintf("adaptive, %d rounds, %s", p.Rounds, state))
+	}
+
+	if p.Challengers > 0 {
+		parts = append(parts, fmt.Sprintf("%d challenger probes", p.Challengers))
+	}
+
+	if len(parts) == 0 {
 		return ""
 	}
 
-	state := "budget reached"
-	if p.Converged {
-		state = "converged"
-	}
-
-	return fmt.Sprintf(" (adaptive, %d rounds, %s)", p.Rounds, state)
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 func rungCommands(

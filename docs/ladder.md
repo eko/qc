@@ -81,6 +81,23 @@ get one extra probe at the lowest CRF − 7:
   4.35 Mb/s to 720p at 3.35 Mb/s at the same measured quality (−23%). On the
   drama, the projection promised at most a 1% saving and no probe was spent.
 
+**Challenger probes.** A rung can only take a resolution probed at its
+bitrate: when the next higher resolution's probes stop above a rung's
+bitrate while it still beats the rung's resolution at its lowest probe, the
+crossover between the two lies below that probe, unknown, and the rung
+falls to the lower resolution by default. Content that compresses well hits
+it: on a reality-TV title, the AV1 1080p probes (CRF 28, 40, 52) stopped at
+1 Mb/s, and the rungs below took 720p, 540p, 360p and 270p where 1080p and
+720p were 30–78% cheaper. Such a rung gets challengers: every higher
+resolution in that case, probed at the rung's bitrate (its CRF extrapolated
+along its curve; the next CRF when that one was already probed), unless
+even the optimistic extension of its curve (its lowest segment, straight
+on, where real curves fall faster) does not beat the rung's resolution
+there. The rungs are planned again, for up to five rounds. Replays on exact
+grids brought that title's AV1 ladder from +37.6% to 0.0% over the optimum,
+and its real ladder from +35.5% to +0.1%, for 7–12 more encodes
+([validation](validation.md#resolutions-never-compared-ladderreplay)).
+
 Each probe is measured with the [VMAF engine](vmaf.md) at **±1** (a sixth of a
 rung step), in budget mode (at most 25% of the digest frames) with a small
 pilot (16 clips). Within one encode, quality varies little across the digest,

@@ -209,6 +209,18 @@ First public release: a Go library and the `qc` CLI.
 
 ### Fixed
 
+- **Rungs at a lower resolution than the optimum's**: a rung can only take a
+  resolution probed at its bitrate, and fixed probe CRFs could stop a higher
+  resolution well above the lower rungs (an AV1 1080p curve at 1 Mb/s on
+  content that compresses well), which then fell to 720p, 540p or 360p where
+  1080p or 720p was 30–78% cheaper. Challenger probes now probe the higher
+  resolution at such rungs' bitrates before the rungs are placed
+  (`probing.challengers`). `bench/ladderval` extends its grid until every
+  resolution covers the rungs' bitrates (its optimum had the same blind
+  spot: a drama's AV1 ladder read +0.7% and was +7.4%), and
+  `bench/ladderreplay` replays the engine on exact grids to compare probing
+  changes in milliseconds.
+
 - **Ladder quality level**: every probe and rung was scored on the same
   sampled frames, whose error the measurements shared (up to about 1 VMAF);
   at the top of a curve that is 25–30% of bitrate. A top rung encoded once

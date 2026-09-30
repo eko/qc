@@ -92,7 +92,8 @@ build -f Dockerfile.cuda --target test .`, see [docs/gpu.md](docs/gpu.md)).
 - **Algorithms**: the VMAF sampler and the ladder engine are validated against
   ground truth. A change to their behaviour must come with the validation it
   passed: real interval coverage with `bench/vmafsim`, and distance to the
-  exhaustive optimum with `bench/ladderval`, and the audio meters against
+  exhaustive optimum with `bench/ladderval` (and `bench/ladderreplay` on its
+  grids for probing changes), and the audio meters against
   the EBU conformance signals and ffmpeg with `bench/audioval` (see
   [docs/validation.md](docs/validation.md)). Include the numbers in the pull
   request.
