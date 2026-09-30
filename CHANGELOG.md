@@ -217,6 +217,17 @@ First public release: a Go library and the `qc` CLI.
 
 ### Fixed
 
+- **VideoToolbox on virtual machines**: a virtualised GPU (a macOS VM, a
+  GitHub runner) decoded 8-bit H.264 chroma differently from the CPU, so
+  chroma metrics (PSNR Cb/Cr, XPSNR U/V) changed with `--hwaccel auto`
+  while luma and VMAF did not. qc now checks once per process that
+  VideoToolbox decodes two reference clips exactly as the CPU does, and
+  decodes on the CPU with a warning where it does not
+  (`decode.VideoToolboxExact`).
+- **libvmaf without the VMAF v1 extractors**: Homebrew's libvmaf 3.2.0
+  lacks `speed_chroma`, and loading the default model failed with "invalid
+  argument"; the error now says which libvmaf is needed
+  (`vmaf.ErrModelFeatures`).
 - **Comparisons refused for a timestamp gap**: two videos were compared only
   if their average frame rates matched, and the average is the frame count
   over the duration, which a gap in the timestamps lengthens. An AV1 encode

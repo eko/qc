@@ -287,8 +287,9 @@ func (s *Scorer) useBackend(
 	return fmt.Errorf("libvmaf: %w %q: resolve it with vmaf.ResolveBackend", vmaf.ErrBackend, backend)
 }
 
-// modelError explains a model libvmaf refused: on CUDA, the usual cause is
-// a feature without CUDA extractor.
+// modelError explains a model libvmaf refused: a feature without CUDA
+// extractor on CUDA, a feature extractor the library was built without on
+// the CPU.
 func (s *Scorer) modelError(
 	backend vmaf.Backend,
 	err error,
@@ -297,7 +298,7 @@ func (s *Scorer) modelError(
 		return fmt.Errorf("libvmaf: use model features: %w (%w)", vmaf.ErrCUDAModel, err)
 	}
 
-	return fmt.Errorf("libvmaf: use model features: %w", err)
+	return fmt.Errorf("libvmaf: use model features: %w (%w)", vmaf.ErrModelFeatures, err)
 }
 
 // use registers an extractor and the outputs to read back.

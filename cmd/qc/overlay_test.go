@@ -74,7 +74,9 @@ func TestOverlayCommandErrors(
 ) {
 	source, _ := clips(t)
 	noLibass := testutil.FakeFFmpeg(t, `case "$*" in *-filters*) printf ' T.. scale  V->V  Scale.\n' ;; *) exec "$REAL_FFMPEG" "$@" ;; esac`)
-	noNVENC := testutil.FakeFFmpeg(t, `case "$*" in *h264_nvenc*) exit 1 ;; *) exec "$REAL_FFMPEG" "$@" ;; esac`)
+	// It lists the subtitles filter itself: the check of the encoder must
+	// not depend on the real ffmpeg having libass (Homebrew's has none).
+	noNVENC := testutil.FakeFFmpeg(t, `case "$*" in *-filters*) printf ' ... subtitles  V->V  Render text subtitles.\n' ;; *h264_nvenc*) exit 1 ;; *) exec "$REAL_FFMPEG" "$@" ;; esac`)
 	output := filepath.Join(t.TempDir(), "o.mp4")
 
 	testCases := []struct {

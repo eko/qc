@@ -95,6 +95,12 @@ type FFmpeg struct {
 	sessions chan struct{}
 	once     sync.Once
 
+	// vtCheck replaces the check that VideoToolbox decodes as the CPU
+	// (vtExact) in tests, with its outcome in vt; the real check is cached
+	// per binary.
+	vtCheck func(ctx context.Context) (bool, error)
+	vt      vtResult
+
 	// mu guards degraded: the mode each file fell back to after a
 	// hardware decoding failure.
 	mu       sync.Mutex
@@ -127,7 +133,7 @@ func (d *FFmpeg) Decode(
 	req Request,
 	fn func(*frame.Frame) error,
 ) error {
-	mode, release := d.acquire(req)
+	mode, release := d.acquire(ctx, req)
 	defer release()
 
 	for {

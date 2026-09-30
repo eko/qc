@@ -1,6 +1,7 @@
 package decode
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -228,7 +229,7 @@ func (d *FFmpeg) SegmentHWAccel(
 ) HWAccel {
 	req.Segment = true
 
-	return d.modeFor(req)
+	return d.modeFor(context.Background(), req)
 }
 
 // vtSessions is how many decodes may use VideoToolbox at once.
@@ -244,9 +245,10 @@ func (d *FFmpeg) vtSessions() int {
 // VideoToolbox session when the mode uses one: none when every session is
 // busy. The returned function gives the session back.
 func (d *FFmpeg) acquire(
+	ctx context.Context,
 	req Request,
 ) (HWAccel, func()) {
-	mode := d.modeFor(req)
+	mode := d.modeFor(ctx, req)
 	if mode != HWAccelVideoToolbox {
 		return mode, func() {}
 	}
@@ -292,13 +294,15 @@ func (d *FFmpeg) configured(
 }
 
 // modeFor returns the mode to decode req with: none for codecs (and
-// pixel formats) the hardware does not decode as the CPU does, and never
-// above a mode that already failed on the file.
+// pixel formats) the hardware does not decode as the CPU does, none for
+// VideoToolbox on a machine where it does not (vtExact), and never above a
+// mode that already failed on the file.
 func (d *FFmpeg) modeFor(
+	ctx context.Context,
 	req Request,
 ) HWAccel {
 	mode := d.configured(req)
-	if !hardwareDecodes(mode, req) {
+	if !hardwareDecodes(mode, req) || (mode == HWAccelVideoToolbox && !d.vtExact(ctx)) {
 		return HWAccelNone
 	}
 

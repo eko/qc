@@ -45,6 +45,11 @@ var (
 	// ErrCUDAModel is returned when a model needs features libvmaf only
 	// extracts on the CPU.
 	ErrCUDAModel = errors.New("model features have no CUDA extractor")
+	// ErrModelFeatures is returned when libvmaf lacks an extractor of the
+	// model's features: VMAF v1 needs speed_chroma, which libvmaf 3.2.0
+	// only builds with -Denable_float=true (Homebrew's 3.2.0 bottle has
+	// none); 3.2.1 always builds it.
+	ErrModelFeatures = errors.New("libvmaf lacks an extractor of the model's features (VMAF v1 needs libvmaf ≥ 3.2.1, or 3.2.0 built with -Denable_float=true; or pick --model vmaf_v0.6.1)")
 )
 
 // ParseBackend reads a backend name: cpu (or empty), cuda or auto.

@@ -21,6 +21,8 @@ func TestVideoToolboxFramesMatchCPU(
 		t.Skip("VideoToolbox is macOS only")
 	}
 
+	skipInexactVideoToolbox(t)
+
 	hdr := testutil.HDRClip("smpte2084")
 	hdr.Seconds, hdr.GOP = 1, 10
 
@@ -71,7 +73,7 @@ func TestVideoToolboxFramesMatchCPU(
 			hardware := decodePlanes(vt)
 			cpu := decodePlanes(NewFFmpeg("ffmpeg", 0))
 
-			assert.Equal(t, HWAccelVideoToolbox, vt.modeFor(req), "no fallback to the cpu")
+			assert.Equal(t, HWAccelVideoToolbox, vt.modeFor(t.Context(), req), "no fallback to the cpu")
 			require.Len(t, cpu, 8*(len(pool.Planes(pool.Get()))+3))
 			assert.Equal(t, cpu, hardware)
 		})

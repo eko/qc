@@ -184,11 +184,12 @@ func TestModeFor(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			d := &FFmpeg{bin: "ffmpeg", hwaccel: testCase.configured, degraded: testCase.degraded}
+			withVTCheck(true, nil)(d)
 
 			req := testCase.req
 			req.Path = "in.mp4"
 
-			assert.Equal(t, testCase.want, d.modeFor(req))
+			assert.Equal(t, testCase.want, d.modeFor(t.Context(), req))
 		})
 	}
 }
@@ -289,7 +290,7 @@ func TestDecodeFallsBack(
 
 			assert.Equal(t, 3, frames)
 			assert.Equal(t, testCase.wantWarnings, strings.Count(logs.String(), "hardware decoding failed"))
-			assert.Equal(t, testCase.wantFinal, d.modeFor(req))
+			assert.Equal(t, testCase.wantFinal, d.modeFor(t.Context(), req))
 
 			commands, err := os.ReadFile(argsLog)
 			require.NoError(t, err)
@@ -328,7 +329,7 @@ func TestDecodeDoesNotFallBack(
 		d := NewFFmpeg(bin, 0, WithHWAccel(HWAccelCUDA))
 
 		require.ErrorIs(t, d.Decode(ctx, req, release), context.Canceled)
-		assert.Equal(t, HWAccelCUDA, d.modeFor(req))
+		assert.Equal(t, HWAccelCUDA, d.modeFor(t.Context(), req))
 	})
 }
 
@@ -412,7 +413,8 @@ func TestSegmentDecoders(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.want, NewFFmpeg("ffmpeg", 0, testCase.opts...).SegmentDecoders(testCase.req))
+			opts := append([]Option{withVTCheck(true, nil)}, testCase.opts...)
+			assert.Equal(t, testCase.want, NewFFmpeg("ffmpeg", 0, opts...).SegmentDecoders(testCase.req))
 		})
 	}
 }
@@ -434,23 +436,23 @@ func TestVideoToolboxSessions(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// VideoToolbox explicitly: auto only means it on macOS.
-			d := NewFFmpeg("ffmpeg", 0, append([]Option{WithHWAccel(HWAccelVideoToolbox)}, testCase.opts...)...)
+			d := NewFFmpeg("ffmpeg", 0, append([]Option{WithHWAccel(HWAccelVideoToolbox), withVTCheck(true, nil)}, testCase.opts...)...)
 
 			releases := make([]func(), testCase.sessions)
 			for i := range releases {
 				var mode HWAccel
 
-				mode, releases[i] = d.acquire(segment)
+				mode, releases[i] = d.acquire(t.Context(), segment)
 				require.Equal(t, HWAccelVideoToolbox, mode, "session %d", i)
 			}
 
-			beyond, releaseBeyond := d.acquire(segment)
+			beyond, releaseBeyond := d.acquire(t.Context(), segment)
 			assert.Equal(t, HWAccelNone, beyond, "decodes beyond the sessions run on the cpu")
 			releaseBeyond()
 
 			releases[0]()
 
-			again, releaseAgain := d.acquire(segment)
+			again, releaseAgain := d.acquire(t.Context(), segment)
 			assert.Equal(t, HWAccelVideoToolbox, again, "a released session is reused")
 			releaseAgain()
 
@@ -460,7 +462,7 @@ func TestVideoToolboxSessions(
 		})
 	}
 
-	cpu, release := NewFFmpeg("ffmpeg", 0, WithVideoToolboxSessions(1)).acquire(segment)
+	cpu, release := NewFFmpeg("ffmpeg", 0, WithVideoToolboxSessions(1)).acquire(t.Context(), segment)
 	assert.Equal(t, HWAccelNone, cpu, "no session without videotoolbox")
 	release()
 }

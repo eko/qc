@@ -150,6 +150,11 @@ VideoToolbox (`--hwaccel auto`, the default):
   frame and the filter graph is a CPU decode's (for the HDR sample grid,
   after an exact conversion to planar 10-bit). The frames are identical to
   a CPU decode (frame hashes checked on 8-bit H.264 and 10-bit HEVC).
+  qc checks it on the machine too, once per process before VideoToolbox
+  decodes anything (`decode.VideoToolboxExact`, two embedded clips of a few
+  kilobytes, a fraction of a second): a virtualised GPU (a macOS virtual
+  machine, a CI runner) was seen to return other chroma for 8-bit H.264,
+  and there qc warns and decodes on the CPU.
   Other codecs, and a VideoToolbox failure before the first frame, decode on
   the CPU. VMAF measurements decode with VideoToolbox too, in concurrent
   runs ([vmaf.md](vmaf.md#hardware-decoding)); the other decodes (ladders)

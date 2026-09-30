@@ -52,5 +52,6 @@ func TestModelError(
 	require.ErrorIs(t, s.modelError(vmaf.BackendCUDA, cause), vmaf.ErrCUDAModel)
 	require.ErrorIs(t, s.modelError(vmaf.BackendCUDA, cause), cause)
 	require.NotErrorIs(t, s.modelError(vmaf.BackendCPU, cause), vmaf.ErrCUDAModel)
+	require.ErrorIs(t, s.modelError(vmaf.BackendCPU, cause), vmaf.ErrModelFeatures)
 	require.ErrorIs(t, s.modelError(vmaf.BackendCPU, cause), cause)
 }

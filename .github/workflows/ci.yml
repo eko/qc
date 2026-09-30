@@ -22,7 +22,13 @@ jobs:
           go-version-file: go.mod
 
       - name: Install ffmpeg, libvmaf and golangci-lint
-        run: brew install ffmpeg libvmaf pkg-config golangci-lint
+        # The runner images turn Homebrew's auto-update off: without an
+        # update, brew installs the formulae of the image, such as libvmaf
+        # 3.2.0 whose bottle lacks the speed_chroma extractor VMAF v1 needs.
+        run: |
+          brew update
+          brew install ffmpeg libvmaf pkg-config golangci-lint
+          brew list --versions ffmpeg libvmaf golangci-lint
 
       - name: Vet
         run: go vet ./...

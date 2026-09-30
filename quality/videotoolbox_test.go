@@ -23,6 +23,10 @@ func TestMeasureVideoToolbox(
 		t.Skip("VideoToolbox is macOS only")
 	}
 
+	if exact, err := decode.VideoToolboxExact(t.Context(), "ffmpeg"); err != nil || !exact {
+		t.Skipf("VideoToolbox does not decode as the CPU on this machine (exact %v, %v): qc decodes on the CPU", exact, err)
+	}
+
 	ref, dist := clips(t, testutil.Clip{Seconds: 42, GOP: 50, Filter: "noise=alls=12:allf=t"})
 
 	testCases := []struct {

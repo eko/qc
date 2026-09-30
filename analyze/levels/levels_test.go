@@ -131,3 +131,23 @@ func TestStatsMatchHistogram(
 		})
 	}
 }
+
+func TestClampByte(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name string
+		v    int
+		want byte
+	}{
+		{name: "below", v: -4, want: 0},
+		{name: "inside", v: 16, want: 16},
+		{name: "above", v: 1023, want: 255},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, clampByte(testCase.v))
+		})
+	}
+}

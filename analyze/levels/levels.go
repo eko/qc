@@ -132,6 +132,20 @@ func (r *run) Close() error {
 	return nil
 }
 
+// clampByte bounds v to a byte.
+func clampByte(
+	v int,
+) byte {
+	switch {
+	case v <= 0:
+		return 0
+	case v >= math.MaxUint8:
+		return math.MaxUint8
+	default:
+		return byte(v)
+	}
+}
+
 // planeStats returns the statistics of the samples of an 8-bit plane.
 // Their sums are integers: the order they are accumulated in (vector
 // lanes, histograms) does not change them.
@@ -140,10 +154,7 @@ func planeStats(
 	lv media.Levels,
 ) rowStats {
 	st := rowStats{lo: math.MaxUint8}
-	black := byte(min(max(lv.Black, 0), math.MaxUint8)) //nolint:gosec // clamped to a byte
-	white := byte(min(max(lv.White, 0), math.MaxUint8)) //nolint:gosec // clamped to a byte
-
-	st.addPlane(p, black, white)
+	st.addPlane(p, clampByte(lv.Black), clampByte(lv.White))
 
 	return st
 }
