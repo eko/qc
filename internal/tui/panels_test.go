@@ -87,9 +87,14 @@ func TestLadderPanel(
 		plot    bool
 	}{
 		{
+			name:  "source analysis",
+			panel: LadderPanel{Stage: ladder.StageAnalysis},
+			want:  []string{"analysing the title, to place its digest…"},
+		},
+		{
 			name:  "digest",
 			panel: LadderPanel{Stage: ladder.StageDigest},
-			want:  []string{"extracting a digest of evenly spaced segments…"},
+			want:  []string{"extracting a digest of segments spread over the title…"},
 		},
 		{
 			name:  "no probe yet",

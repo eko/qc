@@ -46,6 +46,10 @@ const (
 	// predicted on the digest by Value (VMAF), beyond its confidence
 	// interval plus Limit.
 	RenditionQuality Code = "rendition-quality"
+	// TopDigest: the ladder was estimated on the most complex scenes of the
+	// title (ladder.DigestTop), whose temporal information is Value for
+	// Limit over the title: its bitrates are those scenes', not the title's.
+	TopDigest Code = "top-digest"
 	// RenditionBitrate: rendition Other, of rung Index, costs Value (a
 	// share) more or less over the whole title than predicted on the
 	// digest, beyond Limit: the manifest must declare its measured bitrate.
@@ -95,6 +99,10 @@ func Ladder(
 
 	if f, ok := verificationFinding(r.Rungs, c.Step); ok {
 		out = append(out, f)
+	}
+
+	if d := r.Digest; d.Sampling == ladder.DigestTop && d.Complexity != nil {
+		out = append(out, Finding{Level: Info, Code: TopDigest, Value: d.Complexity.TI, Limit: d.Complexity.TitleTI})
 	}
 
 	for i, rung := range r.Rungs {

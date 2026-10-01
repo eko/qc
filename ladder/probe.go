@@ -48,9 +48,13 @@ type build struct {
 	// level is the offset of the sampled measurements (see Level).
 	level float64
 
-	// shotAnalysis returns the frame analysis of the source per-shot
-	// rungs read (see analyseShots).
-	shotAnalysis func(ctx context.Context) (*analysis.Report, error)
+	// sourceAnalysis returns the frame analysis of the source, which a
+	// balanced digest and per-shot rungs read (see analyseSource); nil
+	// when the build needs none.
+	sourceAnalysis func(ctx context.Context) (*analysis.Report, error)
+	// analysis is that frame analysis, once a balanced digest waited for
+	// it (see StageAnalysis).
+	analysis *analysis.Report
 
 	// reference is what encodes are scored against: the digest, or its
 	// denoised version when film grain is synthesised (grain > 0).

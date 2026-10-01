@@ -80,7 +80,9 @@ and more, a summary of the answers given so far sits beside the form.
    same metrics. When the picked video (or the reference) is HDR, how VMAF
    scores it: on the HDR signal or on an SDR tone mapping (`--hdr-metric`),
    with the detected format (HDR10, HLG…) in the question;
-4. **Ladder**: the codecs, then optionally **customise the ladder**:
+4. **Ladder**: the codecs and the digest the ladder is estimated on
+   (balanced on the title, its most complex scenes, or evenly spaced:
+   `--digest`), then optionally **customise the ladder**:
    - shape: automatic, a number of rungs, or one rung per listed resolution;
    - top and minimum VMAF;
    - bitrate cap (kb/s), encoder preset, 8 or 10-bit, verification on or off,
@@ -226,6 +228,7 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 | `--no-verify` | off | skip the verification encodes |
 | `--commands` | off | print each rung's ffmpeg command |
 | `--parallel` | 2 | probe encodes run concurrently |
+| `--digest` | balanced | segments of the digest the ladder is estimated on: `balanced` (one per part of the title, each moved until the digest has the title's SI and TI), `top` (the most complex scenes, one per shot: the ladder of the demanding scenes, with their bitrates, not the title's) or `uniform` (evenly spaced, no analysis); for `balanced` and `top` a standalone `qc ladder` analyses the source first — see [digest](ladder.md#1-digest) |
 | `--probing` | fixed | probe placement: `fixed` (3 CRFs per resolution) or `adaptive` (2 per resolution, then probes where the rungs and crossovers are least certain) — see [probing](ladder.md#adaptive-probing) |
 | `--per-shot` | off | add a per-shot version of every rung: one CRF per shot at equal rate-quality slope, same pooled VMAF — see [per-shot](ladder.md#8-per-shot-rungs). The reports then show the per-shot ladder (every shot's CRF, bitrate and VMAF per rung) |
 | `--per-shot-resolution` | off | experimental, implies `--per-shot`: each shot also picks its resolution among the rung's and the neighbouring rung resolutions; renditions change resolution mid-stream — see [per-shot resolution](ladder.md#per-shot-resolution-experimental) |

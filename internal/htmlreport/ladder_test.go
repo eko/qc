@@ -30,6 +30,27 @@ func TestPredictedLabel(
 	}
 }
 
+func TestSamplingNote(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name string
+		in   ladder.DigestSampling
+		want string
+	}{
+		{name: "title used whole", want: ""},
+		{name: "balanced", in: ladder.DigestBalanced, want: ", balanced on SI/TI"},
+		{name: "uniform", in: ladder.DigestUniform, want: ", evenly spaced"},
+		{name: "top", in: ladder.DigestTop, want: ", the most complex scenes"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, samplingNote(testCase.in))
+		})
+	}
+}
+
 func TestProbingNote(
 	t *testing.T,
 ) {

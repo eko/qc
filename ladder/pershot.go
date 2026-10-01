@@ -8,7 +8,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder/internal/shotalloc"
 )
@@ -243,44 +242,6 @@ func (b *build) verifyPerShots(
 	return group.Wait()
 }
 
-// analyseShots returns the frame analysis per-shot rungs read: that of
-// Options.Analysis when it has shots, otherwise an analysis of the source
-// started now, which decodes the source while the digest is probed, and
-// which the returned function waits for.
-func (b *build) analyseShots(
-	ctx context.Context,
-) func(ctx context.Context) (*analysis.Report, error) {
-	if a := b.opts.Analysis; a != nil && a.Video != nil && len(a.Video.Shots) > 0 {
-		return func(context.Context) (*analysis.Report, error) { return a, nil }
-	}
-
-	var (
-		report *analysis.Report
-		err    error
-	)
-
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-
-		// The shots only: the audio has no part in the ladder.
-		report, err = b.engine.inspector.Analyze(ctx, b.source, analysis.Options{Audio: analysis.AudioOptions{Skip: true}})
-		if err != nil {
-			err = fmt.Errorf("ladder: per-shot: analyse %s: %w", b.source, err)
-		}
-	}()
-
-	return func(wait context.Context) (*analysis.Report, error) {
-		select {
-		case <-done:
-			return report, err
-		case <-wait.Done():
-			return nil, fmt.Errorf("ladder: per-shot: %w", wait.Err())
-		}
-	}
-}
-
 // planShots analyses the source into shots of whole GOPs, cuts the digest
 // into their pieces, and places the per-shot probes of every rung
 // resolution.
@@ -290,7 +251,7 @@ func (b *build) planShots(
 	curves []Curve,
 	digest Digest,
 ) (*shotPlan, error) {
-	report, err := b.shotAnalysis(ctx)
+	report, err := b.sourceAnalysis(ctx)
 	if err != nil {
 		return nil, err
 	}

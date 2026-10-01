@@ -17,7 +17,7 @@ func newLadderCommand(
 		Use:   "ladder <source>",
 		Short: "Build a per-title streaming ladder for one codec",
 		Long: "Build a per-title adaptive streaming ladder for one codec.\n\n" +
-			"A digest of evenly spaced segments is encoded at several resolutions and CRFs; the\n" +
+			"A digest of segments spread over the title is encoded at several resolutions and CRFs; the\n" +
 			"upper envelope of the rate-quality curves gives the rungs, each verified by a real\n" +
 			"encode of the digest with its final settings.",
 		Example: "  qc ladder mezzanine.mov\n" +

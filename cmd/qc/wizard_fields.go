@@ -165,6 +165,15 @@ func (a *wizardAnswers) codecsFields() []huh.Field {
 			).
 			Validate(requireOne("pick at least one codec")).
 			Value(&a.Codecs),
+		huh.NewSelect[string]().
+			Title("Digest the ladder is estimated on").
+			Description("40 s of the title. Balanced and the most complex scenes read its frame analysis.").
+			Options(
+				huh.NewOption("Balanced · as busy as the title (its SI and TI)", "balanced"),
+				huh.NewOption("Most complex scenes · what the demanding scenes need, not the title", "top"),
+				huh.NewOption("Uniform · evenly spaced segments", "uniform"),
+			).
+			Value(&a.Digest),
 		newConfirm().
 			Title("Customise the ladder?").
 			Description("Rung count or resolutions, quality range, bitrate cap, preset, bit depth.").

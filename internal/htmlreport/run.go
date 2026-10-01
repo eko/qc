@@ -79,16 +79,24 @@ func runSummary(
 		c := card{Label: name, Value: fmt.Sprintf("%d rungs", len(l.Rungs))}
 
 		if len(l.Rungs) > 0 {
+			// The top rung as verified, when it was: what the ladder
+			// delivers, and what ladders are compared on.
 			top := l.Rungs[0]
-			c.Detail = fmt.Sprintf("top %s · VMAF %.1f", bitrateLabel(float64(top.Bitrate)), top.PredictedVMAF)
-			c.Meter = vmafMeter(top.PredictedVMAF)
+			vmaf := top.PredictedVMAF
+
+			if top.Measured != nil {
+				vmaf = top.Measured.VMAF
+			}
+
+			c.Detail = fmt.Sprintf("top %s · VMAF %.1f", bitrateLabel(float64(rungBitrate(top))), vmaf)
+			c.Meter = vmafMeter(vmaf)
 		}
 
 		cards = append(cards, c)
 		list = append(list, scoped(name, ladderFindings(l))...)
 	}
 
-	return cards, list
+	return cards, append(list, scoped("Codecs", codecFindings(r.Ladders))...)
 }
 
 func scoped(

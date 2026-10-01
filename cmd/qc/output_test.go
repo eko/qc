@@ -7,14 +7,17 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/encode"
 	"github.com/eko/qc/internal/testutil"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/media"
 	"github.com/eko/qc/pipeline"
 )
 
@@ -191,6 +194,33 @@ func TestRenderRunError(
 	require.Error(t, err)
 }
 
+func TestRenderRunComparesCodecs(
+	t *testing.T,
+) {
+	compared := func(codec string, top int64) *ladder.Result {
+		return &ladder.Result{
+			Source: &analysis.Report{Info: &media.Info{Path: "source.mov"}},
+			Codec:  encode.Codec{Name: codec},
+			Rungs: []ladder.Rung{
+				{Width: 1920, Height: 1080, Measured: &ladder.Measurement{Bitrate: top, VMAF: 93}},
+				{Width: 1280, Height: 720, Measured: &ladder.Measurement{Bitrate: top / 2, VMAF: 87}},
+			},
+		}
+	}
+
+	var out strings.Builder
+
+	run := &pipeline.Report{Ladders: []*ladder.Result{compared("h264", 8_000_000), compared("av1", 5_600_000)}}
+	require.NoError(t, renderRun(&out, run, defaultWidth, false))
+	assert.Contains(t, out.String(), "av1 needs 30% less bitrate than h264 at VMAF 93.0")
+
+	out.Reset()
+
+	run.Ladders = run.Ladders[:1]
+	require.NoError(t, renderRun(&out, run, defaultWidth, false))
+	assert.NotContains(t, out.String(), "codecs at equal quality")
+}
+
 func TestLadderStageLabel(
 	t *testing.T,
 ) {
@@ -228,6 +258,11 @@ func TestLadderStageLabel(
 			name:  "anchoring",
 			stage: ladder.StageAnchor,
 			want:  "anchoring",
+		},
+		{
+			name:  "source analysis",
+			stage: ladder.StageAnalysis,
+			want:  "source analysis",
 		},
 		{
 			name:  "unknown",

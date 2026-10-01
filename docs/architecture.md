@@ -112,7 +112,7 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `internal/testutil` | Test helpers: tiny synthetic clips generated with ffmpeg's lavfi sources, fake ffmpeg binaries |
 | `internal/audiotest` | Test signals: the conformance signals of EBU Tech 3341/3342 with their expected readings, programme-like audio, defects, float WAV files |
 | `cmd/qc` | The CLI and its composition root |
-| `bench/vmafsim`, `bench/ladderval`, `bench/ladderreplay`, `bench/motionval`, `bench/audioval`, `bench/gpuval` | Validation tools (`motionval`: camera motion against synthetic moves of known speed; `audioval`: the audio against the EBU conformance signals, synthetic defects and ffmpeg; `gpuval`: the GPU validation kit) |
+| `bench/vmafsim`, `bench/digestsim`, `bench/ladderval`, `bench/ladderreplay`, `bench/motionval`, `bench/audioval`, `bench/gpuval` | Validation tools (`motionval`: camera motion against synthetic moves of known speed; `audioval`: the audio against the EBU conformance signals, synthetic defects and ffmpeg; `gpuval`: the GPU validation kit) |
 
 ### Ports
 

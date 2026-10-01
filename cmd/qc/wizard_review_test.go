@@ -77,14 +77,14 @@ func TestReviewSections(
 			answers: wizardAnswers{
 				Source: "source.mp4", Actions: []string{actionLadder}, Codecs: []string{"hevc", av1Codec}, Metrics: []string{},
 				Advanced: true, Shape: shapeResolutions, Resolutions: "1080, 720p", TopVMAF: "93", MinVMAF: "40",
-				MaxBitrate: "8000", Preset: "slow", BitDepth: "10", SkipVerify: true, Probing: "adaptive", FilmGrain: "auto",
+				MaxBitrate: "8000", Preset: "slow", BitDepth: "10", SkipVerify: true, Probing: "adaptive", Digest: "top", FilmGrain: "auto",
 			},
 			want: map[section][]string{
 				sectionSource:   {"Video: source.mp4"},
 				sectionAnalysis: {"Compute: Per-title ladder"},
 				sectionQuality:  {"Metrics: VMAF only"},
 				sectionLadder: {
-					"Codecs: HEVC, AV1", "Shape: 1080p, 720p", "Quality: VMAF 40 to 93",
+					"Codecs: HEVC, AV1", "Digest: most complex scenes", "Shape: 1080p, 720p", "Quality: VMAF 40 to 93",
 					"Encoding: cap 8000 kb/s, preset slow, 10-bit", "Rungs: not verified, adaptive probes", "Film grain: auto",
 				},
 				sectionOutputs: {"Report: terminal", "Renditions: none", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
@@ -95,7 +95,7 @@ func TestReviewSections(
 			answers: wizardAnswers{
 				Source: "source.mp4", Reference: "ref.mov", Actions: []string{actionVMAF, actionLadder}, VMAFMode: vmafExact,
 				Codecs: []string{"h264"}, Advanced: true, Shape: shapeCount, RungCount: "5", TopVMAF: "95", MinVMAF: "30",
-				BitDepth: "8", Probing: "fixed", PerShot: true, HDRMetric: "tonemap",
+				BitDepth: "8", Probing: "fixed", Digest: "balanced", PerShot: true, HDRMetric: "tonemap",
 			},
 			want: map[section][]string{
 				sectionSource:   {"Video: source.mp4"},
@@ -104,7 +104,7 @@ func TestReviewSections(
 					"Reference: ref.mov", "VMAF: exact, every frame", "Metrics: VMAF + XPSNR, CAMBI, PSNR", "HDR: HDR10, scored on an SDR tone mapping",
 				},
 				sectionLadder: {
-					"Codecs: H.264", "Shape: 5 rungs", "Quality: VMAF 30 to 95",
+					"Codecs: H.264", "Digest: balanced on the title", "Shape: 5 rungs", "Quality: VMAF 30 to 95",
 					"Encoding: no bitrate cap, default preset, 8-bit", "Rungs: verified, fixed probes, per-shot",
 				},
 				sectionOutputs: {"Report: terminal", "Annotated: none", "Renditions: none", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
@@ -238,13 +238,13 @@ func TestRunAccessible(
 	}{
 		{
 			name:      "defaults, run",
-			lines:     []string{"source.mp4", "0", "0", "0", "0", "", "", "", "", "1"},
+			lines:     []string{"source.mp4", "0", "0", "0", "0", "", "", "", "", "", "1"},
 			wantShown: []string{"Review", "Command: qc run source.mp4 --codecs=h264", "Run this command?"},
 		},
 		{
 			name: "edit the outputs, then cancel",
 			lines: []string{
-				"source.mp4", "0", "0", "0", "0", "", "", "", "",
+				"source.mp4", "0", "0", "0", "0", "", "", "", "", "",
 				"2", "5", "report.html", "", "",
 				"3",
 			},

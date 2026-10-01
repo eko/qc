@@ -347,6 +347,8 @@ func TestLoadConfigFromEnvironment(
 		BitDepth:    8,
 		Probing:     ladder.ProbingAdaptive,
 		HDRMetric:   quality.HDRMetricPQ,
+
+		DigestSampling: ladder.DigestBalanced,
 	}, opts.Ladder, "the rungs get the metrics and devices of the comparison")
 	assert.Equal(t, quality.Options{
 		Model:     "auto",
@@ -399,6 +401,11 @@ func TestConfigValidate(
 			name:    "probing",
 			config:  Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{Probing: "random"}},
 			wantErr: ladder.ErrInvalidProbing.Error(),
+		},
+		{
+			name:    "digest sampling",
+			config:  Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{Digest: "random"}},
+			wantErr: ladder.ErrInvalidDigestSampling.Error(),
 		},
 		{
 			name:   "sample",

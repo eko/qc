@@ -3,6 +3,7 @@ package tui
 import (
 	"cmp"
 	"fmt"
+	"io"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -298,6 +299,9 @@ func ladderLine(
 		return findingLine(f.Level, "top rung %.0f%% lighter than Apple's static 1080p rung (%.1f Mb/s)", f.Value*100, f.Limit/bitsPerMegabit)
 	case findings.Verification:
 		return findingLine(f.Level, "verification: measured VMAF within %.1f of the prediction on every rung (VBV-capped encodes of the digest)", f.Value)
+	case findings.TopDigest:
+		return findingLine(f.Level, "estimated on the most complex scenes of the title (TI %.1f for %.1f over the title): the bitrates are what those scenes need, not the title's average",
+			f.Value, f.Limit)
 	case findings.Extrapolated:
 		return findingLine(f.Level, "%dp rung targets a quality outside the probed range of that resolution: its prediction is extrapolated, trust the measured value",
 			r.Height)
@@ -318,6 +322,49 @@ func ladderLine(
 	}
 
 	return ""
+}
+
+// RenderCodecs prints how the ladders of a run compare at equal quality:
+// every newer codec against the oldest one. It prints nothing when there is
+// nothing to compare (a single codec).
+func RenderCodecs(
+	w io.Writer,
+	ladders []*ladder.Result,
+) error {
+	list := findings.Codecs(ladders)
+	if len(list) == 0 {
+		return nil
+	}
+
+	lines := []string{reportTitle("codecs at equal quality"), ""}
+
+	for _, f := range list {
+		l, ref := ladders[f.Index], ladders[f.Other]
+
+		gap, _ := ladder.CompareRates(ref, l)
+		text := fmt.Sprintf("%s needs %s bitrate than %s at VMAF %.1f, the highest quality both ladders reach (%s on average from VMAF %.0f)",
+			l.Codec.Name, rateShare(gap.Top), ref.Codec.Name, gap.VMAF, rateShare(gap.Mean), gap.Low)
+
+		if f.Code == findings.CodecCostlier {
+			text += fmt.Sprintf("; %s at VMAF %.0f at worst. A newer codec is expected to need less: check the encoder preset, what the digest holds, and the other metrics of the rungs (VMAF v1 counts chroma, which encoders weigh differently)",
+				rateShare(gap.Worst), gap.WorstVMAF)
+		}
+
+		lines = append(lines, findingLine(f.Level, "%s", text))
+	}
+
+	return writeBlocks(w, []string{strings.Join(lines, "\n")})
+}
+
+// rateShare words a bitrate gap: "12% less", "7% more".
+func rateShare(
+	gap float64,
+) string {
+	if gap < 0 {
+		return fmt.Sprintf("%.0f%% less", -gap*100)
+	}
+
+	return fmt.Sprintf("%.0f%% more", gap*100)
 }
 
 // xpsnr is the luma XPSNR of a verified rung, which rank conflicts compare.

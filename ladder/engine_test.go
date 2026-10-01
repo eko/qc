@@ -538,6 +538,7 @@ func TestOptionsWithDefaults(
 				SegmentDuration: media.Seconds(2), DigestDuration: media.Seconds(40), GOPDuration: media.Seconds(2),
 				Precision: 1, Parallel: 2, ProbeClips: 16,
 				Probing: ProbingFixed, Tolerance: 0.5, BitrateTolerance: 0.03,
+				DigestSampling: DigestBalanced,
 			},
 		},
 		{
@@ -547,12 +548,14 @@ func TestOptionsWithDefaults(
 				DigestDuration: media.Seconds(60), GOPDuration: media.Seconds(4),
 				Precision: 0.5, Parallel: 4, ProbeClips: 32,
 				Probing: ProbingAdaptive, Tolerance: 1, BitrateTolerance: 0.05, MaxProbes: 9,
+				DigestSampling: DigestUniform,
 			},
 			want: Options{
 				Preset: "slow", ProbePreset: "slow", Constraints: Constraints{}.WithDefaults(), Heights: []int{720},
 				SegmentDuration: media.Seconds(4), DigestDuration: media.Seconds(60), GOPDuration: media.Seconds(4),
 				Precision: 0.5, Parallel: 4, ProbeClips: 32,
 				Probing: ProbingAdaptive, Tolerance: 1, BitrateTolerance: 0.05, MaxProbes: 9,
+				DigestSampling: DigestUniform,
 			},
 		},
 	}

@@ -327,7 +327,7 @@ func TestRunSummary(
 		{"Duration", "0:04.00"}, {"Video", "1920×1080"}, {"Codec", "h264"}, {"Bitrate", "5.00 Mb/s"}, {"Shots", "1"},
 		{"VMAF", "91.20"}, {"h264 ladder", "2 rungs"}, {"av1 ladder", "0 rungs"},
 	}, cardValues(cards))
-	assert.Equal(t, "top 5.00 Mb/s · VMAF 95.0", cards[6].Detail)
+	assert.Equal(t, "top 4.90 Mb/s · VMAF 94.6", cards[6].Detail, "the top rung as verified, not as planned")
 
 	scopes := map[string]int{}
 	for _, f := range list {
@@ -336,6 +336,92 @@ func TestRunSummary(
 
 	assert.Equal(t, map[string]int{"Source": 2, "VMAF": 3, "h264 ladder": 3, "av1 ladder": 1}, scopes)
 	assert.Equal(t, findings.Warn, list[0].Level, "warnings first")
+}
+
+// comparedLadder is a verified ladder of codec with the given (bitrate in
+// kb/s, VMAF) rungs, top first.
+func comparedLadder(
+	t *testing.T,
+	codec string,
+	pairs ...float64,
+) *ladder.Result {
+	t.Helper()
+
+	l := sampleLadder(t, codec)
+	l.Rungs = nil
+
+	for i := 0; i < len(pairs); i += 2 {
+		l.Rungs = append(l.Rungs, ladder.Rung{
+			Height: 1080, Bitrate: int64(pairs[i] * 1000), PredictedVMAF: pairs[i+1],
+			Measured: &ladder.Measurement{Bitrate: int64(pairs[i] * 1000), VMAF: pairs[i+1]},
+		})
+	}
+
+	return l
+}
+
+func TestCodecFindings(
+	t *testing.T,
+) {
+	h264 := comparedLadder(t, "h264", 8000, 93, 4000, 87, 2000, 81)
+
+	testCases := []struct {
+		name      string
+		ladders   []*ladder.Result
+		wantLevel findings.Level
+		want      string
+	}{
+		{
+			name:      "a newer codec saving bitrate",
+			ladders:   []*ladder.Result{h264, comparedLadder(t, "av1", 5600, 93, 2800, 87, 1400, 81)},
+			wantLevel: findings.Info,
+			want:      "av1 needs 30% less bitrate than h264 at VMAF 93.0, the highest quality both ladders reach (30% less on average from VMAF 81)",
+		},
+		{
+			name:      "a newer codec costlier at the top",
+			ladders:   []*ladder.Result{h264, comparedLadder(t, "av1", 8560, 93, 3600, 87, 1800, 81)},
+			wantLevel: findings.Warn,
+			want: "av1 needs 7% more bitrate than h264 at VMAF 93.0, the highest quality both ladders reach (6% less on average from VMAF 81); " +
+				"7% more at VMAF 93 at worst. A newer codec is expected to need less: check the encoder preset, what the digest holds, " +
+				"and the other metrics of the rungs (VMAF v1 counts chroma, which encoders weigh differently)",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			list := codecFindings(testCase.ladders)
+			require.Len(t, list, 1)
+			assert.Equal(t, testCase.wantLevel, list[0].Level)
+			assert.Equal(t, testCase.want, list[0].Text)
+		})
+	}
+
+	assert.Empty(t, codecFindings([]*ladder.Result{h264}))
+
+	_, list := summary(&pipeline.Report{Analysis: sampleDecodedReport(), Ladders: testCases[1].ladders})
+	scopes := map[string]int{}
+
+	for _, f := range list {
+		scopes[f.Scope]++
+	}
+
+	assert.Equal(t, 1, scopes["Codecs"], "the comparison is part of a run's findings")
+}
+
+func TestLadderFindingTopDigest(
+	t *testing.T,
+) {
+	l := sampleLadder(t, "h264")
+	l.Digest.Sampling = ladder.DigestTop
+	l.Digest.Complexity = &ladder.DigestComplexity{TitleTI: 13.2, TI: 36.7}
+
+	var texts []string
+	for _, f := range ladderFindings(l) {
+		texts = append(texts, f.Text)
+	}
+
+	assert.Contains(t, texts, "Estimated on the most complex scenes of the title (TI 36.7 for 13.2 over the title): "+
+		"the bitrates are what those scenes need, not the title's average, and codecs compare as they do on those scenes")
 }
 
 func TestSpan(

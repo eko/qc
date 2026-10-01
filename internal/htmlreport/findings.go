@@ -324,6 +324,9 @@ func ladderFinding(
 		return worded(f, nil, "Top rung %.0f%% lighter than Apple's static 1080p rung (%.1f Mb/s)", f.Value*100, f.Limit/bitsPerMegabit), true
 	case findings.Verification:
 		return worded(f, nil, "Verification: measured VMAF within %.1f of the prediction on every rung", f.Value), true
+	case findings.TopDigest:
+		return worded(f, nil, "Estimated on the most complex scenes of the title (TI %.1f for %.1f over the title): the bitrates are what those scenes need, not the title's average, and codecs compare as they do on those scenes",
+			f.Value, f.Limit), true
 	case findings.Extrapolated:
 		return worded(f, nil, "%dp rung targets a quality outside the probed range of that resolution: trust the measured value", r.Height), true
 	case findings.GrainMismatch:
@@ -342,6 +345,41 @@ func ladderFinding(
 	}
 
 	return hdrFinding(f)
+}
+
+// codecFindings words how the ladders of a run compare at equal quality.
+func codecFindings(
+	ladders []*ladder.Result,
+) []finding {
+	var out []finding
+
+	for _, f := range findings.Codecs(ladders) {
+		l, ref := ladders[f.Index], ladders[f.Other]
+
+		gap, _ := ladder.CompareRates(ref, l)
+		text := fmt.Sprintf("%s needs %s bitrate than %s at VMAF %.1f, the highest quality both ladders reach (%s on average from VMAF %.0f)",
+			l.Codec.Name, rateShare(gap.Top), ref.Codec.Name, gap.VMAF, rateShare(gap.Mean), gap.Low)
+
+		if f.Code == findings.CodecCostlier {
+			text += fmt.Sprintf("; %s at VMAF %.0f at worst. A newer codec is expected to need less: check the encoder preset, what the digest holds, and the other metrics of the rungs (VMAF v1 counts chroma, which encoders weigh differently)",
+				rateShare(gap.Worst), gap.WorstVMAF)
+		}
+
+		out = append(out, worded(f, nil, "%s", text))
+	}
+
+	return out
+}
+
+// rateShare words a bitrate gap: "12% less", "7% more".
+func rateShare(
+	gap float64,
+) string {
+	if gap < 0 {
+		return fmt.Sprintf("%.0f%% less", -gap*100)
+	}
+
+	return fmt.Sprintf("%.0f%% more", gap*100)
 }
 
 // bitsPerMegabit converts bitrates to Mb/s.

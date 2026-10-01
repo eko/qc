@@ -71,8 +71,8 @@ func ladderHeader(
 		sourceLines("source", res.Source, false) + "\n" +
 		key.Render("target") + Bold.Render(res.Codec.Name) + Subtle.Render(fmt.Sprintf(" (%s, preset %s)", res.Codec.Encoder, res.Preset)) + "\n" +
 		key.Render("shape") + Subtle.Render(shapeLabel(res)) + "\n" +
-		key.Render("digest") + Subtle.Render(fmt.Sprintf("%d segment(s) · %s · %.1f%% of the title · %d probe encodes%s",
-		len(res.Digest.Segments), Clock(res.Digest.Duration, false), res.Digest.Share*100, len(res.Probes), probingLabel(res.Probing))) +
+		key.Render("digest") + Subtle.Render(fmt.Sprintf("%d segment(s)%s · %s · %.1f%% of the title · %d probe encodes%s",
+		len(res.Digest.Segments), samplingLabel(res.Digest.Sampling), Clock(res.Digest.Duration, false), res.Digest.Share*100, len(res.Probes), probingLabel(res.Probing))) +
 		grainLine(res.Grain)
 }
 
@@ -238,6 +238,23 @@ func probingLabel(
 	}
 
 	return " (" + strings.Join(parts, "; ") + ")"
+}
+
+// samplingLabel describes how the segments of the digest were placed; a
+// title used whole has no sampling.
+func samplingLabel(
+	s ladder.DigestSampling,
+) string {
+	switch s {
+	case ladder.DigestBalanced:
+		return ", balanced on SI/TI"
+	case ladder.DigestTop:
+		return ", the most complex scenes"
+	case ladder.DigestUniform:
+		return ", evenly spaced"
+	}
+
+	return ""
 }
 
 // shapeLabel describes how the rungs were chosen.
@@ -418,7 +435,7 @@ func ladderFooter(
 	res *ladder.Result,
 	jsonPath string,
 ) string {
-	timings := stageTimings(res.Timings, "digest", "grain", "probe", "verify", "shots")
+	timings := stageTimings(res.Timings, "analysis", "digest", "grain", "probe", "verify", "shots")
 	if timings != "" {
 		timings += " · "
 	}

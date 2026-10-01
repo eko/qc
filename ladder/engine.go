@@ -53,6 +53,7 @@ const (
 	defaultParallel       = 2
 	defaultProbeClips     = 16
 	defaultProbing        = ProbingFixed
+	defaultDigestSampling = DigestBalanced
 )
 
 // envelopePoints is the number of log-spaced bitrates the envelope samples.
@@ -96,6 +97,11 @@ type Options struct {
 	SegmentDuration media.Duration
 	// DigestDuration caps the digest length. Default 40s.
 	DigestDuration media.Duration
+	// DigestSampling places the segments of the digest: balanced on the
+	// content of the title (the default, see DigestBalanced) or on its
+	// most complex scenes (DigestTop), which both read Analysis or analyse
+	// the source first, or uniform.
+	DigestSampling DigestSampling
 	// GOPDuration is the keyframe interval of the encodes. Default 2s.
 	GOPDuration media.Duration
 	// Precision is the target VMAF confidence half-width of each probe.
@@ -148,9 +154,11 @@ type Options struct {
 	// mapping.
 	HDRMetric quality.HDRMetric
 	// Analysis is the frame analysis of the source, when already done (a
-	// pipeline analyses the source before its ladders): per-shot rungs read
-	// its shots instead of decoding the source again. Without it, or
-	// without shots in it, the source is analysed alongside the probes.
+	// pipeline analyses the source before its ladders): a balanced digest
+	// reads its SI and TI, and per-shot rungs its shots, instead of
+	// decoding the source again. Without it, or without shots in it, the
+	// source is analysed before a balanced digest, or alongside the probes
+	// when only per-shot rungs need it.
 	Analysis *analysis.Report
 	// ContentLight is the content light level of an HDR10 source that
 	// signals none, typically measured by its analysis (MaxCLL, MaxFALL):
@@ -245,11 +253,11 @@ func (e *Engine) Build(
 	defer cleanup()
 
 	// Cancelled when the build ends, which stops a source analysis still
-	// running for per-shot rungs (see analyseShots).
+	// running for per-shot rungs (see analyseSource).
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	run := e.newBuild(ctx, codec, opts, source, dir, video, res)
+	run := e.newBuild(ctx, codec, opts, source, dir, video, duration, res)
 	res.GOP, res.BitDepth = run.gop(), opts.BitDepth
 
 	if res.Timings, err = run.stages(ctx, res, duration); err != nil {
@@ -269,6 +277,7 @@ func (e *Engine) newBuild(
 	opts Options,
 	source, dir string,
 	video media.VideoStream,
+	duration media.Duration,
 	res *Result,
 ) *build {
 	run := &build{
@@ -276,8 +285,8 @@ func (e *Engine) newBuild(
 		video: video, origin: videoOrigin(res.Source, video),
 	}
 
-	if opts.PerShot {
-		run.shotAnalysis = run.analyseShots(ctx)
+	if balanced := run.balances(duration); balanced || opts.PerShot {
+		run.sourceAnalysis = run.analyseSource(ctx, balanced)
 	}
 
 	if res.HDR != nil {
@@ -304,6 +313,10 @@ func (e *Engine) validate(
 	}
 
 	if _, err := ParseProbing(string(opts.Probing)); err != nil {
+		return encode.Codec{}, opts, fmt.Errorf("ladder: %w", err)
+	}
+
+	if _, err := ParseDigestSampling(string(opts.DigestSampling)); err != nil {
 		return encode.Codec{}, opts, fmt.Errorf("ladder: %w", err)
 	}
 
@@ -354,8 +367,8 @@ type stage struct {
 }
 
 // stages runs the stages of the build in order and returns their timings:
-// digest, grain (film grain synthesis), probes, rung selection,
-// verification and per-shot rungs.
+// source analysis (balanced digest), digest, grain (film grain synthesis),
+// probes, rung selection, verification and per-shot rungs.
 func (b *build) stages(
 	ctx context.Context,
 	res *Result,
@@ -395,6 +408,11 @@ func (b *build) stageList(
 	var curves []Curve
 
 	return []stage{
+		{name: StageAnalysis, announce: true, skip: !b.balances(duration) || analysed(b.opts.Analysis), run: func(ctx context.Context, _ *Result) (err error) {
+			b.analysis, err = b.sourceAnalysis(ctx)
+
+			return err
+		}},
 		{name: StageDigest, announce: true, run: func(ctx context.Context, res *Result) (err error) {
 			res.Digest, err = b.makeDigest(ctx, duration)
 
@@ -485,13 +503,7 @@ func (o Options) withDefaults(
 		o.Heights = DefaultHeights()
 	}
 
-	if o.SegmentDuration <= 0 {
-		o.SegmentDuration = media.Seconds(defaultSegmentSeconds)
-	}
-
-	if o.DigestDuration <= 0 {
-		o.DigestDuration = media.Seconds(defaultDigestSeconds)
-	}
+	o = o.withDigestDefaults()
 
 	if o.GOPDuration <= 0 {
 		o.GOPDuration = media.Seconds(defaultGOPSeconds)
@@ -519,6 +531,23 @@ func (o Options) withDefaults(
 
 	if o.BitrateTolerance <= 0 {
 		o.BitrateTolerance = defaultBitrateTolerance
+	}
+
+	return o
+}
+
+// withDigestDefaults fills the options placing the digest.
+func (o Options) withDigestDefaults() Options {
+	if o.SegmentDuration <= 0 {
+		o.SegmentDuration = media.Seconds(defaultSegmentSeconds)
+	}
+
+	if o.DigestDuration <= 0 {
+		o.DigestDuration = media.Seconds(defaultDigestSeconds)
+	}
+
+	if o.DigestSampling == "" {
+		o.DigestSampling = defaultDigestSampling
 	}
 
 	return o

@@ -377,6 +377,16 @@ func TestLadderShape(
 			want:   []string{"shape       automatic: from VMAF 95 down by 6 points"},
 		},
 		{
+			name: "balanced digest of a source analysed first",
+			mutate: func(res *ladder.Result) {
+				res.Digest.Sampling, res.Timings[ladder.StageAnalysis] = ladder.DigestBalanced, "13s"
+			},
+			want: []string{
+				"digest      2 segment(s), balanced on SI/TI · 0:04.000 · 6.7% of the title",
+				"analysis 13s · digest 1.2s · probe 40s",
+			},
+		},
+		{
 			name: "rung count",
 			mutate: func(res *ladder.Result) {
 				res.Shape, res.Constraints.Rungs = ladder.ShapeCount, 5
@@ -406,6 +416,101 @@ func TestLadderShape(
 			for _, want := range testCase.want {
 				assert.Contains(t, out, want)
 			}
+		})
+	}
+}
+
+func TestRenderCodecs(
+	t *testing.T,
+) {
+	compared := func(codec string, pairs ...float64) *ladder.Result {
+		l := sampleLadder(t)
+		l.Codec.Name, l.Rungs = codec, nil
+
+		for i := 0; i < len(pairs); i += 2 {
+			l.Rungs = append(l.Rungs, ladder.Rung{
+				Measured: &ladder.Measurement{Bitrate: int64(pairs[i] * 1000), VMAF: pairs[i+1]},
+			})
+		}
+
+		return l
+	}
+
+	h264 := compared("h264", 8000, 93, 4000, 87, 2000, 81)
+
+	testCases := []struct {
+		name    string
+		ladders []*ladder.Result
+		want    []string
+	}{
+		{name: "a single codec prints nothing", ladders: []*ladder.Result{h264}},
+		{
+			name:    "a newer codec saving bitrate",
+			ladders: []*ladder.Result{h264, compared("av1", 5600, 93, 2800, 87, 1400, 81)},
+			want: []string{
+				"codecs at equal quality",
+				"ℹ av1 needs 30% less bitrate than h264 at VMAF 93.0, the highest quality both ladders reach (30% less on average from VMAF 81)",
+			},
+		},
+		{
+			name:    "a newer codec costlier at the top",
+			ladders: []*ladder.Result{h264, compared("av1", 8560, 93, 3600, 87, 1800, 81)},
+			want: []string{
+				"▲ av1 needs 7% more bitrate than h264 at VMAF 93.0, the highest quality both ladders reach (6% less on average from VMAF 81); 7% more at VMAF 93 at worst.",
+				"A newer codec is expected to need less: check the encoder preset",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out strings.Builder
+
+			require.NoError(t, RenderCodecs(&out, testCase.ladders))
+
+			text := plain(out.String())
+			if len(testCase.want) == 0 {
+				assert.Empty(t, text)
+			}
+
+			for _, want := range testCase.want {
+				assert.Contains(t, text, want)
+			}
+		})
+	}
+
+	require.Error(t, RenderCodecs(failingWriter{}, testCases[1].ladders))
+}
+
+func TestLadderLineTopDigest(
+	t *testing.T,
+) {
+	res := sampleLadder(t)
+	res.Constraints = res.Constraints.WithDefaults()
+	res.Digest.Sampling = ladder.DigestTop
+	res.Digest.Complexity = &ladder.DigestComplexity{TitleTI: 13.2, TI: 36.7}
+
+	assert.Contains(t, renderLadder(t, res, 200, "", false),
+		"estimated on the most complex scenes of the title (TI 36.7 for 13.2 over the title): the bitrates are what those scenes need, not the title's average")
+}
+
+func TestSamplingLabel(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name string
+		in   ladder.DigestSampling
+		want string
+	}{
+		{name: "title used whole", want: ""},
+		{name: "balanced", in: ladder.DigestBalanced, want: ", balanced on SI/TI"},
+		{name: "uniform", in: ladder.DigestUniform, want: ", evenly spaced"},
+		{name: "top", in: ladder.DigestTop, want: ", the most complex scenes"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, samplingLabel(testCase.in))
 		})
 	}
 }

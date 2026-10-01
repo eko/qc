@@ -47,9 +47,9 @@ func toReview(
 	send(m, runes("source"), keyEnter)
 	require.Equal(t, sectionAnalysis, m.current(), view(m))
 
-	// Analysis, metrics, devices, codecs, customisation, HTML, annotated
-	// video, renditions.
-	for range 8 {
+	// Analysis, metrics, devices, codecs, digest, customisation, HTML,
+	// annotated video, renditions.
+	for range 9 {
 		send(m, keyEnter)
 	}
 
@@ -59,7 +59,8 @@ func toReview(
 func TestWizardModelDefaults(
 	t *testing.T,
 ) {
-	m := newTestWizard(t, 80, 24)
+	// Tall enough for the review to show every row.
+	m := newTestWizard(t, 80, 26)
 
 	screen := view(m)
 	assert.Contains(t, screen, "◆ qc   ● Source › ○ Analysis › ○ Quality › ○ Ladder › ○ Outputs › ○ Review")

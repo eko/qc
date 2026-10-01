@@ -64,6 +64,7 @@ decisions than the "top 95 / step 6" heuristic**.
 | 6 | Uncertainty-driven probing | Done, opt-in: `--probing adaptive` | Same or better accuracy; fixes AV1 low rungs (+1.94 → −0.05 VMAF from optimum); saves encodes on 1 title of 3 |
 | 7 | Grain-aware AV1 | Done, opt-in: `--film-grain auto` | Synthetic grain: top rung 104.6 → 5.8 Mb/s at equal fidelity; no real grainy title validated yet |
 | 8–10 | Second opinions and AI | Deferred | |
+| 11 | Content-aware digest | Done, default: `--digest balanced`; `--digest top` for the most complex scenes | Digest bitrate error about halved on a 10-minute title (4.7% against 8.9%; 2.6% against 12.1% at the default 40 s); VMAF level unchanged |
 
 ### Quick wins (low effort, no new dependency)
 

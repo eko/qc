@@ -16,6 +16,34 @@ The release notes of each GitHub release are taken from its section here
   and the VMAF models built into it, so they need only ffmpeg; with their
   `SHA256SUMS` (`make binary` builds the one of the running platform).
   `qc version --check` accepts the models built into libvmaf.
+- **`--digest top`** (`ladder.DigestTop`): a ladder estimated on the most
+  complex scenes of the title (highest SI × TI, one segment per shot), for
+  what the demanding scenes need rather than the title. They are the
+  scenes that cost the most, not the ones that score the lowest (see
+  docs/validation.md).
+
+- **Codecs compared at equal quality**: a run with several codecs reports
+  what every newer codec needs against the oldest one at equal VMAF, on the
+  verified rungs (`ladder.CompareRates`), and warns when a newer codec
+  costs more, with where to look (digest, preset, model). A ladder built on
+  `--digest top` says its bitrates are those scenes'. The summary cards of
+  the HTML report show the top rungs as verified, not as planned.
+
+### Changed
+
+- **Balanced digest**: the segments of the digest a ladder is estimated on
+  are no longer evenly spaced. One still sits in each part of the title,
+  moved inside it until the frames of the digest have the title's spatial
+  and temporal information (SI, TI). On a 10-minute title, the frames of
+  the default 40 s digest then cost what the title's do within 3% instead
+  of 12%, and about half the error of evenly spaced segments over digests
+  of every length (`bench/digestsim`, a new validation tool replaying
+  digests on exact measurements of whole-title encodes); the quality level
+  of the digest is unchanged on average. A standalone `qc ladder` analyses
+  the source first (13 s for that title); `--digest uniform` keeps the
+  previous segments. Library: `ladder.Options.DigestSampling`,
+  `ladder.PlanDigest`, `Result.Digest.Sampling` and `Complexity`, and the
+  `analysis` stage of a build's progress.
 
 ### Fixed
 

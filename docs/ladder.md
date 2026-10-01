@@ -7,7 +7,7 @@ real encode.
 
 ```mermaid
 flowchart TD
-    src[(source)] --> digest["1 · Digest<br/>20 × 2 s evenly spaced segments<br/>raw video, source bit depth"]
+    src[(source)] --> digest["1 · Digest<br/>20 × 2 s segments, one per part of the title,<br/>balanced on its SI and TI (or its most complex scenes)<br/>raw video, source bit depth"]
     digest --> probes["2 · Probe encodes<br/>resolutions × 3 CRFs, fixed 2 s GOP<br/>VMAF ±1 with common random numbers"]
     probes --> curves["3 · Curves<br/>VMAF vs log bitrate per resolution<br/>monotone (isotonic)"]
     curves --> hull["4 · Envelope<br/>best resolution at each bitrate"]
@@ -24,9 +24,64 @@ flowchart TD
 
 Estimating a ladder on the whole title would cost one full encode and one VMAF
 measurement per probe. Instead, the engine builds a **digest**: 20 segments of
-2 s spread evenly over the title (systematic sampling, so every part of the
-title is represented), concatenated into one file. Titles shorter than 40 s
-are used whole.
+2 s, concatenated into one file. Titles shorter than 40 s are used whole.
+
+Which segments it takes is what `--digest` decides:
+
+- **`balanced`** (the default) cuts the title into 20 equal parts and takes
+  **one segment in each** (systematic sampling, so every part of the title
+  is represented), moved inside its part until the frames of the digest
+  have, on average, the **spatial and temporal information of the whole
+  title** (SI and TI, ITU-T P.910, and √TI: a frame costs less than
+  proportionally to its motion). The search is a deterministic coordinate
+  descent from the centred segments: one part at a time, the segment moves
+  to the start that brings the digest closest to the title. The same title
+  always gives the same digest.
+- **`uniform`** centres each segment in its part, whatever the content.
+- **`top`** takes the **most complex scenes**: the 20 segments where SI × TI
+  is highest, one per shot at most (a title with fewer shots gives several
+  per shot). The ladder is then that of the demanding scenes, not of the
+  title: see [below](#a-digest-of-the-most-complex-scenes).
+
+A uniform digest is one draw of a sample: it can land on the calm half of
+every part. On a 10-minute cartoon its 20 segments had a mean TI of 10.4 for
+12.0 over the title, and in four encodes of the whole title their frames
+cost **11–14% less bitrate than the title's**; those of the balanced digest
+(TI 12.0), 1.2–3.3% less. Over digests of every length, balancing about
+halves the bitrate error (4.7% against 8.9%), which is what SI and TI can
+tell of a frame's cost; on real ladders of that title, the whole title cost
+7% more than the balanced digest and 13% more than the uniform one
+([validation](validation.md#digest-balanced-or-uniform-benchdigestsim)).
+What it buys is the **bitrate** of the rungs (hence `BANDWIDTH`, and where a
+`--max-bitrate` cap falls); the quality level of the digest is not closer to
+the title's on average, SI and TI explaining little of a frame's VMAF. Under
+about 18 segments it buys nothing.
+
+`balanced` and `top` read the **frame analysis** of the source. `qc run` has
+already made it; a standalone `qc ladder`, or a run with `--skip-analysis`,
+analyses the source first (no audio, no camera motion: 13 s for a 10-minute
+1080p title on an M2 Max, whose H.264 ladder went from 2 min 53 s to
+3 min 01 s), and `--digest uniform` skips that decode. The JSON report gives
+the digest's SI and TI next to the title's (`digest.complexity`). An
+analysis without SI and TI, or with frames missing from a part of the title,
+leaves uniform segments (`digest.sampling`).
+
+### A digest of the most complex scenes
+
+`--digest top` answers another question than the default: not "what does
+this title need" but "what do its most demanding scenes need". On the
+cartoon its 20 segments had a TI of 29.3 for 12.0 over the title, and their
+frames cost **1.7 to 2.1 times the title's bitrate** at a given CRF.
+
+They are the scenes that cost the most, **not the ones that look the
+worst**: at 720p and 1080p the same frames score 3.2 to 3.7 VMAF *above*
+the title, and only at 360p below it (−0.8). So the rungs, placed where the
+busy scenes reach each quality target, leave the calmer rest of the title
+under it: on that title the top rung, VMAF 95.06 at 2.17 Mb/s on the digest,
+delivered **91.42 at 1.17 Mb/s over the whole title**. Use it to size peak
+bitrates and rate caps or to check the action scenes, not as a safety margin
+on quality
+([validation](validation.md#the-most-complex-scenes---digest-top)).
 
 - The digest is stored as **raw video in a NUT container**, so the ~25
   encodes and measurements that read it pay nothing for decoding. Above 4 GiB
@@ -35,6 +90,9 @@ are used whole.
   measured at 10 bits.
 - `concat` loses the frame rate, so timestamps are rebuilt at the source rate
   (`setpts=N/(rate·TB)`, `-r rate`).
+- A balanced or top segment starts a quarter of a frame before its first frame: a
+  seek rounding that time either way lands on the same frame, and every
+  segment holds the same number of frames.
 - Segments are times of the video, from its first frame. Each one is seeked
   with an absolute seek from the video's first frame (the bitstream's first
   presentation time, `-seek_timestamp 1 -ss origin+t`): ffmpeg counts a
@@ -361,6 +419,27 @@ report adds a *Rung quality* table and two checks:
 With `--devices phone,4k` each rung also gets the VMAF of those viewing
 conditions: a rung that looks mediocre on a TV can be plenty for a phone.
 
+### Codecs compared
+
+A run with several codecs (`qc run --codecs h264,av1`) compares its ladders
+**at equal quality**: every newer codec against the oldest one, on the
+qualities both ladders reach, read on their verified rungs (the logarithm of
+the bitrate interpolated in VMAF between two rungs). The report gives the
+gap at the highest quality both reach and on average, e.g. "av1 needs 33%
+less bitrate than h264 at VMAF 92.9 (44% less on average from VMAF 61)".
+Top rungs are not compared as they stand: each is within 0.5 VMAF of the
+target, so two of them can be 0.6 VMAF, or 5% of bitrate, apart.
+
+A newer codec costing over 3% more is a **warning**. It is not a
+measurement error, and it has causes worth knowing: a digest of scenes the
+newer encoder handles no better (`--digest top`), a preset too fast for it,
+or the model: VMAF v1 counts chroma, where SVT-AV1 gives less than x264.
+On the most complex scenes of a reality-TV title, AV1 came out 7% costlier
+than H.264 at VMAF 93 by v1, and ahead of it by v0.6.1; on a balanced
+digest of the same title, 33% lighter
+([validation](validation.md#codecs-at-equal-quality-when-av1-costs-more-than-h264)).
+Library: `ladder.CompareRates`.
+
 ## 8. Per-shot rungs
 
 `--per-shot` adds to every rung a per-shot version with the same pooled
@@ -643,4 +722,6 @@ exhaustive search on the full title grows with the title length (about 2 hours
 for the 10-minute title).
 
 Plan a margin of ~7% on `BANDWIDTH`: on the long title, full-title bitrates
-came out 3–10% above the digest predictions.
+came out 3–7% above the rungs' planned bitrates with a uniform digest, and
+from 5% below to 6% above with a balanced one
+([validation](validation.md#on-real-ladders-ladderval--rungs-only)).

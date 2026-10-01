@@ -120,6 +120,8 @@ type fakeLab struct {
 	digest      *analysis.Report
 	// compared records the quality options of every comparison.
 	compared []quality.Options
+	// analyses records the options of every analysis of the source.
+	analyses []analysis.Options
 }
 
 func newFakeLab(
@@ -158,13 +160,24 @@ func (l *fakeLab) check(
 func (l *fakeLab) Analyze(
 	_ context.Context,
 	path string,
-	_ analysis.Options,
+	opts analysis.Options,
 ) (*analysis.Report, error) {
 	if err := l.check(opAnalyze, path); err != nil {
 		return nil, err
 	}
 
 	if filepath.Base(path) == "source.mov" {
+		l.mu.Lock()
+		l.analyses = append(l.analyses, opts)
+		l.mu.Unlock()
+
+		// A frame analysis reports its decode, halfway and done.
+		if opts.Progress != nil && !opts.SkipVideo {
+			opts.Progress(analysis.Progress{Stage: analysis.StageProbe})
+			opts.Progress(analysis.Progress{Stage: analysis.StageDecode, Done: 1, Total: 2})
+			opts.Progress(analysis.Progress{Stage: analysis.StageDecode, Done: 2, Total: 2})
+		}
+
 		return l.source, nil
 	}
 

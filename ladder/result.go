@@ -50,6 +50,23 @@ type Digest struct {
 	Segments []media.Interval `json:"segments"`
 	Duration media.Duration   `json:"duration"`
 	Share    float64          `json:"share"`
+	// Sampling is how the segments were placed; empty for a title used
+	// whole. A balanced or top digest whose source analysis had no SI and
+	// TI is uniform.
+	Sampling DigestSampling `json:"sampling,omitempty"`
+	// Complexity compares the digest with its title, when the frame
+	// analysis of the source was read.
+	Complexity *DigestComplexity `json:"complexity,omitempty"`
+}
+
+// DigestComplexity is the mean spatial and temporal information (ITU-T
+// P.910) of the frames of the digest and of the whole title: a balanced
+// digest has the title's, a top digest is above them.
+type DigestComplexity struct {
+	TitleSI float64 `json:"titleSi"`
+	TitleTI float64 `json:"titleTi"`
+	SI      float64 `json:"si"`
+	TI      float64 `json:"ti"`
 }
 
 // Rung is one rendition of the ladder.

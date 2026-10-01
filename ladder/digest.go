@@ -1,14 +1,59 @@
 package ladder
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/ladder/internal/balance"
 	"github.com/eko/qc/media"
 )
+
+// DigestSampling is how the segments of the digest are placed in the title.
+type DigestSampling string
+
+// Digest samplings.
+const (
+	// DigestBalanced keeps one segment in each part of the title, as
+	// DigestUniform does, and moves each inside its part until the frames
+	// of the digest have the spatial and temporal information (SI, TI) of
+	// the whole title, on average: an encode of the digest then costs what
+	// the same encode of the title does, far closer than evenly spaced
+	// segments get (see docs/validation.md). It reads the frame analysis
+	// of the source (Options.Analysis, or one made first), and falls back
+	// on uniform segments when that analysis has no SI and TI.
+	DigestBalanced DigestSampling = "balanced"
+	// DigestUniform spaces the segments evenly, whatever the content.
+	DigestUniform DigestSampling = "uniform"
+	// DigestTop takes the most complex stretches of the title, one per
+	// shot at most: those where the product of the spatial and temporal
+	// information is highest, which are the ones that cost the most bits.
+	// The ladder is then that of the demanding scenes, not of the title:
+	// its bitrates are what those scenes need, above the title's average.
+	// Like DigestBalanced, it reads the frame analysis of the source and
+	// falls back on uniform segments without SI and TI.
+	DigestTop DigestSampling = "top"
+)
+
+// ErrInvalidDigestSampling is returned for an unknown digest sampling.
+var ErrInvalidDigestSampling = errors.New("invalid digest sampling")
+
+// ParseDigestSampling reads a digest sampling ("" is the default one).
+func ParseDigestSampling(
+	s string,
+) (DigestSampling, error) {
+	switch d := DigestSampling(s); d {
+	case "", DigestBalanced, DigestUniform, DigestTop:
+		return d, nil
+	}
+
+	return "", fmt.Errorf("%w %q (supported: balanced, uniform, top)", ErrInvalidDigestSampling, s)
+}
 
 // maxRawDigestBytes switches the digest to lossless compression above it:
 // raw video costs nothing to decode, but a long 4K digest would not fit on
@@ -25,15 +70,12 @@ func (b *build) makeDigest(
 	ctx context.Context,
 	duration media.Duration,
 ) (Digest, error) {
-	segments := digestSegments(duration, b.opts.SegmentDuration, b.opts.DigestDuration)
-
-	var total media.Duration
-	for _, s := range segments {
-		total += s.Length()
-	}
+	// The frame analysis the build waited for (see StageAnalysis), or the
+	// one at hand, which also describes a uniform digest.
+	digest := planDigest(cmp.Or(b.analysis, b.opts.Analysis), duration, b.opts)
 
 	depth := digestBitDepth(b.video)
-	lossless := rawDigestBytes(b.video, depth, total) > maxRawDigestBytes
+	lossless := rawDigestBytes(b.video, depth, digest.Duration) > maxRawDigestBytes
 
 	path := filepath.Join(b.workDir, "digest.nut")
 	if lossless {
@@ -41,7 +83,7 @@ func (b *build) makeDigest(
 	}
 
 	spec := encode.DigestSpec{
-		Source: b.source, Destination: path, Segments: segments,
+		Source: b.source, Destination: path, Segments: digest.Segments,
 		Rate: b.video.AvgFrameRate, BitDepth: depth, Lossless: lossless, Origin: b.origin,
 	}
 
@@ -58,11 +100,148 @@ func (b *build) makeDigest(
 	b.digest, b.digestReport = path, report
 	b.reference, b.referenceReport = path, report
 
-	return Digest{
-		Segments: segments,
-		Duration: total,
-		Share:    total.Seconds() / max(duration.Seconds(), 1e-9),
-	}, nil
+	return digest, nil
+}
+
+// PlanDigest returns the digest Build extracts from a source, without
+// extracting it: its segments and how they stand for the title. source is
+// the frame analysis of the title a balanced digest reads
+// (Options.DigestSampling); with an inspection alone, the segments are
+// evenly spaced.
+func PlanDigest(
+	source *analysis.Report,
+	opts Options,
+) (Digest, error) {
+	if _, err := ParseDigestSampling(string(opts.DigestSampling)); err != nil {
+		return Digest{}, fmt.Errorf("ladder: %w", err)
+	}
+
+	_, duration, err := usableVideo(source)
+	if err != nil {
+		return Digest{}, err
+	}
+
+	return planDigest(source, duration, opts.withDigestDefaults()), nil
+}
+
+// planDigest places the segments of the digest of a title of this duration:
+// balanced on the frame analysis source when opts ask for it and source has
+// the features, evenly spaced otherwise. A title used whole has no
+// sampling.
+func planDigest(
+	source *analysis.Report,
+	duration media.Duration,
+	opts Options,
+) Digest {
+	segments := digestSegments(duration, opts.SegmentDuration, opts.DigestDuration)
+	digest := Digest{Sampling: DigestUniform}
+
+	if duration <= opts.DigestDuration {
+		digest.Sampling = ""
+	}
+
+	if frames, ok := digestFrames(source); ok && digest.Sampling != "" {
+		if placed := placeSegments(source, frames, duration, len(segments), opts); placed != nil {
+			segments, digest.Sampling = placed, opts.DigestSampling
+		}
+
+		digest.Complexity = digestComplexity(frames, segments)
+	}
+
+	for _, s := range segments {
+		digest.Duration += s.Length()
+	}
+
+	digest.Segments = segments
+	digest.Share = digest.Duration.Seconds() / max(duration.Seconds(), 1e-9)
+
+	return digest
+}
+
+// placeSegments places count segments on the frames of an analysed source
+// as opts.DigestSampling asks; nil for uniform segments, or when the frames
+// cannot place them.
+func placeSegments(
+	source *analysis.Report,
+	frames balance.Frames,
+	duration media.Duration,
+	count int,
+	opts Options,
+) []media.Interval {
+	switch opts.DigestSampling {
+	case DigestBalanced:
+		// The slots cover the video: a container may outlast it (a longer
+		// audio track).
+		extent := min(duration, videoEnd(frames.PTS))
+
+		return balance.Segments(frames, extent, opts.SegmentDuration, count)
+	case DigestTop:
+		return balance.Top(frames, source.ShotCuts(), opts.SegmentDuration, count, complexity)
+	}
+
+	return nil
+}
+
+// complexity scores a segment of the digest for DigestTop: the product of
+// its mean spatial and temporal information (the first two features of
+// digestFrames). Among the scores tried on full-title encodes, it ranked
+// the 2 s windows of a title by their encoded size best across titles (see
+// docs/validation.md); it does not rank them by quality.
+func complexity(
+	means []float64,
+) float64 {
+	return means[0] * means[1]
+}
+
+// digestFrames returns the frames of an analysed source with the features
+// its digest is balanced on, and false when the analysis lacks them: the
+// spatial and temporal information of every frame (ITU-T P.910), and the
+// square root of the temporal one, a frame costing less than
+// proportionally to its motion. The source's own bitrate would spare the
+// analysis, but tells nothing: a mezzanine is near constant bitrate (see
+// docs/validation.md).
+func digestFrames(
+	report *analysis.Report,
+) (balance.Frames, bool) {
+	if report == nil || report.Frames == nil {
+		return balance.Frames{}, false
+	}
+
+	series := report.Frames
+	if len(series.PTS) < 2 || len(series.SI) != len(series.PTS) || len(series.TI) != len(series.PTS) {
+		return balance.Frames{}, false
+	}
+
+	root := make([]float64, len(series.TI))
+	for i, ti := range series.TI {
+		root[i] = math.Sqrt(max(ti, 0))
+	}
+
+	return balance.Frames{PTS: series.PTS, Features: [][]float64{series.SI, series.TI, root}}, true
+}
+
+// videoEnd is the end of the last frame, taken as long as the average one.
+func videoEnd(
+	pts []media.Duration,
+) media.Duration {
+	last := pts[len(pts)-1]
+
+	return last + (last-pts[0])/media.Duration(len(pts)-1)
+}
+
+// digestComplexity compares the frames of the segments with the title's.
+func digestComplexity(
+	frames balance.Frames,
+	segments []media.Interval,
+) *DigestComplexity {
+	title, _ := frames.Means()
+
+	digest, ok := frames.Means(segments...)
+	if !ok {
+		return nil
+	}
+
+	return &DigestComplexity{TitleSI: title[0], TitleTI: title[1], SI: digest[0], TI: digest[1]}
 }
 
 // digestSource is the digest as the source of chunked encodes: its

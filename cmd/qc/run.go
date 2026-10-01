@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/internal/findings"
 	"github.com/eko/qc/internal/htmlreport"
 	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/pipeline"
@@ -115,6 +116,11 @@ func renderRun(
 
 	for _, l := range report.Ladders {
 		sections = append(sections, func() error { return tui.RenderLadder(w, l, width, "", commands) })
+	}
+
+	// How the codecs compare at equal quality, when the run has several.
+	if len(findings.Codecs(report.Ladders)) > 0 {
+		sections = append(sections, func() error { return tui.RenderCodecs(w, report.Ladders) })
 	}
 
 	for i, render := range sections {

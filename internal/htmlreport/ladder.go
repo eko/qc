@@ -38,8 +38,8 @@ func ladderPage(
 
 	p := page{
 		Title: fmt.Sprintf("%s ladder · %s", r.Codec.Name, filepath.Base(r.Source.Info.Path)),
-		Subtitle: fmt.Sprintf("%d rungs · digest of %d segments (%.1f%% of the title) · %d probe encodes%s · %s",
-			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, len(r.Probes), probingNote(r.Probing), r.Elapsed.Std().Round(time.Second)),
+		Subtitle: fmt.Sprintf("%d rungs · digest of %d segments (%.1f%% of the title%s) · %d probe encodes%s · %s",
+			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, samplingNote(r.Digest.Sampling), len(r.Probes), probingNote(r.Probing), r.Elapsed.Std().Round(time.Second)),
 		Sections: slices.Concat([]section{{
 			Title:    "Rate / quality",
 			Subtitle: "probe encodes per resolution, their upper envelope and the selected rungs",
@@ -482,6 +482,23 @@ func predictedLabel(
 	}
 
 	return fmt.Sprintf("%.1f", rung.PredictedVMAF)
+}
+
+// samplingNote describes how the segments of the digest were placed in the
+// page subtitle; a title used whole has no sampling.
+func samplingNote(
+	s ladder.DigestSampling,
+) string {
+	switch s {
+	case ladder.DigestBalanced:
+		return ", balanced on SI/TI"
+	case ladder.DigestTop:
+		return ", the most complex scenes"
+	case ladder.DigestUniform:
+		return ", evenly spaced"
+	}
+
+	return ""
 }
 
 // probingNote describes adaptive probing in the page subtitle.

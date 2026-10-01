@@ -180,7 +180,15 @@ func hdrMetricLabel(
 // codecLabels name the ladder codecs.
 var codecLabels = map[string]string{"h264": "H.264", "hevc": "HEVC", av1Codec: "AV1"}
 
-// ladderRows review the codecs and, when customised, the ladder settings.
+// digestLabels name the digests of a ladder.
+var digestLabels = map[string]string{
+	"balanced": "balanced on the title",
+	"top":      "most complex scenes",
+	"uniform":  "evenly spaced segments",
+}
+
+// ladderRows review the codecs, the digest and, when customised, the ladder
+// settings.
 func (a *wizardAnswers) ladderRows() []reviewRow {
 	if a.ladderHidden() {
 		return nil
@@ -191,7 +199,10 @@ func (a *wizardAnswers) ladderRows() []reviewRow {
 		codecs[i] = codecLabels[c]
 	}
 
-	rows := []reviewRow{{key: "Codecs", value: strings.Join(codecs, ", ")}}
+	rows := []reviewRow{
+		{key: "Codecs", value: strings.Join(codecs, ", ")},
+		{key: "Digest", value: digestLabels[a.Digest]},
+	}
 	if !a.Advanced {
 		return append(rows, reviewRow{key: "Settings", value: "automatic"})
 	}

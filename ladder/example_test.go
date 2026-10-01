@@ -11,6 +11,7 @@ import (
 	"github.com/eko/qc/decode"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/media"
 	"github.com/eko/qc/nvidia"
 	"github.com/eko/qc/probe"
 	"github.com/eko/qc/quality"
@@ -256,4 +257,50 @@ func ExampleEngine_Build_hdr() {
 
 		fmt.Println(r.Command)
 	}
+}
+
+// The digest a ladder is estimated on, planned without extracting it. A
+// balanced digest (the default) reads the frame analysis of the title and
+// holds frames that are, on average, as busy as the title's; evenly spaced
+// segments can miss what happens between them.
+func ExamplePlanDigest() {
+	// The frame analysis of a 10-minute title (analysis.Analyzer.Analyze),
+	// here made up: every half minute starts with six busy seconds.
+	const frames = 600 * 25
+
+	rate := media.Rational{Num: 25, Den: 1}
+	source := &analysis.Report{
+		Info: &media.Info{
+			Duration: media.Seconds(600),
+			Video:    []media.VideoStream{{Width: 1920, Height: 1080, FrameRate: rate, AvgFrameRate: rate}},
+		},
+		Frames: &analysis.FrameSeries{
+			PTS: make([]media.Duration, frames), SI: make([]float64, frames), TI: make([]float64, frames),
+		},
+	}
+
+	for i := range frames {
+		source.Frames.PTS[i] = media.Seconds(float64(i) / 25)
+		source.Frames.SI[i] = 40
+
+		source.Frames.TI[i] = 5
+		if i%750 < 150 {
+			source.Frames.TI[i] = 20
+		}
+	}
+
+	for _, sampling := range []ladder.DigestSampling{ladder.DigestUniform, ladder.DigestBalanced} {
+		digest, err := ladder.PlanDigest(source, ladder.Options{DigestSampling: sampling})
+		if err != nil {
+			fmt.Println(err)
+
+			return
+		}
+
+		fmt.Printf("%s: %d segments, %s, TI %.1f for %.1f over the title\n",
+			digest.Sampling, len(digest.Segments), digest.Duration, digest.Complexity.TI, digest.Complexity.TitleTI)
+	}
+	// Output:
+	// uniform: 20 segments, 40s, TI 5.0 for 8.0 over the title
+	// balanced: 20 segments, 40s, TI 8.0 for 8.0 over the title
 }

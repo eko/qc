@@ -69,6 +69,13 @@ func TestWizardAdvancedArgs(
 			want: []string{"in.mp4", "--codecs=av1", "--per-shot", "--skip-analysis"},
 		},
 		{
+			name: "digest of the most complex scenes",
+			mutate: func(a *wizardAnswers) {
+				a.Digest = "top"
+			},
+			want: []string{"in.mp4", "--codecs=av1", "--digest", "top", "--skip-analysis"},
+		},
+		{
 			name: "film grain only for AV1",
 			mutate: func(a *wizardAnswers) {
 				a.Advanced, a.Codecs, a.Probing, a.FilmGrain = true, []string{"h264"}, "fixed", "auto"

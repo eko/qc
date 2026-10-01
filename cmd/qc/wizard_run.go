@@ -304,6 +304,7 @@ func newWizardAnswers() *wizardAnswers {
 		MinVMAF:   defaultMinVMAF,
 		BitDepth:  defaultBitDepth,
 		Probing:   defaultProbing,
+		Digest:    defaultDigest,
 		FilmGrain: defaultFilmGrain,
 		HDRMetric: string(quality.HDRMetricPQ),
 	}

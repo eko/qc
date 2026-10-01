@@ -281,11 +281,12 @@ func TestBuildPerShotErrors(
 	t *testing.T,
 ) {
 	testCases := []struct {
-		name    string
-		source  *analysis.Report
-		failOn  func(op, target string, seen int) bool
-		wantErr error
-		wantMsg string
+		name     string
+		source   *analysis.Report
+		sampling DigestSampling
+		failOn   func(op, target string, seen int) bool
+		wantErr  error
+		wantMsg  string
 	}{
 		{
 			name:    "no shot",
@@ -297,7 +298,14 @@ func TestBuildPerShotErrors(
 			name:    "source analysis",
 			failOn:  failing(opAnalyze, "source.mov", 1),
 			wantErr: errFake,
-			wantMsg: "per-shot: analyse",
+			wantMsg: "ladder: analyse",
+		},
+		{
+			name:     "source analysis alongside the probes of a uniform digest",
+			sampling: DigestUniform,
+			failOn:   failing(opAnalyze, "source.mov", 1),
+			wantErr:  errFake,
+			wantMsg:  "ladder: analyse",
 		},
 		{
 			name:    "per-shot probe",
@@ -335,7 +343,7 @@ func TestBuildPerShotErrors(
 			lab := newFakeLab(rateModel{}, source)
 			lab.failOn = testCase.failOn
 
-			_, err := labEngine(lab).Build(t.Context(), sourcePath, Options{Codec: "h264", PerShot: true})
+			_, err := labEngine(lab).Build(t.Context(), sourcePath, Options{Codec: "h264", PerShot: true, DigestSampling: testCase.sampling})
 			require.ErrorIs(t, err, testCase.wantErr)
 
 			if testCase.wantMsg != "" {

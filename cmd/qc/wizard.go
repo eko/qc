@@ -47,6 +47,7 @@ const (
 	defaultPerScene  = "2"
 	defaultBitDepth  = "8"
 	defaultProbing   = "fixed"
+	defaultDigest    = "balanced"
 	defaultFilmGrain = "off"
 )
 
@@ -91,6 +92,7 @@ type wizardAnswers struct {
 	BitDepth    string
 	SkipVerify  bool
 	Probing     string
+	Digest      string
 	PerShot     bool
 	FilmGrain   string
 }
@@ -115,6 +117,11 @@ func (a wizardAnswers) runArgs() []string {
 	}
 
 	args = append(args, "--codecs="+strings.Join(codecs, ","))
+
+	// The digest is asked of every ladder, the rest when it is customised.
+	if len(codecs) > 0 && changed(a.Digest, defaultDigest) {
+		args = append(args, "--digest", a.Digest)
+	}
 
 	if len(codecs) > 0 && a.Advanced {
 		args = append(args, a.ladderArgs()...)

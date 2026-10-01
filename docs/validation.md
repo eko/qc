@@ -345,6 +345,221 @@ average, every rung at its optimal resolution; probed at fast, −0.03 and
 the option pays only for delivery presets several times slower than the
 probes'.
 
+## Digest: balanced or uniform (`bench/digestsim`)
+
+```sh
+qc analyze source.mov -f json > analysis.json                    # SI and TI of every frame
+qc vmaf source.mov encode-1080p.mp4 --exact -f json > 1080.json  # encodes of the whole title
+go run ./bench/digestsim -source analysis.json -digests 40 1080.json 720.json 360.json
+```
+
+A ladder is estimated on a digest and delivered on the title: what the
+digest's frames cost and score must be what the title's do. `digestsim`
+takes exact measurements of encodes of the **whole title** and reads, on
+their frames, the VMAF and the bitrate of the frames a digest holds, without
+encoding anything. It compares the digests the engine itself plans
+(`ladder.PlanDigest`):
+
+- **balanced**: the engine's default ([ladder engine](ladder.md#1-digest));
+- **uniform**: the engine's evenly spaced segments, centred in their parts
+  of the title;
+- **every phase**: those segments shifted through 100 positions, from the
+  start to the end of their parts. Its root mean square is the error uniform
+  sampling makes on average; the centred digest is one of its draws;
+- **top**: the most complex scenes (`--digest top`), which is meant to
+  differ from the title ([below](#the-most-complex-scenes---digest-top)).
+
+The digest's bitrate is read from the encode's bitrate per second
+(`distorted.bitstream` of the measurement), each second counted for the
+share of it a segment covers.
+
+Cartoon (10:36, 1080p25), four x264 fast encodes of the whole title, digest
+of 40 s. Title: SI 30.43, TI 11.98; balanced digest 30.43 and 11.98; uniform
+digest 27.27 and 10.37.
+
+| Encode | Title VMAF, bitrate | Balanced: ΔVMAF, Δbitrate | Uniform (centred) | Uniform, every phase (rms) |
+|---|---|---|---|---|
+| 1080p CRF 23 | 95.39, 2883 kb/s | −0.30, −3.2% | −0.83, −11.4% | 0.48, 10.4% |
+| 720p CRF 28 | 87.86, 812 kb/s | +0.03, −2.2% | −0.59, −11.9% | 0.49, 11.7% |
+| 720p, 484 kb/s | 79.75, 484 kb/s | +0.21, −3.3% | −0.91, −13.9% | 0.60, 16.3% |
+| 360p CRF 33 | 58.48, 192 kb/s | +0.16, −1.2% | +0.29, −11.1% | 1.03, 11.4% |
+| **rms** | | **0.20, 2.6%** | 0.70, 12.1% | 0.69, 12.6% |
+
+One digest length is one draw of each design, and a lucky or unlucky one:
+the same replay over twelve lengths from 20 s to 2 min (10 to 60 segments),
+root mean square over the four encodes:
+
+| Digest length | 20 s | 24 s | 30 s | 36 s | 40 s | 44 s | 50 s | 60 s | 70 s | 80 s | 100 s | 2 min | all |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Balanced Δbitrate | 4.6% | 7.3% | 11.1% | 3.4% | 2.6% | 2.2% | 5.1% | 3.6% | 1.8% | 1.8% | 0.9% | 0.9% | **4.7%** |
+| Uniform, every phase | 13.8% | 12.0% | 9.6% | 9.9% | 12.6% | 7.9% | 8.7% | 5.4% | 5.4% | 5.3% | 3.7% | 5.3% | 8.9% |
+| Balanced ΔVMAF | 1.32 | 1.29 | 1.05 | 0.31 | 0.20 | 0.19 | 0.30 | 0.57 | 0.61 | 0.37 | 0.21 | 0.11 | 0.69 |
+| Uniform, every phase | 1.08 | 0.91 | 0.81 | 0.99 | 0.69 | 0.47 | 0.46 | 0.59 | 0.53 | 0.22 | 0.28 | 0.29 | 0.67 |
+
+Drama (1 min, three encodes: 1080p CRF 24, 720p, 540p CRF 32), eight lengths
+from 16 s to 50 s: balanced 0.51 VMAF and 3.0%, every phase 0.28 and 3.3%. At
+40 s, where the digest is two thirds of the title: balanced 0.19 and 0.6%,
+uniform 0.07 and 1.4%.
+
+- **The bitrate error is about halved** on the long title (4.7% against
+  8.9% over the twelve lengths; 2.8% against 7.6% from 18 segments up), which
+  is what its features can give: SI and TI explain 62–78% of the variance
+  of the bits of a 2 s window of the cartoon's encodes (75–84% on the
+  drama's), the balance removes that part, and the rest, which it cannot
+  see, leaves √(1 − R²) ≈ half the error. The 2.6% of the 40 s digest is a
+  good draw, the 11.1% at 30 s a bad one. The 3–10% of bitrate the full
+  title cost above its predictions, measured on this title, came largely
+  from its uniform digest.
+- **The quality level is not closer** (0.69 against 0.67 VMAF on the
+  cartoon). SI and TI explain 17–40% of the variance of the VMAF of a 2 s
+  window there (9–72% on the drama). Mean luma raises that to 33–61% on the
+  cartoon, but balancing on it too did not lower the VMAF error in replays
+  (0.64 against 0.65) and was left out. The level correction of the probes
+  ([ladder engine](ladder.md#quality-level-of-the-probes)) is about the
+  frames VMAF samples inside the digest, not about the digest: it does not
+  correct this.
+- **Short digests** (under ~18 segments) and titles barely longer than their
+  digest gain nothing: on the cartoon under 36 s the balanced digest was no
+  better than a uniform draw (8.1% and 1.2 VMAF against 11.9% and 0.9), and
+  on the drama under 30 s its VMAF was further off (0.40–1.15 against
+  0.19–0.62). With few segments, each one weighs enough for the balance to
+  pick unusual ones.
+- **The source's own bitrate is no proxy**: both mezzanines are near
+  constant bitrate (peak to average 1.3 and 1.5), and the bitrate of a 2 s
+  window of the source explains 7% of what the same window costs once
+  encoded (TI: 77%). Balancing therefore needs the frame analysis,
+  one decode of the title: 13 s for this one.
+- **Features tried**, in replays at three grids of candidate starts over
+  the twelve lengths: TI alone, SI and TI, with √TI, log TI, SI × TI, mean
+  luma, luma range, the density of scene cuts, and a penalty keeping each
+  segment close to its own part of the title. Every set with TI gave
+  3.9–5.8% of bitrate error against 9.5%, none standing out beyond what two
+  titles can tell; SI, TI and √TI were kept as a small set among the best
+  on both errors. Strata by TI quantiles, without a segment in every part
+  of the title, beat uniform on the cartoon (5.1% against 12.7% at 40 s)
+  and lost on the drama (7.8% against 2.9%).
+
+### On real ladders (`ladderval -rungs-only`)
+
+The replays read digests on encodes of the whole title; a ladder encodes its
+digest on its own. H.264 ladders of the cartoon, every rung then encoded on
+the whole title (VMAF at ±0.25), six rungs each:
+
+| Digest | Top rung | Title bitrate over the digest's (verification encodes) | Title bitrate over the rung's planned one (mean of absolute gaps) | Mean \|predicted − full title\| VMAF | Title VMAF over the digest's |
+|---|---|---|---|---|---|
+| Uniform | 720p CRF 17, 3.05 Mb/s | **+12.7%** (+12.0 to +13.4%) | 5.4% (+3.0 to +7.4%) | 0.79 | +0.92 |
+| Balanced | 1080p CRF 22.5, 3.14 Mb/s | **+7.1%** (+6.2 to +8.5%) | 3.4% (−1.3 to +6.2%) | 1.00 | +0.96 |
+| Balanced, two segments elsewhere | 720p CRF 17.5, 2.86 Mb/s | **+1.9%** (+0.6 to +3.0%) | 2.1% (−4.7 to +1.1%) | 0.63 | +0.56 |
+
+- The uniform digest undercosts the title by what the replay said (12.7%
+  here, 12.1% there). The balanced one by 7.1%, more than the replay's
+  2.6%: a digest encoded on its own is not the title's frames (every
+  segment starts a scene, rate control and lookahead restart), and the
+  rungs are not the replay's encodes. The error is about halved, as over
+  the digest lengths above.
+- The third row is the digest of an earlier build, whose segments started
+  half a frame before their first frame instead of a quarter: the same
+  frames, but a search that ended with two of the twenty segments elsewhere
+  (at 524 s and 588 s). Probe bitrates moved by 4–5%, and the top rung went
+  from 720p to 1080p, both 0.7 VMAF above the target on the title
+  (95.66 and 95.65 for 95): near the top quality the two resolutions cost
+  about the same on this title, and **two segments decide between them**.
+  A digest of 40 s carries that uncertainty, balanced or not.
+- The quality gap between the title and the digest is the same with both
+  designs (the title scores 0.6 to 1.0 above its digest), as in the replays.
+- **Cost**: 13 s of analysis on an idle M2 Max; the ladder went from
+  2 min 53 s (20 probes) to 3 min 01 s (19 probes).
+
+### Codecs at equal quality: when AV1 costs more than H.264
+
+A run on a 59-minute reality-TV title with `--digest top --top-vmaf 93`
+gave a 1080p top rung of 8.12 Mb/s in H.264 (x264 fast) and **9.33 Mb/s in
+AV1** (SVT-AV1 preset 8): the newer codec costlier. The measurements were
+checked before anything else: the same digest extracted again, encoded by
+hand with ffmpeg, and scored by qc and by Netflix's `vmaf` tool.
+
+| 1080p encode of the top digest | Bitrate | VMAF v1 (qc) | VMAF v1 (`vmaf`) | VMAF v0.6.1 (`vmaf`) | PSNR Y | PSNR Cb |
+|---|---|---|---|---|---|---|
+| x264 fast CRF 29.5 | 8.11 Mb/s | 92.77 | 92.77 | 92.20 | 31.67 | 41.98 |
+| SVT-AV1 preset 8 CRF 43 | 9.18 Mb/s | 93.41 | 93.41 | 96.29 | 32.98 | 41.31 |
+| x264 fast CRF 27 | 11.92 Mb/s | 96.54 | 96.54 | 97.05 | 33.33 | 42.95 |
+| SVT-AV1 preset 8 CRF 40 | 11.97 Mb/s | 95.81 | 95.81 | 98.27 | 33.94 | 41.90 |
+
+- **Nothing is mismeasured**: the run reproduces to the kb/s, and qc's
+  scores are the reference tool's.
+- **The model decides.** At 12 Mb/s SVT-AV1 keeps more luma (+0.6 dB) and
+  less chroma (−1.05 dB on Cb, −1.14 on Cr) than x264. VMAF v0.6.1 scores
+  luma only and puts AV1 1.2 points ahead there (and 4.1 ahead at the top
+  rungs, for 13% more bitrate); **VMAF v1 counts chroma**
+  (its chroma features read 5.7–6.7 for SVT-AV1 against 3.7–4.3 for x264
+  here) and puts the two level, x264 slightly ahead. Which is right is a
+  question for subjective tests, not for this tool; v1 is the default.
+- **The digest decides too.** These are the 20 most complex segments of
+  the title (SI 91, TI 37, for 52 and 13 over the title). On a balanced
+  digest of the same title, the same grids give AV1 36% less bitrate at
+  VMAF 91.7 (2.52 Mb/s against 3.93), and the ladders:
+
+  | Digest | H.264 top rung (verified) | AV1 top rung (verified) | AV1 against H.264 at equal VMAF |
+  |---|---|---|---|
+  | `top` | 1080p, 8.12 Mb/s, VMAF 92.8 | 1080p, 9.18 Mb/s, VMAF 93.4 | **+7%** at 92.8, +11% at 87, −4% on average from 45 |
+  | `balanced` | 1080p, 5.08 Mb/s, VMAF 93.3 | 1080p, 3.28 Mb/s, VMAF 92.9 | **−33%** at 92.9, −44% on average from 61 |
+
+- **A slower preset does not change it** on those scenes: at CRF 43,
+  SVT-AV1 preset 6 gives 8.42 Mb/s for VMAF 93.23 (level with x264 fast),
+  preset 4 7.12 Mb/s for 91.79; 10 bits change nothing (9.00 Mb/s, 93.42)
+  and `tune=0` costs more (9.62 Mb/s, 93.97).
+- Top rungs within the 0.5 tolerance of their target can be 0.6 VMAF apart
+  (92.8 and 93.4 here): 5% of bitrate at that quality. Ladders are
+  compared at equal quality, not by their top rungs.
+
+A run with several codecs now says so itself (`ladder.CompareRates`): every
+newer codec against the oldest one at equal VMAF, read on the verified
+rungs, as a warning when the newer one costs over 3% more at the top
+quality or on average ("av1 needs 7% more bitrate than h264 at VMAF 92.8…"),
+as a note otherwise ("av1 needs 33% less bitrate than h264 at VMAF 92.9…").
+A ladder built on a top digest carries a note that its bitrates are those
+scenes', and the summary cards show the top rungs as verified.
+
+### The most complex scenes (`--digest top`)
+
+`--digest top` builds the digest from the 2 s segments where SI × TI is
+highest, one per shot at most. Same replays, digest of 40 s:
+
+| Title | Top digest SI, TI (title) | Δbitrate against the title | ΔVMAF |
+|---|---|---|---|
+| Cartoon 10:36 | 36.98, 29.32 (30.43, 11.98) | **+68% to +109%** (1080p +68%, 720p +80%, 360p +80%) | +3.5 at 1080p, +3.2 and +3.7 at 720p, −0.8 at 360p |
+| Drama 1 min | 37.64, 16.32 (33.92, 13.42) | +13% | +0.6 at 1080p, +0.4 at 720p, 0.0 at 540p |
+
+- **These scenes cost the most, they do not look the worst.** At a given
+  CRF their frames take 1.7 to 2.1 times the title's bitrate on the cartoon,
+  and score **above** the title at 720p and 1080p. They only score below
+  it at 360p (−0.8).
+- **A ladder built on them is not a worst-case ladder for quality.** H.264
+  ladder of the cartoon with `--digest top`, every rung encoded on the
+  whole title (`ladderval -rungs-only`, VMAF at ±0.25):
+
+  | Rung | Predicted on the digest | Whole title |
+  |---|---|---|
+  | 720p CRF 24.5 | VMAF 95.06, 2.17 Mb/s | **91.42**, 1.17 Mb/s |
+  | 720p CRF 29 | 89.06, 1.45 Mb/s | 86.53, 733 kb/s |
+  | 540p CRF 29 | 81.70, 965 kb/s | 80.57, 494 kb/s |
+  | 360p CRF 27 | 72.89, 643 kb/s | 72.65, 349 kb/s |
+  | 360p CRF 31.5 | 60.85, 429 kb/s | 62.62, 222 kb/s |
+  | 360p CRF 36 | 47.20, 286 kb/s | 48.80, 145 kb/s |
+
+  The busy scenes reach VMAF 95 at a CRF that leaves the title 3.6 points
+  under it (the balanced ladder's top rung delivers 95.65), and the
+  bitrates the ladder announces are 1.85 to 1.97 times what the title
+  takes. It answers "what do the demanding scenes need" (peak bitrates,
+  rate caps, a check of the action scenes), not "what does the title
+  need".
+- **Score**: over the 2 s windows of a title, the rank correlation with the
+  encoded size is 0.74–0.87 for SI × TI across both titles and five
+  encodes, 0.75–0.86 for TI alone (lower on the drama's 1080p encode, where
+  SI × TI finds its three costliest windows and TI one), −0.07 to 0.48 for
+  SI alone. None ranks windows by quality: the correlation of SI × TI with
+  VMAF goes from −0.21 (360p) to +0.86 (drama 1080p).
+
 ## Per-shot rungs (`ladderval -per-shot`, `-shot-optimum`)
 
 ```sh
@@ -872,6 +1087,10 @@ EBU R 128, as ffmpeg measures it too): no clipping, phase, DC, silence or
 channel finding on the programmes.
 
 ## What is not validated yet
+
+- The balanced digest: two titles, both SDR and x264; a film with long
+  takes, sport and a title of an hour or more are missing, and the features
+  it balances on were chosen on these two.
 
 - Camera motion: the real-content check is a visual review of stills by
   one reviewer, not an annotated ground truth; shake on real content and

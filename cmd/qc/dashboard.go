@@ -200,6 +200,8 @@ func ladderStageLabel(
 	stage string,
 ) string {
 	switch stage {
+	case ladder.StageAnalysis:
+		return "source analysis"
 	case ladder.StageDigest:
 		return "digest"
 	case ladder.StageProbe:

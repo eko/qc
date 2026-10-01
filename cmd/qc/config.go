@@ -125,6 +125,7 @@ type LadderConfig struct {
 	Parallel          int     `mapstructure:"parallel"`
 	EncodeBitDepth    int     `mapstructure:"encode-bit-depth"`
 	Probing           string  `mapstructure:"probing"`
+	Digest            string  `mapstructure:"digest"`
 	PerShot           bool    `mapstructure:"per-shot"`
 	PerShotResolution bool    `mapstructure:"per-shot-resolution"`
 	FilmGrain         string  `mapstructure:"film-grain"`
@@ -272,14 +273,18 @@ func (c QualityConfig) validateSample() error {
 	return nil
 }
 
-// validate checks the ladder shape, the probing mode and the film grain
-// setting.
+// validate checks the ladder shape, the probing mode, the digest sampling
+// and the film grain setting.
 func (c LadderConfig) validate() error {
 	if _, _, err := parseRungs(c.Rungs); err != nil {
 		return err
 	}
 
 	if _, err := ladder.ParseProbing(c.Probing); err != nil {
+		return err
+	}
+
+	if _, err := ladder.ParseDigestSampling(c.Digest); err != nil {
 		return err
 	}
 

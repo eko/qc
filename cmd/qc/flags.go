@@ -122,6 +122,7 @@ func addLadderFlags(
 	flags.Bool("commands", false, "print the ffmpeg command of each rung")
 	flags.Int("parallel", 2, "probe encodes run concurrently")
 	flags.Int("encode-bit-depth", 8, "bit depth of the ladder encodes: 8 or 10 (Main10, best for HEVC/AV1)")
+	flags.String("digest", "balanced", "segments of the digest the ladder is estimated on: balanced (moved until the digest has the SI and TI of the title), top (the most complex scenes: a ladder for the demanding parts) or uniform (evenly spaced); balanced and top analyse the title first")
 	flags.String("probing", "fixed", "probe placement: fixed (3 CRFs per resolution) or adaptive (uncertainty-driven)")
 	flags.Bool("per-shot", false, "add a per-shot version of every rung: one CRF per shot at equal rate-quality slope")
 	flags.Bool("per-shot-resolution", false, "experimental: per-shot rungs whose shots also pick their resolution among neighbouring rungs' (implies --per-shot)")
@@ -279,17 +280,18 @@ func ladderOptions(
 			MinBitrate:  l.MinBitrate,
 			MaxBitrate:  l.MaxBitrate,
 		},
-		Heights:    l.Heights,
-		SkipVerify: l.NoVerify,
-		Model:      config.Quality.Model,
-		ModelDirs:  config.Quality.ModelDir,
-		Metrics:    config.Quality.metrics(),
-		Devices:    config.Quality.Devices,
-		HDRMetric:  config.Quality.hdrMetric(),
-		Parallel:   l.Parallel,
-		BitDepth:   l.EncodeBitDepth,
-		Probing:    ladder.Probing(l.Probing),
-		PerShot:    l.PerShot,
+		Heights:        l.Heights,
+		SkipVerify:     l.NoVerify,
+		Model:          config.Quality.Model,
+		ModelDirs:      config.Quality.ModelDir,
+		Metrics:        config.Quality.metrics(),
+		Devices:        config.Quality.Devices,
+		HDRMetric:      config.Quality.hdrMetric(),
+		Parallel:       l.Parallel,
+		BitDepth:       l.EncodeBitDepth,
+		Probing:        ladder.Probing(l.Probing),
+		DigestSampling: ladder.DigestSampling(l.Digest),
+		PerShot:        l.PerShot,
 		// PerShotResolution implies PerShot in the ladder options.
 		PerShotResolution: l.PerShotResolution,
 		FilmGrain:         filmGrain,

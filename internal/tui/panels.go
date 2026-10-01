@@ -63,8 +63,10 @@ func (p LadderPanel) View(
 	width int,
 ) string {
 	switch {
+	case p.Stage == ladder.StageAnalysis:
+		return Subtle.Render("analysing the title, to place its digest…")
 	case p.Stage == ladder.StageDigest:
-		return Subtle.Render("extracting a digest of evenly spaced segments…")
+		return Subtle.Render("extracting a digest of segments spread over the title…")
 	case p.Stage == ladder.StageGrain:
 		return Subtle.Render("measuring the grain of the digest, calibrating film grain synthesis…")
 	case p.Stage == ladder.StageAnchor:
