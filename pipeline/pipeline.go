@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/eko/qc/analysis"
@@ -38,6 +39,11 @@ type Options struct {
 	Source string
 	// Reference, when set, measures VMAF of Source against it.
 	Reference string
+	// Program lists the other videos sharing the ladders of the source:
+	// when set, each ladder is that of the program, the source and these
+	// videos (ladder.Engine.BuildProgram), with as many digest segments in
+	// each, and its renditions are those of every video.
+	Program []string
 	// LadderSource, when set, is the video the ladders are built from
 	// instead of Source: typically the mezzanine (the Reference) when
 	// Source is an encode under test. It is not analysed by the run.
@@ -152,15 +158,22 @@ type Analyzer interface {
 
 // LadderBuilder builds streaming ladders. *ladder.Engine implements it.
 type LadderBuilder interface {
-	// Prepare returns what the ladders of every codec of a run share of
-	// their source: its frame analysis and its digest, made once.
-	Prepare(
+	// PrepareProgram returns what the ladders of every codec of a run
+	// share of their source, or of the videos of their program: the frame
+	// analyses and the digest, made once.
+	PrepareProgram(
 		ctx context.Context,
-		source string,
+		sources []string,
 	) (*ladder.Prepared, error)
 	Build(
 		ctx context.Context,
 		source string,
+		opts ladder.Options,
+	) (*ladder.Result, error)
+	// BuildProgram builds one ladder for several videos.
+	BuildProgram(
+		ctx context.Context,
+		sources []string,
 		opts ladder.Options,
 	) (*ladder.Result, error)
 }
@@ -432,24 +445,11 @@ func (r *Runner) ladder(
 
 	source := cmp.Or(opts.LadderSource, opts.Source)
 
-	prepared, err := shared.prepare(ctx, r.ladders, source)
-	if err != nil {
-		return StageResult{}, err
+	if opts.LadderSource == "" && lopts.ContentLight == nil {
+		lopts.ContentLight = measuredLight(rep.Analysis)
 	}
 
-	lopts.Prepared = prepared
-
-	if opts.LadderSource == "" {
-		// The ladder is built on the analysed source: its per-shot rungs
-		// read the shots of that analysis rather than decoding it again.
-		lopts.Analysis = rep.Analysis
-
-		if lopts.ContentLight == nil {
-			lopts.ContentLight = measuredLight(rep.Analysis)
-		}
-	}
-
-	res, err := r.ladders.Build(ctx, source, lopts)
+	res, err := r.buildLadder(ctx, source, opts, lopts, rep, shared)
 	if err != nil {
 		return StageResult{}, err
 	}
@@ -463,8 +463,46 @@ func (r *Runner) ladder(
 	return StageResult{Ladder: res}, nil
 }
 
-// sharedSource is the source of the ladders of a run, prepared once: every
-// codec then reads the same frame analysis and the same digest file.
+// buildLadder builds the ladder of source, or of its program when the run
+// has one, prepared once for the codecs of the run.
+func (r *Runner) buildLadder(
+	ctx context.Context,
+	source string,
+	opts Options,
+	lopts ladder.Options,
+	rep *Report,
+	shared *sharedSource,
+) (*ladder.Result, error) {
+	prepared, err := shared.prepare(ctx, r.ladders, opts.videos())
+	if err != nil {
+		return nil, err
+	}
+
+	lopts.Prepared = prepared
+
+	if len(opts.Program) > 0 {
+		return r.ladders.BuildProgram(ctx, opts.videos(), lopts)
+	}
+
+	if opts.LadderSource == "" {
+		// The ladder is built on the analysed source: its balanced digest
+		// and its per-shot rungs read that analysis rather than decoding
+		// the source again.
+		lopts.Analysis = rep.Analysis
+	}
+
+	return r.ladders.Build(ctx, source, lopts)
+}
+
+// videos lists the videos the ladders are built for: the source of the
+// ladders, then the other videos of its program.
+func (o Options) videos() []string {
+	return append([]string{cmp.Or(o.LadderSource, o.Source)}, o.Program...)
+}
+
+// sharedSource is the source of the ladders of a run, or the videos of
+// their program, prepared once: every codec then reads the same frame
+// analyses and the same digest file.
 type sharedSource struct {
 	prepared *ladder.Prepared
 }
@@ -473,10 +511,10 @@ type sharedSource struct {
 func (s *sharedSource) prepare(
 	ctx context.Context,
 	ladders LadderBuilder,
-	source string,
+	sources []string,
 ) (*ladder.Prepared, error) {
 	if s.prepared == nil {
-		prepared, err := ladders.Prepare(ctx, source)
+		prepared, err := ladders.PrepareProgram(ctx, sources)
 		if err != nil {
 			return nil, err
 		}
@@ -597,20 +635,61 @@ func (r *Runner) renditions(
 		return StageResult{}, fmt.Errorf("%w: %s", errNoLadder, codec)
 	}
 
-	ropts := opts.Renditions
-	ropts.Dir = filepath.Join(ropts.Dir, codec)
-	ropts.Progress = progress
+	res := rep.Ladders[len(rep.Ladders)-1]
+	videos := opts.videos()
 
-	if err := os.MkdirAll(ropts.Dir, 0o750); err != nil {
-		return StageResult{}, fmt.Errorf("renditions: %w", err)
+	var all []ladder.Rendition
+
+	for i, video := range videos {
+		ropts := opts.Renditions
+		ropts.Dir = filepath.Join(ropts.Dir, codec)
+		ropts.Progress = progress
+
+		// The videos of a program share the names of their renditions:
+		// each gets a folder of its own.
+		if len(videos) > 1 {
+			ropts.Dir = filepath.Join(ropts.Dir, videoFolder(videos, i))
+		}
+
+		if err := os.MkdirAll(ropts.Dir, 0o750); err != nil {
+			return StageResult{}, fmt.Errorf("renditions: %w", err)
+		}
+
+		renditions, err := r.encoder.Encode(ctx, video, res, ropts)
+		if err != nil {
+			return StageResult{}, err
+		}
+
+		all = append(all, renditions...)
 	}
 
-	renditions, err := r.encoder.Encode(ctx, cmp.Or(opts.LadderSource, opts.Source), rep.Ladders[len(rep.Ladders)-1], ropts)
-	if err != nil {
-		return StageResult{}, err
+	res.Renditions = all
+
+	return StageResult{Renditions: all}, nil
+}
+
+// videoFolder names the folder of the renditions of video i of a program:
+// its file name without extension, with its rank when an earlier video has
+// the same name.
+func videoFolder(
+	videos []string,
+	i int,
+) string {
+	stem := func(path string) string {
+		base := filepath.Base(path)
+
+		return strings.TrimSuffix(base, filepath.Ext(base))
 	}
 
-	return StageResult{Renditions: renditions}, nil
+	name := stem(videos[i])
+
+	for _, earlier := range videos[:i] {
+		if stem(earlier) == name {
+			return fmt.Sprintf("%s-%d", name, i+1)
+		}
+	}
+
+	return name
 }
 
 // errNoLadder is returned for renditions of a codec whose ladder was not

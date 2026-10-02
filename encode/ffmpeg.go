@@ -87,8 +87,8 @@ func (f *FFmpeg) Encode(
 	return nil
 }
 
-// DigestSpec describes a digest: segments of a source concatenated at the
-// source resolution in 4:2:0.
+// DigestSpec describes a digest: segments of a source (or of several, see
+// Parts) concatenated at the source resolution in 4:2:0.
 type DigestSpec struct {
 	// Source is the file the segments are cut from; Destination receives
 	// the digest.
@@ -107,6 +107,49 @@ type DigestSpec struct {
 	// a NUT container, which costs nothing to decode for the many encodes
 	// and measurements that read it.
 	Lossless bool
+	// Parts, when set, cut the digest from several sources, one after the
+	// other, in place of Source, Origin and Segments: the digest of a
+	// program. The sources must share their geometry, frame rate and pixel
+	// format, which the concatenation does not convert.
+	Parts []DigestPart
+}
+
+// DigestPart is the part of a digest cut from one source: its segments,
+// times of that source's video seeked at its Origin.
+type DigestPart struct {
+	Source   string
+	Origin   media.Duration
+	Segments []media.Interval
+}
+
+// parts returns the parts of the digest: Parts, or the single source.
+func (s DigestSpec) parts() []DigestPart {
+	if len(s.Parts) > 0 {
+		return s.Parts
+	}
+
+	return []DigestPart{{Source: s.Source, Origin: s.Origin, Segments: s.Segments}}
+}
+
+// name names the digest in errors: its source, or its first source and how
+// many follow.
+func (s DigestSpec) name() string {
+	parts := s.parts()
+	if len(parts) == 1 {
+		return parts[0].Source
+	}
+
+	return fmt.Sprintf("%s and %d more", parts[0].Source, len(parts)-1)
+}
+
+// segments counts the segments of the digest.
+func (s DigestSpec) segments() int {
+	n := 0
+	for _, p := range s.parts() {
+		n += len(p.Segments)
+	}
+
+	return n
 }
 
 // Digest writes the digest spec describes.
@@ -114,12 +157,12 @@ func (f *FFmpeg) Digest(
 	ctx context.Context,
 	spec DigestSpec,
 ) error {
-	if len(spec.Segments) == 0 {
-		return fmt.Errorf("digest %s: %w", spec.Source, ErrNoSegments)
+	if spec.segments() == 0 {
+		return fmt.Errorf("digest %s: %w", spec.name(), ErrNoSegments)
 	}
 
 	if err := ffexec.Stream(ctx, f.bin, digestArgs(spec), discard); err != nil {
-		return fmt.Errorf("digest %s: %w", spec.Source, err)
+		return fmt.Errorf("digest %s: %w", spec.name(), err)
 	}
 
 	return nil
@@ -136,19 +179,25 @@ func digestArgs(
 
 	var graph strings.Builder
 
-	for i, seg := range spec.Segments {
-		args = append(args, seekArgs(spec.Origin+seg.Start)...)
-		args = append(args, "-t", seconds(seg.Length()), "-i", spec.Source)
-		fmt.Fprintf(&graph, "[%d:v:0]format=%s,setsar=1[v%d];", i, format, i)
+	inputs := 0
+
+	for _, part := range spec.parts() {
+		for _, seg := range part.Segments {
+			args = append(args, seekArgs(part.Origin+seg.Start)...)
+			args = append(args, "-t", seconds(seg.Length()), "-i", part.Source)
+			fmt.Fprintf(&graph, "[%d:v:0]format=%s,setsar=1[v%d];", inputs, format, inputs)
+
+			inputs++
+		}
 	}
 
-	for i := range spec.Segments {
+	for i := range inputs {
 		fmt.Fprintf(&graph, "[v%d]", i)
 	}
 
 	// concat loses the frame rate: restore constant timestamps at the
 	// source rate so every encode and measurement sees the same timeline.
-	fmt.Fprintf(&graph, "concat=n=%d:v=1:a=0,setpts=N/(%s*TB)[out]", len(spec.Segments), spec.Rate)
+	fmt.Fprintf(&graph, "concat=n=%d:v=1:a=0,setpts=N/(%s*TB)[out]", inputs, spec.Rate)
 
 	args = append(args, "-filter_complex", graph.String(), "-map", "[out]", "-an", "-r", spec.Rate.String())
 

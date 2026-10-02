@@ -31,6 +31,13 @@ type build struct {
 	codec  encode.Codec
 	opts   Options
 	source string
+	// titles are the videos of a program, the first being source; empty
+	// for the build of one title. titleSpans is where the frames of each
+	// are in the digest, and digestAsked whether the length of the digest
+	// was asked for, and is then shared between them.
+	titles      []programTitle
+	titleSpans  [][2]int
+	digestAsked bool
 	// prepared is what the build reads of the source, and what it leaves
 	// for the next builds of the same source (see Prepared).
 	prepared     *Prepared
@@ -379,7 +386,10 @@ func (b *build) scoreFile(
 		return Measurement{}, err
 	}
 
-	return measurementOf(cmp), nil
+	m := measurementOf(cmp)
+	m.Titles = b.titleMeasurements(cmp)
+
+	return m, nil
 }
 
 // inspect runs after on the encode at path, when set, before it is removed.

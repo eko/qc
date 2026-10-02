@@ -26,7 +26,7 @@ func runDashboard(
 	cmd *cobra.Command,
 	env environment,
 	config Config,
-	name, source string,
+	name, subject string,
 	labels []string,
 	fn job,
 ) (err error) {
@@ -50,7 +50,7 @@ func runDashboard(
 		}
 	}()
 
-	return tui.RunDashboard(ctx, cmd.ErrOrStderr(), env.dashboard, gpuTitle(name, gpuSettingsOf(config)), filepath.Base(source), labels,
+	return tui.RunDashboard(ctx, cmd.ErrOrStderr(), env.dashboard, gpuTitle(name, gpuSettingsOf(config)), subject, labels,
 		func(ctx context.Context, e *tui.Emitter) error {
 			return fn(ctx, svc, e)
 		})
@@ -73,15 +73,28 @@ func executePipeline(
 
 	var report *pipeline.Report
 
-	err := runDashboard(cmd, env, config, name, opts.Source, labels,
+	err := runDashboard(cmd, env, config, name, subject(opts), labels,
 		func(ctx context.Context, svc services, e *tui.Emitter) error {
 			var err error
-			report, err = svc.runner.Run(ctx, opts, hooks(e, stages))
+			report, err = svc.runner.Run(ctx, opts, hooks(e, stages, 1+len(opts.Program)))
 
 			return err
 		})
 
 	return report, err
+}
+
+// subject names what the pipeline works on: the source, and how many videos
+// share its ladder.
+func subject(
+	opts pipeline.Options,
+) string {
+	name := filepath.Base(opts.Source)
+	if len(opts.Program) > 0 {
+		return fmt.Sprintf("%s + %d more", name, len(opts.Program))
+	}
+
+	return name
 }
 
 // executeInspection runs the container and bitstream inspection only (no
@@ -95,7 +108,7 @@ func executeInspection(
 ) (*analysis.Report, error) {
 	var report *analysis.Report
 
-	err := runDashboard(cmd, env, config, "analyze", source, []string{"Inspect"},
+	err := runDashboard(cmd, env, config, "analyze", filepath.Base(source), []string{"Inspect"},
 		func(ctx context.Context, svc services, e *tui.Emitter) error {
 			e.Start(0)
 
@@ -114,10 +127,12 @@ func executeInspection(
 	return report, err
 }
 
-// hooks maps pipeline events to dashboard updates.
+// hooks maps pipeline events to dashboard updates; videos is the number of
+// videos the ladders are built for.
 func hooks(
 	e *tui.Emitter,
 	stages []pipeline.Stage,
+	videos int,
 ) pipeline.Hooks {
 	var (
 		mu     sync.Mutex
@@ -144,7 +159,7 @@ func hooks(
 		Renditions: func(i int, p ladder.RenditionProgress) {
 			detail := ""
 			if p.Rendition != nil {
-				detail = filepath.Base(p.Rendition.Path)
+				detail = p.Rendition.Name()
 			}
 
 			e.Progress(i, p.Done, p.Total, detail)
@@ -170,6 +185,7 @@ func hooks(
 				Total:  p.Total,
 				Probes: append([]ladder.Probe(nil), probes[i]...),
 				Rungs:  append([]ladder.Rung(nil), rungs[i]...),
+				Videos: videos,
 			})
 		},
 	}

@@ -31,7 +31,7 @@ func (a *wizardAnswers) reviewSections(
 	ctx wizardContext,
 ) []reviewSection {
 	sections := []reviewSection{
-		{section: sectionSource, rows: []reviewRow{a.videoRow("Video", a.Source, ctx)}},
+		{section: sectionSource, rows: a.sourceRows(ctx)},
 		{section: sectionAnalysis, rows: []reviewRow{{key: "Compute", value: a.actionsLabel()}}},
 		{section: sectionQuality, rows: a.qualityRows(ctx)},
 		{section: sectionLadder, rows: a.ladderRows()},
@@ -47,6 +47,22 @@ func (a *wizardAnswers) reviewSections(
 	}
 
 	return sections
+}
+
+// sourceRows review the video, or the videos of one ladder.
+func (a *wizardAnswers) sourceRows(
+	ctx wizardContext,
+) []reviewRow {
+	if !a.isProgram() {
+		return []reviewRow{a.videoRow("Video", a.Source, ctx)}
+	}
+
+	rows := []reviewRow{a.videoRow("Video 1", a.Source, ctx)}
+	for i, path := range a.Program {
+		rows = append(rows, a.videoRow("Video "+strconv.Itoa(i+2), path, ctx))
+	}
+
+	return rows
 }
 
 // videoRow reviews a picked video with its metadata.
@@ -74,6 +90,10 @@ var actionLabels = map[string]string{
 
 // actionsLabel lists the chosen actions, in the order of the form.
 func (a *wizardAnswers) actionsLabel() string {
+	if a.isProgram() {
+		return fmt.Sprintf("One ladder per codec for the %d videos", len(a.Program)+1)
+	}
+
 	var names []string
 
 	for _, action := range []string{actionAnalysis, actionVMAF, actionLadder} {
@@ -187,6 +207,13 @@ var digestLabels = map[string]string{
 	"uniform":  "evenly spaced segments",
 }
 
+// programDigestLabels name the digests of the ladder of several videos.
+var programDigestLabels = map[string]string{
+	"balanced": "shared equally, balanced on each video",
+	"top":      "shared equally, most complex scenes",
+	"uniform":  "shared equally, evenly spaced segments",
+}
+
 // ladderRows review the codecs, the digest and, when customised, the ladder
 // settings.
 func (a *wizardAnswers) ladderRows() []reviewRow {
@@ -203,6 +230,10 @@ func (a *wizardAnswers) ladderRows() []reviewRow {
 		{key: "Codecs", value: strings.Join(codecs, ", ")},
 		{key: "Digest", value: digestLabels[a.Digest]},
 	}
+	if a.isProgram() {
+		rows[1].value = programDigestLabels[a.Digest]
+	}
+
 	if !a.Advanced {
 		return append(rows, reviewRow{key: "Settings", value: "automatic"})
 	}
@@ -259,7 +290,7 @@ func (a *wizardAnswers) rungsLabel() string {
 	}
 
 	parts = append(parts, a.Probing+" probes")
-	if a.PerShot {
+	if a.perShot() {
 		parts = append(parts, "per-shot")
 	}
 
@@ -347,7 +378,7 @@ func plainReview(
 		}
 	}
 
-	b.WriteString("\nCommand: " + commandLine(append([]string{"qc", "run"}, a.runArgs()...)))
+	b.WriteString("\nCommand: " + commandLine(a.command()))
 
 	return b.String()
 }

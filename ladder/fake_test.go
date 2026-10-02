@@ -124,6 +124,14 @@ type fakeLab struct {
 	analyses []analysis.Options
 	// sources counts the encodes read from each file.
 	sources map[string]int
+	// others are the other videos of a program, by file name, and hardness
+	// how much harder than the model each video of the program is, in
+	// their order (1 when unset): a harder video costs more bits and
+	// scores lower at the same settings.
+	others   map[string]*analysis.Report
+	hardness []float64
+	// spans are the frames of each video in the digest of a program.
+	spans [][2]int
 }
 
 func newFakeLab(
@@ -184,6 +192,18 @@ func (l *fakeLab) Analyze(
 		return l.source, nil
 	}
 
+	if other, ok := l.others[filepath.Base(path)]; ok {
+		l.mu.Lock()
+		l.analyses = append(l.analyses, opts)
+		l.mu.Unlock()
+
+		if opts.Progress != nil && !opts.SkipVideo {
+			opts.Progress(analysis.Progress{Stage: analysis.StageDecode, Done: 2, Total: 2})
+		}
+
+		return other, nil
+	}
+
 	l.mu.Lock()
 	p, encoded := l.encodes[path]
 	l.mu.Unlock()
@@ -225,6 +245,10 @@ func (l *fakeLab) Compare(
 	// sampled or exact, through the model.
 	if chunks != nil && !rendition {
 		return l.perFrame(p, chunks, opts.Quality.Exact), nil
+	}
+
+	if len(l.spans) > 0 && !rendition {
+		return l.perTitle(p, opts.Quality), nil
 	}
 
 	vmaf := l.model.vmaf(p)
@@ -336,6 +360,18 @@ func (l *fakeLab) Digest(
 		l.frames += int(math.Round(seg.Length().Seconds() * spec.Rate.Float()))
 	}
 
+	// The digest of a program: where the frames of each video are.
+	l.spans = nil
+
+	for _, part := range spec.Parts {
+		first := l.frames
+		for _, seg := range part.Segments {
+			l.frames += int(math.Round(seg.Length().Seconds() * spec.Rate.Float()))
+		}
+
+		l.spans = append(l.spans, [2]int{first, l.frames})
+	}
+
 	l.digests = append(l.digests, spec)
 
 	return nil
@@ -445,6 +481,52 @@ func (l *fakeLab) perFrame(
 	return &analysis.Comparison{
 		Distorted: &analysis.Report{Bitstream: &bitstream.Report{AverageBitrate: int64(total * 8 * 25 / n), FrameSizes: sizes}},
 		VMAF:      res,
+	}
+}
+
+// hardnessPenalty is the VMAF a video loses per unit of hardness.
+const hardnessPenalty = 10
+
+// perTitle measures an encode of the digest of a program frame by frame:
+// the frames of each video cost and score as the model says, scaled by the
+// video's hardness. Exact measurements list every frame's score, sampled
+// ones one frame in sampledEvery.
+func (l *fakeLab) perTitle(
+	p encode.Params,
+	q quality.Options,
+) *analysis.Comparison {
+	sizes := make([]int, l.frames)
+	res := &quality.Result{HalfWidth: q.Precision / 2}
+	total, sum := 0, 0.0
+
+	for t, span := range l.spans {
+		hard := 1.0
+		if t < len(l.hardness) {
+			hard = l.hardness[t]
+		}
+
+		score := math.Min(100, l.model.vmaf(p)-hardnessPenalty*(hard-1))
+		if !q.Exact {
+			score += l.sampledBias
+		}
+
+		for f := span[0]; f < span[1]; f++ {
+			sizes[f] = int(float64(l.model.bitrate(p)) * hard / 25 / 8)
+			total += sizes[f]
+			sum += score
+
+			if q.Exact || f%sampledEvery == 0 {
+				res.Frames = append(res.Frames, quality.FrameScore{Index: f, Score: score})
+			}
+		}
+	}
+
+	n := max(l.frames, 1)
+	res.Mean = sum / float64(n)
+
+	return &analysis.Comparison{
+		Distorted: &analysis.Report{Bitstream: &bitstream.Report{AverageBitrate: int64(total * 8 * 25 / n), FrameSizes: sizes}},
+		VMAF:      withExtras(res, q),
 	}
 }
 

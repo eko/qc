@@ -54,7 +54,11 @@ const (
 // wizardAnswers are the choices made in the wizard. Numeric answers are kept
 // as typed text: they are validated by the form and passed on as flags.
 type wizardAnswers struct {
-	Source    string
+	Source string
+	// Program are the other videos picked with the source: one ladder per
+	// codec is built for all of them, and nothing else is computed (see
+	// isProgram).
+	Program   []string
 	Reference string
 	Actions   []string
 	Codecs    []string
@@ -95,6 +99,66 @@ type wizardAnswers struct {
 	Digest      string
 	PerShot     bool
 	FilmGrain   string
+}
+
+// isProgram reports whether several videos were picked: they get one ladder
+// for all of them, which is all qc computes on several videos.
+func (a *wizardAnswers) isProgram() bool {
+	return len(a.Program) > 0
+}
+
+// perShot reports whether per-shot rungs are added: never to the ladder of
+// several videos, whose shots are not those of one title.
+func (a *wizardAnswers) perShot() bool {
+	return a.PerShot && !a.isProgram()
+}
+
+// command is the qc invocation equivalent to a: qc run, or qc ladder for
+// the ladders of several videos.
+func (a wizardAnswers) command() []string {
+	if a.isProgram() {
+		return append([]string{"qc", "ladder"}, a.programArgs()...)
+	}
+
+	return append([]string{"qc", "run"}, a.runArgs()...)
+}
+
+// programArgs are the arguments of the qc ladder invocation building one
+// ladder per codec for the videos of a.
+func (a wizardAnswers) programArgs() []string {
+	args := []string{notFlag(a.Source)}
+	for _, path := range a.Program {
+		args = append(args, notFlag(path))
+	}
+
+	args = append(args, "-c", strings.Join(a.Codecs, ","))
+	args = append(args, a.metricArgs()...)
+
+	if changed(a.Digest, defaultDigest) {
+		args = append(args, "--digest", a.Digest)
+	}
+
+	if a.Advanced {
+		args = append(args, a.ladderArgs()...)
+	}
+
+	if a.HDRMetric == string(quality.HDRMetricToneMap) {
+		args = append(args, "--hdr-metric", a.HDRMetric)
+	}
+
+	if a.GPU {
+		args = append(args, "--gpu")
+	}
+
+	if html := strings.TrimSpace(a.HTML); html != "" {
+		args = append(args, "--html", notFlag(html))
+	}
+
+	if dir := strings.TrimSpace(a.RenditionsDir); a.Renditions && dir != "" {
+		args = append(args, "--encode-ladder", notFlag(dir))
+	}
+
+	return args
 }
 
 // runArgs are the arguments of the qc run invocation equivalent to a.
@@ -304,12 +368,12 @@ func (a wizardAnswers) innovationArgs() []string {
 		args = append(args, "--probing", a.Probing)
 	}
 
-	if a.PerShot {
+	if a.perShot() {
 		args = append(args, "--per-shot")
 	}
 
 	// Film grain synthesis is an AV1 tool, which per-shot rungs exclude.
-	if changed(a.FilmGrain, defaultFilmGrain) && slices.Contains(a.Codecs, av1Codec) && !a.PerShot {
+	if changed(a.FilmGrain, defaultFilmGrain) && slices.Contains(a.Codecs, av1Codec) && !a.perShot() {
 		args = append(args, "--film-grain", a.FilmGrain)
 	}
 

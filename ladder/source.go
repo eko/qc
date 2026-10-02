@@ -30,6 +30,19 @@ func (b *build) balances(
 	return b.opts.DigestSampling != DigestUniform && duration > b.opts.DigestDuration
 }
 
+// analyses reports whether the build waits for a frame analysis before its
+// digest: of its source, when the digest is placed on its content and no
+// analysis is at hand, or of the videos of its program.
+func (b *build) analyses(
+	duration media.Duration,
+) bool {
+	if b.isProgram() {
+		return b.programAnalysed()
+	}
+
+	return b.balances(duration) && !analysed(b.opts.Analysis)
+}
+
 // analyseSource returns the frame analysis a balanced digest and per-shot
 // rungs read: that of Options.Analysis when it is one, otherwise an analysis
 // of the source started now, which the returned function waits for. A

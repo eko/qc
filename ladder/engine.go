@@ -222,6 +222,17 @@ func (e *Engine) Build(
 	source string,
 	opts Options,
 ) (*Result, error) {
+	return e.build(ctx, source, opts, nil)
+}
+
+// build computes the ladder of source, or of the program whose first video
+// source is.
+func (e *Engine) build(
+	ctx context.Context,
+	source string,
+	opts Options,
+	p *program,
+) (*Result, error) {
 	started := time.Now()
 
 	codec, opts, err := e.validate(opts)
@@ -229,15 +240,9 @@ func (e *Engine) Build(
 		return nil, err
 	}
 
-	res := &Result{
-		SchemaVersion: analysis.SchemaVersion,
-		GeneratedAt:   started.UTC(),
-		Codec:         codec,
-		Preset:        opts.Preset,
-		Constraints:   opts.Constraints,
-	}
+	res := newResult(started, codec, opts)
 
-	prepared, err := e.preparedFor(ctx, source, opts.Prepared)
+	prepared, err := e.preparedFor(ctx, source, opts.Prepared, p)
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +260,10 @@ func (e *Engine) Build(
 		return nil, fmt.Errorf("ladder: %w", err)
 	}
 
+	if err := e.inspectProgram(ctx, p, res, prepared); err != nil {
+		return nil, err
+	}
+
 	res.Shape = opts.Constraints.Shape()
 	res.HDR = hdrLadder(&opts, video)
 
@@ -269,7 +278,9 @@ func (e *Engine) Build(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	run := e.newBuild(ctx, codec, opts, prepared, dir, video, duration, res)
+	run := e.newBuild(codec, opts, prepared, dir, video, res, p)
+	run.startAnalysis(ctx, duration)
+
 	res.GOP, res.BitDepth = run.gop(), opts.BitDepth
 
 	if res.Timings, err = run.stages(ctx, res, duration); err != nil {
@@ -281,13 +292,43 @@ func (e *Engine) Build(
 	return res, nil
 }
 
-// preparedFor returns what the build of source reads of it: shared, the
-// Prepared of several builds, when given, or one the build makes for
-// itself.
+// newResult is the result of a build started at started, before its
+// stages fill it.
+func newResult(
+	started time.Time,
+	codec encode.Codec,
+	opts Options,
+) *Result {
+	return &Result{
+		SchemaVersion: analysis.SchemaVersion,
+		GeneratedAt:   started.UTC(),
+		Codec:         codec,
+		Preset:        opts.Preset,
+		Constraints:   opts.Constraints,
+	}
+}
+
+// startAnalysis starts the frame analysis of the source when the build
+// reads it (a digest placed on the content, per-shot rungs): it runs while
+// the build goes on. The videos of a program are analysed one after the
+// other, by a stage of their own.
+func (b *build) startAnalysis(
+	ctx context.Context,
+	duration media.Duration,
+) {
+	if balanced := b.balances(duration); !b.isProgram() && (balanced || b.opts.PerShot) {
+		b.sourceAnalysis = b.analyseSource(ctx, balanced)
+	}
+}
+
+// preparedFor returns what the build of source, or of program p whose first
+// video it is, reads of it: shared, the Prepared of several builds, when
+// given, or one the build makes for itself.
 func (e *Engine) preparedFor(
 	ctx context.Context,
 	source string,
 	shared *Prepared,
+	p *program,
 ) (*Prepared, error) {
 	if shared == nil {
 		return e.inspect(ctx, source)
@@ -297,29 +338,37 @@ func (e *Engine) preparedFor(
 		return nil, fmt.Errorf("ladder: %w: %s, not %s", ErrPreparedSource, shared.source, source)
 	}
 
+	var sources []string
+	if p != nil {
+		sources = p.sources
+	}
+
+	if !slices.Equal(shared.program, sources) {
+		return nil, fmt.Errorf("ladder: %w: its videos are not those of the build", ErrPreparedSource)
+	}
+
 	return shared, nil
 }
 
 // newBuild prepares the build of the ladder of the prepared source, whose
 // usable video stream is video and inspection res holds, in the work
-// directory dir.
+// directory dir; p is its program, nil for one title.
 func (e *Engine) newBuild(
-	ctx context.Context,
 	codec encode.Codec,
 	opts Options,
 	prepared *Prepared,
 	dir string,
 	video media.VideoStream,
-	duration media.Duration,
 	res *Result,
+	p *program,
 ) *build {
 	run := &build{
 		engine: e, codec: codec, opts: opts, source: prepared.source, prepared: prepared, workDir: dir,
 		video: video, origin: videoOrigin(res.Source, video),
 	}
 
-	if balanced := run.balances(duration); balanced || opts.PerShot {
-		run.sourceAnalysis = run.analyseSource(ctx, balanced)
+	if p != nil {
+		run.titles, run.digestAsked = p.titles, p.digestAsked
 	}
 
 	if res.HDR != nil {
@@ -443,13 +492,11 @@ func (b *build) stageList(
 	var curves []Curve
 
 	return []stage{
-		{name: StageAnalysis, announce: true, skip: !b.balances(duration) || analysed(b.opts.Analysis), run: func(ctx context.Context, _ *Result) (err error) {
-			b.analysis, err = b.sourceAnalysis(ctx)
-
-			return err
+		{name: StageAnalysis, announce: true, skip: !b.analyses(duration), run: func(ctx context.Context, _ *Result) error {
+			return b.analyse(ctx)
 		}},
 		{name: StageDigest, announce: true, run: func(ctx context.Context, res *Result) (err error) {
-			res.Digest, err = b.makeDigest(ctx, duration)
+			res.Digest, err = b.digestOf(ctx, duration)
 
 			return err
 		}},
@@ -491,6 +538,32 @@ func (b *build) stageList(
 			return err
 		}},
 	}
+}
+
+// analyse waits for the frame analysis of the source, or analyses the
+// videos of the program.
+func (b *build) analyse(
+	ctx context.Context,
+) (err error) {
+	if b.isProgram() {
+		return b.analyseProgram(ctx)
+	}
+
+	b.analysis, err = b.sourceAnalysis(ctx)
+
+	return err
+}
+
+// digestOf extracts the digest of the title, or of the program.
+func (b *build) digestOf(
+	ctx context.Context,
+	duration media.Duration,
+) (Digest, error) {
+	if b.isProgram() {
+		return b.makeProgramDigest(ctx)
+	}
+
+	return b.makeDigest(ctx, duration)
 }
 
 // selectRungs builds the curves of the probes and their envelope, and

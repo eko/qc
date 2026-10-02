@@ -340,11 +340,42 @@ func (m *wizardModel) hintsView(
 	m.help.Width = width
 
 	if m.phase == phaseReview {
-		return m.help.ShortHelpView(m.reviewBindings())
+		return m.help.ShortHelpView(fitHints(m.reviewBindings(), width))
 	}
 
-	return m.help.ShortHelpView(formHints(m.form.form.KeyBinds()))
+	return m.help.ShortHelpView(fitHints(formHints(m.form.form.KeyBinds()), width))
 }
+
+// fitHints keeps the first hints that fit width: the help view overflows
+// when it has no room for its ellipsis.
+func fitHints(
+	bindings []key.Binding,
+	width int,
+) []key.Binding {
+	total := 0
+
+	for i, b := range bindings {
+		if !b.Enabled() {
+			continue
+		}
+
+		w := lipgloss.Width(b.Help().Key) + 1 + lipgloss.Width(b.Help().Desc)
+		if total > 0 {
+			w += hintGap
+		}
+
+		if total+w > width {
+			return bindings[:i]
+		}
+
+		total += w
+	}
+
+	return bindings
+}
+
+// hintGap is the width of the separator between two key hints.
+const hintGap = 2
 
 // formHints are the keys of the focused field as the page tells them: esc
 // goes back a page (shift+tab still goes back a field), and the last enter

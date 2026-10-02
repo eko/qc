@@ -52,6 +52,7 @@ func TestCommands(
 	t *testing.T,
 ) {
 	source, encoded := clips(t)
+	larger := testutil.Generate(t, testutil.Clip{GOP: 25, Name: "larger.mp4", Width: 640, Height: 360})
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "missing.mp4")
 	noDir := filepath.Join(dir, "no-such-dir", "file")
@@ -144,6 +145,55 @@ func TestCommands(
 			name:       "ladder verified, as text with commands",
 			args:       []string{"ladder", "--commands", "--heights", "180", "--max-rungs", "2", source},
 			wantStdout: []string{"180p", "ffmpeg"},
+		},
+		{
+			name: "ladder of several videos",
+			args: []string{"ladder", "-f", "json", "--heights", "180", "--max-rungs", "2", source, encoded},
+			check: func(t *testing.T, stdout string) {
+				var res ladder.Result
+				require.NoError(t, json.Unmarshal([]byte(stdout), &res))
+				require.Len(t, res.Sources, 2)
+				require.Len(t, res.Digest.Titles, 2)
+				require.NotEmpty(t, res.Rungs)
+				require.NotNil(t, res.Rungs[0].Measured)
+				assert.Len(t, res.Rungs[0].Measured.Titles, 2, "every rung is read video by video")
+			},
+		},
+		{
+			name: "ladders of several codecs for several videos",
+			args: []string{"ladder", "-c", "h264, hevc", "-f", "json", "--heights", "180", "--max-rungs", "2", "--no-verify", source, encoded},
+			check: func(t *testing.T, stdout string) {
+				var report pipeline.Report
+				require.NoError(t, json.Unmarshal([]byte(stdout), &report))
+				require.Len(t, report.Ladders, 2, "reported together, as a run reports them")
+
+				for i, codec := range []string{"h264", "hevc"} {
+					assert.Equal(t, codec, report.Ladders[i].Codec.Name)
+					assert.Len(t, report.Ladders[i].Sources, 2)
+				}
+
+				assert.Equal(t, report.Ladders[0].Digest, report.Ladders[1].Digest, "one digest for both codecs")
+			},
+		},
+		{
+			name:       "ladders of several codecs as text",
+			args:       []string{"ladder", "-c", "h264,hevc", "--heights", "180", "--max-rungs", "2", "--no-verify", source},
+			wantStdout: []string{"h264 (libx264", "hevc (libx265"},
+			check: func(t *testing.T, stdout string) {
+				assert.NotContains(t, stdout, "Bitrate", "the ladders alone, without the inspection of the source")
+			},
+		},
+		{
+			name:       "ladder with an unknown codec among several",
+			args:       []string{"ladder", "-c", "h264,mpeg2", source},
+			wantCode:   1,
+			wantStderr: `unknown codec "mpeg2"`,
+		},
+		{
+			name:       "ladder of videos of several formats",
+			args:       []string{"ladder", source, larger},
+			wantCode:   1,
+			wantStderr: ladder.ErrProgramFormat.Error() + ": " + source + " is 320×180, " + larger + " is not",
 		},
 		{
 			name:       "ladder with an unknown codec",

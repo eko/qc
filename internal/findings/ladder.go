@@ -50,6 +50,24 @@ const (
 	// verification on the digest costing Value (a share) more than the
 	// rung at equal VMAF (ladder.Rung.PerShotRejected).
 	PerShotRejected Code = "per-shot-rejected"
+	// TitleBelowProgram: on the top rung of the ladder of a program, video
+	// Index (of ladder.Result.Sources) scores Value where the program
+	// scores Limit, more than ProgramTolerance below: the shared ladder
+	// under-serves it, and a ladder of its own would reach the target.
+	TitleBelowProgram Code = "title-below-program"
+	// TitleAboveProgram: video Index scores Value on the top rung where
+	// the program scores Limit, more than ProgramTolerance above: it would
+	// reach the target with fewer bits than the shared ladder gives it.
+	TitleAboveProgram Code = "title-above-program"
+	// ProgramEven: every video of the program is within Limit
+	// (ProgramTolerance) of the top rung's quality; Value is the largest
+	// gap.
+	ProgramEven Code = "program-even"
+	// ProgramSpread: below the top rung, rung Index is where the videos of
+	// the program differ most: Value VMAF points between the lowest (video
+	// Other) and the highest (see Spread), more than Limit
+	// (ProgramSpreadLimit). One CRF for all does not give them one quality.
+	ProgramSpread Code = "program-spread"
 	// TopDigest: the ladder was estimated on the most complex scenes of the
 	// title (ladder.DigestTop), whose temporal information is Value for
 	// Limit over the title: its bitrates are those scenes', not the title's.
@@ -71,6 +89,17 @@ const (
 	// AVERAGE-BANDWIDTH within 10% of the measured average.
 	bandwidthTolerance = 0.10
 )
+
+// ProgramTolerance is how far (VMAF) the quality of a video on the top
+// rung may stray from the program's before the shared ladder is said to
+// serve it badly: a third of a rung step, and well beyond what the few
+// segments of a video measure it within.
+const ProgramTolerance = 2.0
+
+// ProgramSpreadLimit is the VMAF span between the videos of a program on a
+// rung beyond which the rung is said to serve them unevenly: a quality
+// step of the default ladder, about one just-noticeable difference.
+const ProgramSpreadLimit = 6.0
 
 const (
 	// AppleTopH264 (bits/s) is the top rung of Apple's HLS authoring spec
@@ -124,9 +153,105 @@ func Ladder(
 		out = append(out, Finding{Level: Warn, Code: RankConflict, Index: conflict.Higher, Other: conflict.Lower})
 	}
 
+	out = append(out, programFindings(r)...)
 	out = append(out, renditionFindings(r)...)
 
 	return append(out, hdrLadderFindings(r)...)
+}
+
+// programFindings read the ladder of a program video by video: on the top
+// rung, those the shared ladder serves badly, or that all are served
+// alike; below it, the rung where they differ most when that is more than
+// a quality step. A video with no scored frame is not judged.
+func programFindings(
+	r *ladder.Result,
+) []Finding {
+	top := r.Rungs[0].Measured
+	if top == nil || len(top.Titles) < 2 {
+		return nil
+	}
+
+	var out []Finding
+
+	worst := 0.0
+
+	for i, t := range top.Titles {
+		if t.ScoredFrames == 0 {
+			continue
+		}
+
+		gap := t.VMAF - top.VMAF
+		worst = math.Max(worst, math.Abs(gap))
+
+		switch {
+		case gap < -ProgramTolerance:
+			out = append(out, Finding{Level: Warn, Code: TitleBelowProgram, Index: i, Value: t.VMAF, Limit: top.VMAF})
+		case gap > ProgramTolerance:
+			out = append(out, Finding{Level: Info, Code: TitleAboveProgram, Index: i, Value: t.VMAF, Limit: top.VMAF})
+		}
+	}
+
+	if len(out) == 0 {
+		out = []Finding{{Level: OK, Code: ProgramEven, Value: worst, Limit: ProgramTolerance}}
+	}
+
+	return append(out, spreadFindings(r)...)
+}
+
+// spreadFindings name the rung below the top where the videos of a program
+// differ most, when by more than ProgramSpreadLimit.
+func spreadFindings(
+	r *ladder.Result,
+) []Finding {
+	widest := Finding{Level: Info, Code: ProgramSpread, Value: ProgramSpreadLimit, Limit: ProgramSpreadLimit}
+
+	for i, rung := range r.Rungs[1:] {
+		low, high, ok := Spread(rung.Measured)
+		if !ok {
+			continue
+		}
+
+		if span := rung.Measured.Titles[high].VMAF - rung.Measured.Titles[low].VMAF; span > widest.Value {
+			widest.Index, widest.Other, widest.Value = i+1, low, span
+		}
+	}
+
+	if widest.Index == 0 {
+		return nil
+	}
+
+	return []Finding{widest}
+}
+
+// Spread returns the videos of a program scoring lowest and highest on m,
+// among those with scored frames; ok is false with fewer than two.
+func Spread(
+	m *ladder.Measurement,
+) (low, high int, ok bool) {
+	if m == nil {
+		return 0, 0, false
+	}
+
+	low, high = -1, -1
+	scored := 0
+
+	for i, t := range m.Titles {
+		if t.ScoredFrames == 0 {
+			continue
+		}
+
+		scored++
+
+		if low < 0 || t.VMAF < m.Titles[low].VMAF {
+			low = i
+		}
+
+		if high < 0 || t.VMAF > m.Titles[high].VMAF {
+			high = i
+		}
+	}
+
+	return low, high, scored > 1
 }
 
 // renditionFindings compare every rendition encoded on the whole title with

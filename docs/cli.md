@@ -5,7 +5,7 @@ qc                      interactive wizard (in a terminal)
 qc run <source>         everything: analysis, VMAF (with -r), ladders
 qc analyze <file>       technical analysis
 qc vmaf <ref> <dist>    VMAF of dist against ref
-qc ladder <source>      per-title ladder for one codec
+qc ladder <source>...   per-title ladder (-c h264,av1 for several codecs); several sources: one ladder for all
 qc version [--check]    versions of qc, Go and libvmaf; --check: the environment
 ```
 
@@ -66,7 +66,12 @@ and more, a summary of the answers given so far sits beside the form.
    folder or picks a file, `←` goes up. Only video files are listed; the
    highlighted one is described by a quick ffprobe (codec, resolution, frame
    rate, bit depth, duration, SDR or HDR format, audio tracks, size). A file
-   ffprobe cannot read, or without a video stream, cannot be picked;
+   ffprobe cannot read, or without a video stream, cannot be picked.
+   `space` selects **several videos** (ticked, across folders; `space` again
+   takes one out) and `enter` then continues with them: they get [one
+   ladder for all of them](ladder.md#12-one-ladder-for-several-videos), and
+   the wizard asks only about that ladder (its codecs, no per-shot rungs).
+   A video whose format differs from the first one selected is refused;
 2. **Analysis**: what to compute: technical analysis, VMAF against a
    reference, streaming ladder;
 3. **Quality**, for VMAF: the reference (browsed from the folder of the
@@ -96,7 +101,8 @@ and more, a summary of the answers given so far sits beside the form.
 6. **Review**: every answer, section by section, with the metadata of the
    videos and the hardware the run uses (the NVIDIA GPU with `--gpu`, Apple
    VideoToolbox on macOS, the CPU elsewhere), and the exact equivalent `qc run`
-   command (wrapped with `\` continuations, so it can be copied as it is).
+   command, or `qc ladder a b c` for several videos (wrapped with `\`
+   continuations, so it can be copied as it is).
    **Run** (`enter` or `r`), **Edit a section** (`e`, or its number `1`–`5`:
    the section is asked again, with the pages the change calls for, such as
    the reference when VMAF is added) or **Cancel** (`q`).
@@ -211,9 +217,14 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 
 ### Ladder (`ladder`, `run`)
 
+`qc ladder` takes one source, or several for [one ladder for all of
+them](ladder.md#12-one-ladder-for-several-videos) (same resolution, frame
+rate, bit depth and dynamic range; no `--per-shot`), for one codec or
+several (`-c h264,av1`); `qc run` takes one source.
+
 | Flag | Default | Meaning |
 |---|---|---|
-| `-c, --codec` (ladder only) | h264 | h264, hevc or av1 |
+| `-c, --codec` (ladder only) | h264 | h264, hevc or av1, or several separated by commas (`-c h264,av1`): one ladder each, on the same analysis and digest, compared at equal quality; the reports are then those of a run (JSON: `ladders`) |
 | `--model`, `--model-dir` (ladder only; `run` shares the VMAF ones) | auto | VMAF model of the probe measurements |
 | `--preset` | codec default | encoder preset of the rungs (their verification and commands) |
 | `--probe-preset` | `--preset` | encoder preset of the probe encodes: a much faster one cuts probing, the probes being anchored at `--preset` by encoding the top and bottom rungs ([details](ladder.md#faster-probes-at-another-preset)) |
@@ -228,14 +239,14 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 | `--no-verify` | off | skip the verification encodes |
 | `--commands` | off | print each rung's ffmpeg command |
 | `--parallel` | 2 | probe encodes run concurrently |
-| `--digest-duration` | 0 (40 s) | length of the digest, in seconds: the ladder is estimated on that much of the title, and costs in proportion to it |
+| `--digest-duration` | 0 (40 s) | length of the digest, in seconds: the ladder is estimated on that much of the title, and costs in proportion to it; shared equally between several videos |
 | `--digest` | balanced | segments of the digest the ladder is estimated on: `balanced` (one per part of the title, each moved until the digest has the title's SI and TI), `top` (the most complex scenes, one per shot: the ladder of the demanding scenes, with their bitrates, not the title's) or `uniform` (evenly spaced, no analysis); for `balanced` and `top` a standalone `qc ladder` analyses the source first — see [digest](ladder.md#1-digest) |
 | `--probing` | fixed | probe placement: `fixed` (3 CRFs per resolution) or `adaptive` (2 per resolution, then probes where the rungs and crossovers are least certain) — see [probing](ladder.md#adaptive-probing) |
 | `--per-shot` | off | add a per-shot version of every rung: one CRF per shot at equal rate-quality slope, same pooled VMAF — see [per-shot](ladder.md#8-per-shot-rungs). The reports then show the per-shot ladder (every shot's CRF, bitrate and VMAF per rung) |
 | `--per-shot-resolution` | off | experimental, implies `--per-shot`: each shot also picks its resolution among the rung's and the neighbouring rung resolutions; renditions change resolution mid-stream — see [per-shot resolution](ladder.md#per-shot-resolution-experimental) |
 | `--film-grain` | off | AV1 only: `off`, `auto` (detect grain, calibrate the level) or a synthesis level `1`–`50`; fidelity is then scored against a denoised reference; cannot be combined with `--per-shot` on an AV1 ladder — see [film grain](ladder.md#9-film-grain-synthesis-av1) |
 | `--metrics`, `--av2-ctc`, `--devices` (ladder only; `run` shares the VMAF ones) | xpsnr,cambi,psnr | measured on the verification encodes of the rungs, next to VMAF: flags banding-limited rungs and rungs VMAF and XPSNR order differently — see [rung quality](ladder.md#rung-quality) |
-| `--encode-ladder` | off | a folder: once built, the ladder is encoded on the whole title into `<folder>/<codec>/` (`01-1080p.mp4`, and `01-1080p-pershot.mp4` for per-shot rungs), each rendition then checked against the source — see [renditions](ladder.md#11-renditions) |
+| `--encode-ladder` | off | a folder: once built, the ladder is encoded on the whole title into `<folder>/<codec>/` (`01-1080p.mp4`, and `01-1080p-pershot.mp4` for per-shot rungs), each rendition then checked against the source; several videos get a folder each (`<folder>/<codec>/<video name>/`) — see [renditions](ladder.md#11-renditions) |
 | `--no-rendition-check` | off | skip the check of the renditions against the source (VMAF with its confidence interval, at the VMAF precision) |
 | `--hdr-metric` (ladder only; `run` shares the VMAF one) | pq | how VMAF scores the probes and rungs of an HDR source; HDR sources are always encoded in 10 bits with their colour description and HDR10 metadata — see [HDR ladders](hdr.md#5-hdr-ladders) |
 
@@ -290,7 +301,8 @@ Paste the output of `qc version --check` in bug reports. See
   MaxFALL, peak and average light over time). Audio tracks get a line each
   (loudness and true peak against the target, loudness range) with their
   short-term loudness. For VMAF: a score gauge with its interval, and quality over time.
-  For ladders: the rate-quality chart, the rung table (predicted vs measured)
+  For ladders: the rate-quality chart, the rung table (predicted vs measured),
+  the quality of every rung on each video when the ladder is that of several,
   and findings.
 - **JSON** (`schemaVersion` 1): the full results. Durations are in seconds, and
   per-frame series are stored as columns. `qc run` writes one document with

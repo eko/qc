@@ -291,6 +291,32 @@ func ladderFindings(
 	return out
 }
 
+// programFinding words a finding of the ladder of a program, read video
+// by video; ok is false for the other findings.
+func programFinding(
+	f findings.Finding,
+	res *ladder.Result,
+) (finding, bool) {
+	switch f.Code {
+	case findings.TitleBelowProgram:
+		return worded(f, nil, "%s: VMAF %.1f on the top rung for %.1f over the program. The shared ladder under-serves it: a ladder of its own would reach the target",
+			sourceName(res, f.Index), f.Value, f.Limit), true
+	case findings.TitleAboveProgram:
+		return worded(f, nil, "%s: VMAF %.1f on the top rung for %.1f over the program. It would reach the target with fewer bits on a ladder of its own",
+			sourceName(res, f.Index), f.Value, f.Limit), true
+	case findings.ProgramEven:
+		return worded(f, nil, "Every video within %.1f VMAF of the program on the top rung", f.Value), true
+	case findings.ProgramSpread:
+		titles := res.Rungs[f.Index].Measured.Titles
+		_, high, _ := findings.Spread(res.Rungs[f.Index].Measured)
+
+		return worded(f, nil, "Rung %d (%dp): %.1f VMAF between %s (%.1f) and %s (%.1f). One CRF for all does not give the videos one quality down the ladder",
+			f.Index+1, res.Rungs[f.Index].Height, f.Value, sourceName(res, f.Other), titles[f.Other].VMAF, sourceName(res, high), titles[high].VMAF), true
+	}
+
+	return finding{}, false
+}
+
 // ladderFinding words a finding of a ladder.
 func ladderFinding(
 	f findings.Finding,
@@ -300,6 +326,10 @@ func ladderFinding(
 		return worded(f, nil, "No rung could be selected"), true
 	}
 
+	if w, ok := programFinding(f, res); ok {
+		return w, true
+	}
+
 	r := res.Rungs[f.Index]
 
 	switch f.Code {
@@ -307,12 +337,12 @@ func ladderFinding(
 		rd := res.Renditions[f.Other]
 
 		return worded(f, nil, "%s on the whole title: VMAF %s, %+.1f from its prediction on the digest",
-			filepath.Base(rd.Path), rd.Checked.VMAFLabel(), f.Value), true
+			rd.Name(), rd.Checked.VMAFLabel(), f.Value), true
 	case findings.RenditionBitrate:
 		rd := res.Renditions[f.Other]
 
 		return worded(f, nil, "%s: %+.0f%% bitrate over the whole title against the ladder's: declare its measured %s in the manifest (Apple HLS: within %.0f%%)",
-			filepath.Base(rd.Path), f.Value*100, bitrateLabel(float64(rd.Bitrate)), f.Limit*100), true
+			rd.Name(), f.Value*100, bitrateLabel(float64(rd.Bitrate)), f.Limit*100), true
 	}
 
 	switch f.Code {
@@ -348,6 +378,14 @@ func ladderFinding(
 	}
 
 	return hdrFinding(f)
+}
+
+// sourceName is the file name of video i of a program.
+func sourceName(
+	res *ladder.Result,
+	i int,
+) string {
+	return filepath.Base(res.Sources[i].Info.Path)
 }
 
 // codecFindings words how the ladders of a run compare at equal quality.

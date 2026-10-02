@@ -56,6 +56,9 @@ type LadderPanel struct {
 	Total  int
 	Probes []ladder.Probe
 	Rungs  []ladder.Rung
+	// Videos is the number of videos of the ladder of a program; 0 or 1
+	// for one title.
+	Videos int
 }
 
 // View implements Panel.
@@ -63,6 +66,10 @@ func (p LadderPanel) View(
 	width int,
 ) string {
 	switch {
+	case p.Stage == ladder.StageAnalysis && p.Videos > 1:
+		return Subtle.Render(fmt.Sprintf("analysing the %d videos, to place their digest…", p.Videos))
+	case p.Stage == ladder.StageDigest && p.Videos > 1:
+		return Subtle.Render(fmt.Sprintf("extracting a digest of segments spread over the %d videos…", p.Videos))
 	case p.Stage == ladder.StageAnalysis:
 		return Subtle.Render("analysing the title, to place its digest…")
 	case p.Stage == ladder.StageDigest:

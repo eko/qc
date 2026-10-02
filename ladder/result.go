@@ -15,8 +15,11 @@ type Result struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	GeneratedAt   time.Time        `json:"generatedAt"`
 	Source        *analysis.Report `json:"source"`
-	Codec         encode.Codec     `json:"codec"`
-	Preset        string           `json:"preset"`
+	// Sources are the videos of a program (Engine.BuildProgram), the first
+	// being Source; nil for the ladder of one title.
+	Sources []*analysis.Report `json:"sources,omitempty"`
+	Codec   encode.Codec       `json:"codec"`
+	Preset  string             `json:"preset"`
 	// GOP is the keyframe interval of every encode, in frames; BitDepth
 	// their depth (0 or 8, or 10). With Preset, the rungs' resolution and
 	// rate cap and the ladder's grain and signal, they are the settings of
@@ -50,12 +53,27 @@ type Digest struct {
 	Segments []media.Interval `json:"segments"`
 	Duration media.Duration   `json:"duration"`
 	Share    float64          `json:"share"`
+	// Titles describes the part of the digest of each video of a program,
+	// in the order of Result.Sources: its Segments come one video after
+	// the other. Empty for one title.
+	Titles []DigestTitle `json:"titles,omitempty"`
 	// Sampling is how the segments were placed; empty for a title used
 	// whole. A balanced or top digest whose source analysis had no SI and
 	// TI is uniform.
 	Sampling DigestSampling `json:"sampling,omitempty"`
 	// Complexity compares the digest with its title, when the frame
 	// analysis of the source was read.
+	Complexity *DigestComplexity `json:"complexity,omitempty"`
+}
+
+// DigestTitle is the part of the digest of a program taken in one video.
+type DigestTitle struct {
+	Source string `json:"source"`
+	// Segments counts its segments, and Duration is their length.
+	Segments int            `json:"segments"`
+	Duration media.Duration `json:"duration"`
+	// Complexity compares them with the video they come from, when its
+	// frame analysis was read.
 	Complexity *DigestComplexity `json:"complexity,omitempty"`
 }
 
@@ -113,11 +131,26 @@ type Measurement struct {
 	Metrics map[string]float64 `json:"metrics,omitempty"`
 	// Devices is the VMAF of each viewing device measured on a verified rung.
 	Devices map[string]float64 `json:"devices,omitempty"`
+	// Titles reads the measurement video by video, for the ladder of a
+	// program (Engine.BuildProgram): one entry per video, in the order of
+	// Result.Sources.
+	Titles []TitleMeasurement `json:"titles,omitempty"`
 	// BandedFrames counts the scored frames with visible banding (CAMBI
 	// above quality.BandingThreshold) when CAMBI is measured, out of
 	// ScoredFrames.
 	BandedFrames int `json:"bandedFrames,omitempty"`
 	ScoredFrames int `json:"scoredFrames,omitempty"`
+}
+
+// TitleMeasurement is the part of a measurement of an encode of the digest
+// that falls in one video of a program.
+type TitleMeasurement struct {
+	// Bitrate is measured on every frame of the video's segments.
+	Bitrate int64 `json:"bitrate"`
+	// VMAF is the mean of the scored frames among them: a sampled
+	// measurement scores some only (ScoredFrames, 0 when none fell there).
+	VMAF         float64 `json:"vmaf,omitempty"`
+	ScoredFrames int     `json:"scoredFrames,omitempty"`
 }
 
 // VMAFLabel is the measured VMAF with its 95% confidence interval, or

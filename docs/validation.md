@@ -584,6 +584,54 @@ highest, one per shot at most. Same replays, digest of 40 s:
   SI alone. None ranks windows by quality: the correlation of SI × TI with
   VMAF goes from −0.21 (360p) to +0.86 (drama 1080p).
 
+### One ladder for several videos
+
+`qc ladder a b c` reads every verified rung video by video, on the few
+segments the digest took of each (7 × 2 s for three videos). Are those
+readings the videos'? One H.264 ladder for the cartoon (10:36), the drama
+(1 min) and a reality show (59 min, SI 52 where the two others have 30 and
+34), then rungs of that ladder encoded on the **whole** videos with exact
+VMAF:
+
+| Video, rung | Read on its segments | Whole video | Gap |
+|---|---|---|---|
+| Cartoon, 1080p CRF 22.5 | VMAF 94.64, 3.15 Mb/s | 95.66, 3.12 Mb/s | −1.02, +1.0% |
+| Drama, 1080p CRF 22.5 | 95.61, 4.82 Mb/s | 95.00, 5.16 Mb/s | +0.61, −6.6% |
+| Reality show, 1080p CRF 22.5 | 95.56, 7.66 Mb/s | 95.34, 7.46 Mb/s | +0.22, +2.7% |
+| Cartoon, 720p CRF 28.5 | 86.13, 780 kb/s | 87.08, 770 kb/s | −0.95, +1.4% |
+| Drama, 720p CRF 28.5 | 84.68, 1.14 Mb/s | 82.42, 1.16 Mb/s | +2.25, −1.9% |
+
+- **The top rung of a video is read within about 1 VMAF and 7% of
+  bitrate**, on 14 s of it. The findings on the top rung start at 2 VMAF
+  from the program, twice that.
+- **Lower rungs are read less precisely**: their verification scores a
+  sample of the digest's frames (52 to 98 per video here, against all 350
+  on the top rung), and the drama's 720p rung is read 2.3 VMAF high. The
+  finding on the lower rungs starts at 6 VMAF between two videos.
+- **One CRF, three bitrates**: the top rung the ladder announces at
+  5.38 Mb/s for VMAF 95 (95.3 at 5.21 Mb/s on the digest) is 3.1 Mb/s on
+  the cartoon, 5.2 on the drama and 7.5 on the reality show, at VMAF 95.7,
+  95.0 and 95.3 over the whole videos: 95.3 at 5.25 Mb/s on average. Down the ladder the
+  qualities part: at 360p the cartoon is read at VMAF 55.9 and the reality
+  show at 42.2, which the report says.
+
+**Each video balanced on its own, not the digest as a whole.** Balancing
+the 21 segments together reaches the same average SI and TI (38.80 and
+12.89 for 38.81 and 12.87) with segments that are no video's:
+
+| Segments of | Balanced as a whole: SI, TI | Each on its own: SI, TI | The video |
+|---|---|---|---|
+| Cartoon | 25.3, 5.4 | 30.4, 12.0 | 30.4, 12.0 |
+| Drama | 35.5, 14.9 | 33.9, 13.5 | 33.9, 13.4 |
+| Reality show | 55.5, 18.3 | 52.2, 13.5 | 52.1, 13.2 |
+
+The whole-digest balance compensates a calm half-cartoon with an agitated
+reality show. Its ladder had about the same rungs (top rung CRF 22 against
+22.5), but its readings were wrong: the cartoon's 720p CRF 28 rung was read
+at VMAF 85.16 and 510 kb/s where the whole cartoon gives **87.86 and
+812 kb/s** (−2.7 VMAF, −37%), and its top rung 1.9 VMAF and 16% under, at
+least. Balanced on its own, each video is read as in the first table.
+
 ## Per-shot rungs (`ladderval -per-shot`, `-shot-optimum`)
 
 ```sh
@@ -1205,7 +1253,10 @@ channel finding on the programmes.
   takes and sport are missing. The features it balances on were chosen on
   the cartoon and the drama; the title of an hour, measured afterwards, is
   the only one that did not take part in that choice.
-
+- One ladder for several videos: one program of three SDR titles, x264;
+  the per-video readings are checked on two rungs, not on a series of
+  episodes that resemble each other (the case it is made for), nor with
+  HEVC or AV1.
 - Camera motion: the real-content check is a visual review of stills by
   one reviewer, not an annotated ground truth; shake on real content and
   the tracking heuristic are not measured against references.

@@ -253,6 +253,7 @@ func TestRunWizard(
 	t *testing.T,
 ) {
 	source := testutil.Generate(t, testutil.Clip{Name: "source.mp4"})
+	episode := testutil.Generate(t, testutil.Clip{Name: "episode.mp4"})
 	html := filepath.Join(t.TempDir(), "wizard.html")
 
 	testCases := []struct {
@@ -261,6 +262,7 @@ func TestRunWizard(
 		err        error
 		wantCode   int
 		wantStderr string
+		wantStdout string
 		wantFile   string
 	}{
 		{
@@ -271,6 +273,17 @@ func TestRunWizard(
 				HTML:    html,
 			},
 			wantStderr: "$ qc run " + source + " --codecs= --html " + html,
+			wantFile:   html,
+		},
+		{
+			name: "several videos run qc ladder",
+			answers: wizardAnswers{
+				Source: source, Program: []string{episode}, Codecs: []string{"h264", "hevc"},
+				Advanced: true, Shape: shapeResolutions, Resolutions: "180", SkipVerify: true,
+				HTML: html,
+			},
+			wantStderr: "$ qc ladder " + source + " " + episode + " -c h264,hevc --rungs 180p --no-verify --html " + html,
+			wantStdout: "program     2 videos",
 			wantFile:   html,
 		},
 		{
@@ -304,11 +317,12 @@ func TestRunWizard(
 				},
 			}
 
-			code, _, stderr := execute(t, env)
+			code, stdout, stderr := execute(t, env)
 
 			require.Equal(t, testCase.wantCode, code, stderr)
 			assert.Contains(t, stderr, "qc · fast video quality analysis")
 			assert.Contains(t, stderr, testCase.wantStderr)
+			assert.Contains(t, stdout, testCase.wantStdout)
 
 			if testCase.wantFile != "" {
 				_, err := os.Stat(testCase.wantFile)

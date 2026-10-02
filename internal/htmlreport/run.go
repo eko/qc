@@ -5,6 +5,7 @@ import (
 	"io"
 	"slices"
 
+	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/pipeline"
 )
 
@@ -16,6 +17,11 @@ func RenderRun(
 ) error {
 	p := runPage(r)
 	p.Kind = "Full run"
+
+	if program(r) != nil {
+		p.Kind = "Encoding ladders"
+	}
+
 	p.summarize(runSummary(r))
 
 	return render(w, p)
@@ -28,6 +34,10 @@ func runPage(
 	r *pipeline.Report,
 ) page {
 	p := analyzePage(r.Analysis)
+	if l := program(r); l != nil {
+		p = programPage(l)
+	}
+
 	p.Subtitle += " · " + r.Elapsed
 
 	if r.Comparison != nil {
@@ -62,12 +72,43 @@ func runPage(
 	return p
 }
 
+// program returns a ladder of the run when its ladders are those of
+// several videos, nil otherwise.
+func program(
+	r *pipeline.Report,
+) *ladder.Result {
+	if len(r.Ladders) == 0 || len(r.Ladders[0].Sources) < 2 {
+		return nil
+	}
+
+	return r.Ladders[0]
+}
+
+// programPage heads the page of the ladders of a program: its videos and
+// their common format, where a run shows the analysis of its source.
+func programPage(
+	l *ladder.Result,
+) page {
+	v, _ := l.Source.Info.PrimaryVideo()
+
+	return page{
+		Title:    ladderSubject(l),
+		Subtitle: fmt.Sprintf("%d videos · %d×%d · %.3f fps · %s", len(l.Sources), v.Width, v.Height, v.AvgFrameRate.Float(), v.HDR.DynamicRange),
+	}
+}
+
 // runSummary combines the summaries of a pipeline run, each finding scoped
 // to its report.
 func runSummary(
 	r *pipeline.Report,
 ) ([]card, []finding) {
 	cards, list := analysisCards(r.Analysis), scoped("Source", analysisFindings(r.Analysis))
+
+	// The ladders of a program are not those of the first video alone: its
+	// inspection is left out.
+	if program(r) != nil {
+		cards, list = nil, nil
+	}
 
 	if c := r.Comparison; c != nil {
 		cards = append(cards, comparisonCards(c.VMAF)[0])

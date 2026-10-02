@@ -114,15 +114,46 @@ func renderRun(
 		sections = append(sections, func() error { return tui.RenderComparison(w, report.Comparison, width, "") })
 	}
 
+	return renderSections(w, append(sections, ladderSections(w, report, width, commands)...))
+}
+
+// renderLadders prints the ladders of several codecs as text, and how they
+// compare.
+func renderLadders(
+	w io.Writer,
+	report *pipeline.Report,
+	width int,
+	commands bool,
+) error {
+	return renderSections(w, ladderSections(w, report, width, commands))
+}
+
+// ladderSections print every ladder of a report, then how the codecs
+// compare at equal quality when there are several.
+func ladderSections(
+	w io.Writer,
+	report *pipeline.Report,
+	width int,
+	commands bool,
+) []func() error {
+	var sections []func() error
+
 	for _, l := range report.Ladders {
 		sections = append(sections, func() error { return tui.RenderLadder(w, l, width, "", commands) })
 	}
 
-	// How the codecs compare at equal quality, when the run has several.
 	if len(findings.Codecs(report.Ladders)) > 0 {
 		sections = append(sections, func() error { return tui.RenderCodecs(w, report.Ladders) })
 	}
 
+	return sections
+}
+
+// renderSections prints sections separated by a blank line.
+func renderSections(
+	w io.Writer,
+	sections []func() error,
+) error {
 	for i, render := range sections {
 		if i > 0 {
 			fmt.Fprintln(w)

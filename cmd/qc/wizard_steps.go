@@ -54,18 +54,20 @@ func (a *wizardAnswers) formSteps(
 ) []wizardStep {
 	return []wizardStep{
 		{section: sectionSource, fields: a.sourceFields(ctx)},
-		{section: sectionAnalysis, fields: a.actionsFields()},
+		{section: sectionAnalysis, fields: a.actionsFields(), hidden: a.isProgram},
 		{section: sectionQuality, fields: a.referenceFields(ctx), hidden: a.vmafHidden},
 		{section: sectionQuality, fields: a.precisionFields(), hidden: a.vmafModeHidden(vmafPrecision)},
 		{section: sectionQuality, fields: a.shareFields(), hidden: a.vmafModeHidden(vmafShare)},
 		{section: sectionQuality, fields: a.perSceneFields(), hidden: a.vmafModeHidden(vmafPerScene)},
 		{section: sectionQuality, fields: a.metricsFields(), hidden: a.metricsHidden},
 		a.hdrStep(ctx.detectHDR),
-		{section: sectionLadder, fields: a.codecsFields(), hidden: a.ladderHidden},
+		{section: sectionLadder, fields: a.codecsFields(), hidden: a.codecsHidden},
+		{section: sectionLadder, fields: a.programFields(), hidden: a.programHidden},
 		{section: sectionLadder, fields: a.shapeFields(), hidden: a.advancedHidden},
 		{section: sectionLadder, fields: a.rungCountFields(), hidden: a.shapeHidden(shapeCount)},
 		{section: sectionLadder, fields: a.resolutionsFields(), hidden: a.shapeHidden(shapeResolutions)},
-		{section: sectionLadder, fields: a.encodingFields(), hidden: a.advancedHidden},
+		{section: sectionLadder, fields: a.encodingFields(true), hidden: a.encodingHidden(false)},
+		{section: sectionLadder, fields: a.encodingFields(false), hidden: a.encodingHidden(true)},
 		{section: sectionLadder, fields: a.filmGrainFields(), hidden: a.filmGrainHidden},
 		{section: sectionOutputs, fields: a.gpuFields(), hidden: func() bool { return !ctx.offerGPU }},
 		{section: sectionOutputs, fields: a.htmlFields()},
@@ -159,11 +161,35 @@ func (w wizardForm) current() section {
 	return w.sections[w.form.GetFocusedField()]
 }
 
-// wants reports whether action was picked.
+// wants reports whether action was picked. Several videos get a ladder and
+// nothing else.
 func (a *wizardAnswers) wants(
 	action string,
 ) bool {
+	if a.isProgram() {
+		return action == actionLadder
+	}
+
 	return slices.Contains(a.Actions, action)
+}
+
+// codecsHidden hides the codecs of the ladders of one video.
+func (a *wizardAnswers) codecsHidden() bool {
+	return a.ladderHidden() || a.isProgram()
+}
+
+// programHidden hides the codecs of the ladders of several videos.
+func (a *wizardAnswers) programHidden() bool {
+	return !a.isProgram()
+}
+
+// encodingHidden hides the encoding settings unless the ladder is
+// customised, and those of the other kind of ladder: of several videos or
+// of one.
+func (a *wizardAnswers) encodingHidden(
+	program bool,
+) func() bool {
+	return func() bool { return a.advancedHidden() || a.isProgram() != program }
 }
 
 // vmafHidden hides the VMAF settings unless VMAF was picked.
@@ -193,7 +219,7 @@ func (a *wizardAnswers) shapeHidden(
 // filmGrainHidden hides film grain synthesis without an AV1 ladder, or with
 // per-shot rungs, which exclude it.
 func (a *wizardAnswers) filmGrainHidden() bool {
-	return a.advancedHidden() || !slices.Contains(a.Codecs, av1Codec) || a.PerShot
+	return a.advancedHidden() || !slices.Contains(a.Codecs, av1Codec) || a.perShot()
 }
 
 // overlayHidden hides the annotated copy unless the source is analysed or

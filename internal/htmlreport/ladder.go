@@ -37,9 +37,9 @@ func ladderPage(
 	own := ladderArea(r.Codec.Name)
 
 	p := page{
-		Title: fmt.Sprintf("%s ladder · %s", r.Codec.Name, filepath.Base(r.Source.Info.Path)),
-		Subtitle: fmt.Sprintf("%d rungs · digest of %d segments (%.1f%% of the title%s) · %d probe encodes%s · %s",
-			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, samplingNote(r.Digest.Sampling), len(r.Probes), probingNote(r.Probing), r.Elapsed.Std().Round(time.Second)),
+		Title: fmt.Sprintf("%s ladder · %s", r.Codec.Name, ladderSubject(r)),
+		Subtitle: fmt.Sprintf("%d rungs · digest of %d segments (%.1f%% of the %s%s) · %d probe encodes%s · %s",
+			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, ladderScope(r), samplingNote(r.Digest.Sampling), len(r.Probes), probingNote(r.Probing), r.Elapsed.Std().Round(time.Second)),
 		Sections: slices.Concat([]section{{
 			Title:    "Rate / quality",
 			Subtitle: "probe encodes per resolution, their upper envelope and the selected rungs",
@@ -62,11 +62,98 @@ func ladderPage(
 	return p
 }
 
-// ladderExtras are the per-shot and film grain sections, when requested.
+// ladderSubject names what the ladder is for: its source, or the first
+// video of its program and how many follow.
+func ladderSubject(
+	r *ladder.Result,
+) string {
+	name := filepath.Base(r.Source.Info.Path)
+	if len(r.Sources) > 1 {
+		return fmt.Sprintf("%s and %d more", name, len(r.Sources)-1)
+	}
+
+	return name
+}
+
+// ladderScope is what the digest is a share of.
+func ladderScope(
+	r *ladder.Result,
+) string {
+	if len(r.Sources) > 1 {
+		return fmt.Sprintf("%d videos, as many segments each", len(r.Sources))
+	}
+
+	return "title"
+}
+
+// digestSubject is what the segments of the digest are taken from.
+func digestSubject(
+	r *ladder.Result,
+) string {
+	if len(r.Sources) > 1 {
+		return fmt.Sprintf("%d videos", len(r.Sources))
+	}
+
+	return "title"
+}
+
+// programTable reads every verified rung video by video: its VMAF on each
+// rung and what the top rung costs there (the bitrates of the other rungs
+// are in the JSON report). It is nil for the ladder of one title.
+func programTable(
+	r *ladder.Result,
+) *table {
+	if len(r.Sources) < 2 || len(r.Digest.Titles) != len(r.Sources) {
+		return nil
+	}
+
+	t := &table{Head: []string{"video", "duration", "segments"}}
+	for i, rung := range r.Rungs {
+		t.Head = append(t.Head, fmt.Sprintf("#%d %dp", i+1, rung.Height))
+	}
+
+	t.Head = append(t.Head, "top rung")
+
+	for v := range r.Sources {
+		row := []string{sourceName(r, v), clock(r.Sources[v].Info.Duration), strconv.Itoa(r.Digest.Titles[v].Segments)}
+		top := "–"
+
+		for i, rung := range r.Rungs {
+			cell := "–"
+
+			if m := rung.Measured; m != nil && v < len(m.Titles) {
+				if m.Titles[v].ScoredFrames > 0 {
+					cell = fmt.Sprintf("%.1f", m.Titles[v].VMAF)
+				}
+
+				if i == 0 {
+					top = bitrateLabel(float64(m.Titles[v].Bitrate))
+				}
+			}
+
+			row = append(row, cell)
+		}
+
+		t.Rows = append(t.Rows, append(row, top))
+	}
+
+	return t
+}
+
+// ladderExtras are the per-video, per-shot and film grain sections, when
+// requested.
 func ladderExtras(
 	r *ladder.Result,
 ) []section {
 	var out []section
+
+	if t := programTable(r); t != nil {
+		out = append(out, section{
+			Title:    "Per-video quality",
+			Subtitle: "the VMAF of every rung on the frames of each video of the program, and what the top rung costs there",
+			Table:    t,
+		})
+	}
 
 	if t := perShotTable(r.Rungs); t != nil {
 		out = append(out, section{
@@ -115,7 +202,7 @@ func renditionTable(
 		}
 
 		t.Rows = append(t.Rows, []string{
-			filepath.Base(rd.Path), fmt.Sprintf("%d×%d", rd.Width, rd.Height),
+			rd.Name(), fmt.Sprintf("%d×%d", rd.Width, rd.Height),
 			bitrateLabel(bitrate), bitrateLabel(float64(rd.Bitrate)), fmt.Sprintf("%.1f", vmaf), checked,
 		})
 	}
@@ -564,7 +651,7 @@ func ladderCards(
 
 	return append(cards,
 		card{Label: "Probe encodes", Value: strconv.Itoa(len(r.Probes)), Detail: probing},
-		card{Label: "Digest", Value: fmt.Sprintf("%.1f%%", r.Digest.Share*100), Detail: plural(len(r.Digest.Segments), "segment") + " of the title"},
+		card{Label: "Digest", Value: fmt.Sprintf("%.1f%%", r.Digest.Share*100), Detail: plural(len(r.Digest.Segments), "segment") + " of the " + digestSubject(r)},
 	)
 }
 

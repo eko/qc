@@ -29,6 +29,8 @@ type videoSummary struct {
 	// dynamicRange is the HDR format ("HDR10", "HLG"...), "" for SDR.
 	dynamicRange string
 	audioTracks  int
+	// stream is the video stream, compared between the videos of one ladder.
+	stream media.VideoStream
 }
 
 // summarize extracts the summary of a probed file.
@@ -42,7 +44,7 @@ func summarize(
 		return s
 	}
 
-	s.hasVideo = true
+	s.hasVideo, s.stream = true, v
 	s.codec, s.width, s.height, s.bitDepth = v.Codec, v.Width, v.Height, v.BitDepth
 	s.fps = v.AvgFrameRate.Float()
 

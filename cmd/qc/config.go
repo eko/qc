@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/eko/qc/audio/loudness"
@@ -328,12 +329,13 @@ func (c Config) validateFilmGrain() error {
 }
 
 // ladderCodecs are the codecs of the ladders the command builds: --codec
-// of the ladder command, --codecs of the run command.
+// of the ladder command (one, or several separated by commas), --codecs of
+// the run command.
 func (c Config) ladderCodecs() []string {
 	var codecs []string
 
-	for _, codec := range append([]string{c.Ladder.Codec}, c.Run.Codecs...) {
-		if codec != "" {
+	for _, codec := range append(strings.Split(c.Ladder.Codec, ","), c.Run.Codecs...) {
+		if codec = strings.TrimSpace(codec); codec != "" {
 			codecs = append(codecs, codec)
 		}
 	}

@@ -28,6 +28,14 @@ var fakeVideos = map[string]*media.Info{
 		}},
 		Audio: []media.AudioStream{{Codec: "aac"}},
 	},
+	// episode.mp4 has the format of source.mp4: they can share a ladder.
+	"episode.mp4": {
+		Duration: media.Duration(45 * time.Second),
+		Video: []media.VideoStream{{
+			Codec: "h264", Width: 1920, Height: 1080, BitDepth: 8,
+			AvgFrameRate: media.Rational{Num: 25, Den: 1},
+		}},
+	},
 	"ref.mov": {
 		Duration: media.Duration(65 * time.Second),
 		Video: []media.VideoStream{{
@@ -77,6 +85,19 @@ func wizardDir(
 	}
 
 	t.Chdir(dir)
+
+	return dir
+}
+
+// programDir is wizardDir with episode.mp4, a video of the format of
+// source.mp4.
+func programDir(
+	t *testing.T,
+) string {
+	t.Helper()
+
+	dir := wizardDir(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "episode.mp4"), []byte("x"), 0o600))
 
 	return dir
 }

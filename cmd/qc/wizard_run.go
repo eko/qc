@@ -17,11 +17,11 @@ import (
 	"github.com/eko/qc/quality"
 )
 
-// runWizard asks what to compute, prints the equivalent qc run command and
-// runs it with runCmd, so that the wizard behaves exactly like the command it
-// shows.
+// runWizard asks what to compute, prints the equivalent command (qc run, or
+// qc ladder for the ladders of several videos) and runs it with runCmd or
+// ladderCmd, so that the wizard behaves exactly like the command it shows.
 func runWizard(
-	cmd, runCmd *cobra.Command,
+	cmd, runCmd, ladderCmd *cobra.Command,
 	env environment,
 ) error {
 	stderr := cmd.ErrOrStderr()
@@ -54,28 +54,35 @@ func runWizard(
 		return fmt.Errorf("wizard: %w", err)
 	}
 
-	args := answers.runArgs()
-	fmt.Fprintln(stderr, handoff(args, newWizardStyle(os.Getenv, lipgloss.ColorProfile())))
+	command := answers.command()
+	fmt.Fprintln(stderr, handoff(command, newWizardStyle(os.Getenv, lipgloss.ColorProfile())))
 
-	if err := runCmd.ParseFlags(args); err != nil {
+	target := runCmd
+	if answers.isProgram() {
+		target = ladderCmd
+	}
+
+	if err := target.ParseFlags(command[2:]); err != nil {
 		return fmt.Errorf("wizard: %w", err)
 	}
 
-	runCmd.SetContext(cmd.Context())
+	target.SetContext(cmd.Context())
 
-	return runEverything(runCmd, env, runCmd.Flags().Arg(0))
+	if answers.isProgram() {
+		return runLadder(target, env, target.Flags().Args())
+	}
+
+	return runEverything(target, env, target.Flags().Arg(0))
 }
 
 // handoff introduces the dashboard: the command the wizard runs, to run it
 // again without the wizard.
 func handoff(
-	args []string,
+	command []string,
 	s wizardStyle,
 ) string {
-	command := commandLine(append([]string{"qc", "run"}, args...))
-
 	return "  " + s.faint.Render("equivalent command "+s.g.dot+" run it again without the wizard") + "\n" +
-		"  " + s.accent.Render("$ ") + s.text.Render(command)
+		"  " + s.accent.Render("$ ") + s.text.Render(commandLine(command))
 }
 
 // wizardOffersGPU reports whether the wizard asks about the GPU: whether

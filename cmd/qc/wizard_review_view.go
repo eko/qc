@@ -31,7 +31,7 @@ func (m *wizardModel) commandView(
 	width int,
 ) string {
 	s := m.ctx.style
-	lines := wrapCommand(append([]string{"qc", "run"}, m.answers.runArgs()...), width-2)
+	lines := wrapCommand(m.answers.command(), width-2)
 	title := s.kicker.Render("COMMAND") + s.faint.Render("  "+s.g.dot+"  what runs, to run it again without the wizard")
 
 	for i, line := range lines {

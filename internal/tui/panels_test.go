@@ -97,6 +97,16 @@ func TestLadderPanel(
 			want:  []string{"extracting a digest of segments spread over the title…"},
 		},
 		{
+			name:  "analysis of the videos of a program",
+			panel: LadderPanel{Stage: ladder.StageAnalysis, Videos: 3},
+			want:  []string{"analysing the 3 videos, to place their digest…"},
+		},
+		{
+			name:  "digest of a program",
+			panel: LadderPanel{Stage: ladder.StageDigest, Videos: 3},
+			want:  []string{"extracting a digest of segments spread over the 3 videos…"},
+		},
+		{
 			name:  "no probe yet",
 			panel: LadderPanel{Stage: ladder.StageProbe},
 			want:  []string{"encoding the first probes…"},

@@ -82,34 +82,49 @@ func (b *build) makeDigest(
 		return digest, nil
 	}
 
-	dir := b.prepared.digestDir(b.workDir)
-	depth := digestBitDepth(b.video)
-	lossless := rawDigestBytes(b.video, depth, digest.Duration) > maxRawDigestBytes
+	spec := encode.DigestSpec{Source: b.source, Segments: digest.Segments, Origin: b.origin}
 
-	path := filepath.Join(dir, "digest.nut")
-	if lossless {
-		path = filepath.Join(dir, "digest.mkv")
+	path, report, err := b.extractDigest(ctx, b.prepared.digestDir(b.workDir), digest.Duration, spec)
+	if err != nil {
+		return Digest{}, err
 	}
 
-	spec := encode.DigestSpec{
-		Source: b.source, Destination: path, Segments: digest.Segments,
-		Rate: b.video.AvgFrameRate, BitDepth: depth, Lossless: lossless, Origin: b.origin,
+	b.prepared.keepDigest(digest.Segments, path, report)
+
+	return digest, nil
+}
+
+// extractDigest writes the digest spec cuts (its sources and segments) into
+// dir, raw or compressed losslessly as its duration asks, inspects it and
+// makes it what the build encodes and scores against.
+func (b *build) extractDigest(
+	ctx context.Context,
+	dir string,
+	duration media.Duration,
+	spec encode.DigestSpec,
+) (string, *analysis.Report, error) {
+	spec.BitDepth = digestBitDepth(b.video)
+	spec.Lossless = rawDigestBytes(b.video, spec.BitDepth, duration) > maxRawDigestBytes
+	spec.Rate = b.video.AvgFrameRate
+
+	spec.Destination = filepath.Join(dir, "digest.nut")
+	if spec.Lossless {
+		spec.Destination = filepath.Join(dir, "digest.mkv")
 	}
 
 	if err := b.engine.digester.Digest(ctx, spec); err != nil {
-		return Digest{}, fmt.Errorf("ladder: %w", err)
+		return "", nil, fmt.Errorf("ladder: %w", err)
 	}
 
-	report, err := b.engine.inspector.Analyze(ctx, path, analysis.Options{SkipVideo: true})
+	report, err := b.engine.inspector.Analyze(ctx, spec.Destination, analysis.Options{SkipVideo: true})
 	if err != nil {
-		return Digest{}, fmt.Errorf("ladder: inspect digest: %w", err)
+		return "", nil, fmt.Errorf("ladder: inspect digest: %w", err)
 	}
 
 	report = withSignal(report, b.video)
-	b.prepared.keepDigest(digest.Segments, path, report)
-	b.useDigest(path, report)
+	b.useDigest(spec.Destination, report)
 
-	return digest, nil
+	return spec.Destination, report, nil
 }
 
 // useDigest makes the digest at path, inspected as report, what the build

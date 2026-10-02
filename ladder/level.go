@@ -124,6 +124,12 @@ func (b *build) leveled(
 ) Measurement {
 	if mode == scoreRung || mode == scoreProbe {
 		m.VMAF += b.level
+
+		for i := range m.Titles {
+			if m.Titles[i].ScoredFrames > 0 {
+				m.Titles[i].VMAF += b.level
+			}
+		}
 	}
 
 	return m

@@ -16,7 +16,8 @@ func (a *wizardAnswers) sourceFields(
 	ctx wizardContext,
 ) []huh.Field {
 	return []huh.Field{
-		newVideoPicker("Video to analyse", "The source: a mezzanine for ladders, or an encode to compare for VMAF.", &a.Source, ctx),
+		newVideoPicker("Video to analyse", "The source: a mezzanine for ladders, or an encode to compare for VMAF.", &a.Source, ctx).
+			Several(&a.Program),
 	}
 }
 
@@ -152,17 +153,22 @@ func (a *wizardAnswers) hdrDetected(
 	return detect(a.Source)
 }
 
-// codecsFields ask for the ladder codecs, and whether to customise the
-// ladders.
+// codecOptions are the codecs a ladder is built for.
+func codecOptions() []huh.Option[string] {
+	return []huh.Option[string]{
+		huh.NewOption("H.264 · libx264", "h264"),
+		huh.NewOption("HEVC · libx265", "hevc"),
+		huh.NewOption("AV1 · SVT-AV1", av1Codec),
+	}
+}
+
+// codecsFields ask for the ladder codecs, the digest, and whether to
+// customise the ladders.
 func (a *wizardAnswers) codecsFields() []huh.Field {
 	return []huh.Field{
 		huh.NewMultiSelect[string]().
 			Title("Ladder codecs").
-			Options(
-				huh.NewOption("H.264 · libx264", "h264"),
-				huh.NewOption("HEVC · libx265", "hevc"),
-				huh.NewOption("AV1 · SVT-AV1", av1Codec),
-			).
+			Options(codecOptions()...).
 			Validate(requireOne("pick at least one codec")).
 			Value(&a.Codecs),
 		huh.NewSelect[string]().
@@ -174,13 +180,41 @@ func (a *wizardAnswers) codecsFields() []huh.Field {
 				huh.NewOption("Uniform · evenly spaced segments", "uniform"),
 			).
 			Value(&a.Digest),
-		newConfirm().
-			Title("Customise the ladder?").
-			Description("Rung count or resolutions, quality range, bitrate cap, preset, bit depth.").
-			Affirmative("Yes").
-			Negative("No, automatic").
-			Value(&a.Advanced),
+		a.customiseField(),
 	}
+}
+
+// programFields ask for the codecs of the ladders of several videos, their
+// digest, and whether to customise them. The page is as tall as that of
+// one video (codecsFields), which fills an 80×24 terminal.
+func (a *wizardAnswers) programFields() []huh.Field {
+	return []huh.Field{
+		huh.NewMultiSelect[string]().
+			Title("Ladder codecs · one ladder each, for all the videos").
+			Options(codecOptions()...).
+			Validate(requireOne("pick at least one codec")).
+			Value(&a.Codecs),
+		huh.NewSelect[string]().
+			Title("Digest the ladder is estimated on").
+			Description("About 40 s, shared equally between the videos whatever their length.").
+			Options(
+				huh.NewOption("Balanced · each video's part as busy as the video (its SI and TI)", "balanced"),
+				huh.NewOption("Most complex scenes · what the demanding scenes of each video need", "top"),
+				huh.NewOption("Uniform · evenly spaced segments", "uniform"),
+			).
+			Value(&a.Digest),
+		a.customiseField(),
+	}
+}
+
+// customiseField asks whether to customise the ladder.
+func (a *wizardAnswers) customiseField() huh.Field {
+	return newConfirm().
+		Title("Customise the ladder?").
+		Description("Rung count or resolutions, quality range, bitrate cap, preset, bit depth.").
+		Affirmative("Yes").
+		Negative("No, automatic").
+		Value(&a.Advanced)
 }
 
 // shapeFields ask for the ladder shape and its quality range.
@@ -230,9 +264,12 @@ func (a *wizardAnswers) resolutionsFields() []huh.Field {
 }
 
 // encodingFields ask for the encoding settings, the verification, the
-// probe placement and the per-shot rungs.
-func (a *wizardAnswers) encodingFields() []huh.Field {
-	return []huh.Field{
+// probe placement and, with perShot, the per-shot rungs (of one title: the
+// ladder of several videos has none).
+func (a *wizardAnswers) encodingFields(
+	perShot bool,
+) []huh.Field {
+	fields := []huh.Field{
 		huh.NewInput().
 			Title("Maximum bitrate (kb/s)").
 			Description("Cap of the top rung. Leave empty for no cap.").
@@ -262,13 +299,18 @@ func (a *wizardAnswers) encodingFields() []huh.Field {
 				huh.NewOption("Adaptive · probes where the rungs are uncertain", "adaptive"),
 			).
 			Value(&a.Probing),
-		newConfirm().
-			Title("Add per-shot rungs?").
-			Description("One CRF per shot at equal rate-quality slope; costs exact probes and a verification per rung. Excludes AV1 film grain synthesis.").
-			Affirmative("Yes").
-			Negative("No").
-			Value(&a.PerShot),
 	}
+
+	if !perShot {
+		return fields
+	}
+
+	return append(fields, newConfirm().
+		Title("Add per-shot rungs?").
+		Description("One CRF per shot at equal rate-quality slope; costs exact probes and a verification per rung. Excludes AV1 film grain synthesis.").
+		Affirmative("Yes").
+		Negative("No").
+		Value(&a.PerShot))
 }
 
 // filmGrainFields ask for AV1 film grain synthesis, which per-shot rungs

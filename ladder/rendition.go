@@ -50,8 +50,10 @@ type Rendition struct {
 	// PerShot is set for the per-shot version of the rung.
 	PerShot bool   `json:"perShot,omitempty"`
 	Path    string `json:"path"`
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
+	// Source is the video encoded, for the renditions of a program.
+	Source string `json:"source,omitempty"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 	// Bitrate is the rendition's average bitrate over the whole title.
 	Bitrate int64 `json:"bitrate"`
 	// Checked is the rendition measured against the source when checked
@@ -61,9 +63,20 @@ type Rendition struct {
 	Elapsed media.Duration `json:"elapsed"`
 }
 
+// Name names the rendition in reports: its file, after its folder for the
+// renditions of a program, which share their file names.
+func (rd Rendition) Name() string {
+	if rd.Source == "" {
+		return filepath.Base(rd.Path)
+	}
+
+	return filepath.Join(filepath.Base(filepath.Dir(rd.Path)), filepath.Base(rd.Path))
+}
+
 // Prediction is what the ladder predicted, on the digest, for rendition rd
 // of res: the rung's quality and bitrate, or its per-shot version's
-// (pooled over the title's shots).
+// (pooled over the title's shots). For a video of a program, it is what
+// the rung measured on the segments of that video, when it was verified.
 func (res *Result) Prediction(
 	rd Rendition,
 ) (vmaf, bitrate float64) {
@@ -72,7 +85,39 @@ func (res *Result) Prediction(
 		return r.PerShot.PredictedVMAF, r.PerShot.PooledBitrate(res.Shots)
 	}
 
+	if i := res.titleOf(rd.Source); i >= 0 && r.Measured != nil && i < len(r.Measured.Titles) {
+		if t := r.Measured.Titles[i]; t.ScoredFrames > 0 {
+			return t.VMAF, float64(t.Bitrate)
+		}
+	}
+
 	return r.PredictedVMAF, float64(r.Bitrate)
+}
+
+// titleOf returns the index of source among the videos of a program, -1
+// when it is not one of them (or res is the ladder of one title).
+func (res *Result) titleOf(
+	source string,
+) int {
+	for i, s := range res.Sources {
+		if s != nil && s.Info != nil && s.Info.Path == source {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// inspectionOf returns the inspection of source: that of the video of the
+// program it is, the ladder's source otherwise.
+func (res *Result) inspectionOf(
+	source string,
+) *analysis.Report {
+	if i := res.titleOf(source); i >= 0 {
+		return res.Sources[i]
+	}
+
+	return res.Source
 }
 
 // RenditionProgress reports the encoding of the renditions: the frames
@@ -172,7 +217,10 @@ func renditionJobs(
 
 // Encode encodes the renditions of the ladder res of source on the whole
 // title, into opts.Dir, checks them against the source when asked, and
-// records them in res.Renditions.
+// records them in res.Renditions. For the ladder of a program, source is
+// one of its videos: each is encoded by a call of its own, into a
+// directory of its own, the caller gathering the renditions (res.Renditions
+// holds those of the last call).
 func (e *Engine) Encode(
 	ctx context.Context,
 	source string,
@@ -183,15 +231,27 @@ func (e *Engine) Encode(
 		return nil, ErrNoRenditionEncoder
 	}
 
-	video, duration, err := usableVideo(res.Source)
+	// The video encoded: the ladder's source, or one of its program.
+	inspection := res.inspectionOf(source)
+
+	video, duration, err := usableVideo(inspection)
 	if err != nil {
 		return nil, err
 	}
 
 	jobs := renditionJobs(res, opts)
+	if res.titleOf(source) >= 0 {
+		for i := range jobs {
+			jobs[i].rendition.Source = source
+		}
+	}
+
 	frames := int(math.Round(duration.Seconds() * video.AvgFrameRate.Float()))
-	src := encode.ChunkSource{Path: source, Rate: video.AvgFrameRate, Origin: videoOrigin(res.Source, video)}
-	run := &renditionRun{engine: e, res: res, source: src, opts: opts, done: make([]int, len(jobs)), total: frames * len(jobs)}
+	src := encode.ChunkSource{Path: source, Rate: video.AvgFrameRate, Origin: videoOrigin(inspection, video)}
+	run := &renditionRun{
+		engine: e, res: res, source: src, reference: inspection, opts: opts,
+		done: make([]int, len(jobs)), total: frames * len(jobs),
+	}
 
 	out := make([]Rendition, len(jobs))
 	group, gctx := errgroup.WithContext(ctx)
@@ -220,7 +280,10 @@ type renditionRun struct {
 	engine *Engine
 	res    *Result
 	source encode.ChunkSource
-	opts   RenditionOptions
+	// reference is the inspection of the video encoded, which its
+	// renditions are checked against.
+	reference *analysis.Report
+	opts      RenditionOptions
 
 	// mu guards done and serialises Progress calls.
 	mu    sync.Mutex
@@ -257,7 +320,7 @@ func (r *renditionRun) encode(
 
 	if r.opts.Check != nil {
 		cmp, err := r.engine.inspector.Compare(ctx, r.source.Path, rendition.Path, analysis.CompareOptions{
-			Reference: r.res.Source, Distorted: encoded, Quality: *r.opts.Check,
+			Reference: r.reference, Distorted: encoded, Quality: *r.opts.Check,
 		})
 		if err != nil {
 			return Rendition{}, fmt.Errorf("%s: check: %w", filepath.Base(rendition.Path), err)

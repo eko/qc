@@ -24,6 +24,23 @@ The release notes of each GitHub release are taken from its section here
 
 - **`--digest-duration`**: the length of the digest, 40 s by default
   whatever the title.
+- **One ladder for several videos** (per-program encoding): `qc ladder
+  ep1.mov ep2.mov ep3.mov` builds one ladder for all of them
+  (`ladder.Engine.BuildProgram`, `pipeline.Options.Program`). The digest
+  takes as many segments in every video, whatever its length, each video
+  balanced on its own SI and TI; the videos must share their resolution,
+  frame rate, bit depth and dynamic range. Every verified rung is also read
+  video by video (`Measurement.Titles`, a *Per-video quality* table in the
+  reports), with findings for a video the shared ladder under-serves or
+  over-serves on the top rung and for the rung where the videos differ
+  most; `--encode-ladder` encodes every video into a folder of its own.
+  In the wizard, `space` selects several videos, which then get that
+  ladder for every codec picked. `qc run` stays on one video, and per-shot
+  rungs on one title.
+- **`qc ladder -c h264,av1`**: several codecs in one command, for one
+  video or several: one ladder each on the same analysis and digest
+  (`ladder.Engine.PrepareProgram` for several videos), compared at equal
+  quality, reported together as a run reports them.
 - **Codecs compared at equal quality**: a run with several codecs reports
   what every newer codec needs against the oldest one at equal VMAF, on the
   verified rungs (`ladder.CompareRates`), and warns when a newer codec

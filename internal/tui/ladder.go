@@ -41,6 +41,10 @@ func RenderLadder(
 		blocks = append(blocks, table)
 	}
 
+	if table := programTable(res); table != "" {
+		blocks = append(blocks, table)
+	}
+
 	if table := perShotTable(res.Rungs, res.ShotProbing); table != "" {
 		blocks = append(blocks, table)
 	}
@@ -68,12 +72,118 @@ func ladderHeader(
 	res *ladder.Result,
 ) string {
 	return reportTitle("ladder") + "\n\n" +
-		sourceLines("source", res.Source, false) + "\n" +
+		subjectLines(res) + "\n" +
 		key.Render("target") + Bold.Render(res.Codec.Name) + Subtle.Render(fmt.Sprintf(" (%s, preset %s)", res.Codec.Encoder, res.Preset)) + "\n" +
 		key.Render("shape") + Subtle.Render(shapeLabel(res)) + "\n" +
-		key.Render("digest") + Subtle.Render(fmt.Sprintf("%d segment(s)%s · %s · %.1f%% of the title · %d probe encodes%s",
-		len(res.Digest.Segments), samplingLabel(res.Digest.Sampling), Clock(res.Digest.Duration, false), res.Digest.Share*100, len(res.Probes), probingLabel(res.Probing))) +
+		key.Render("digest") + Subtle.Render(fmt.Sprintf("%d segment(s)%s · %s · %.1f%% of the %s · %d probe encodes%s",
+		len(res.Digest.Segments), samplingLabel(res.Digest.Sampling), Clock(res.Digest.Duration, false), res.Digest.Share*100, digestScope(res), len(res.Probes), probingLabel(res.Probing))) +
 		grainLine(res.Grain)
+}
+
+// subjectLines present what the ladder is for: its source, or the videos
+// of its program, the first of which gives their common format.
+func subjectLines(
+	res *ladder.Result,
+) string {
+	if len(res.Sources) < 2 {
+		return sourceLines("source", res.Source, false)
+	}
+
+	v, _ := res.Source.Info.PrimaryVideo()
+	lines := []string{
+		key.Render("program") + Bold.Render(fmt.Sprintf("%d videos", len(res.Sources))) +
+			Subtle.Render(fmt.Sprintf(" · %s · %d×%d · %.3f fps", v.Codec, v.Width, v.Height, v.AvgFrameRate.Float())),
+	}
+
+	for _, s := range res.Sources {
+		dir, file := filepath.Split(s.Info.Path)
+		lines = append(lines, key.Render("")+Subtle.Render(dir)+Bold.Render(file)+Subtle.Render(" · "+Clock(s.Info.Duration, false)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// digestScope is what the digest is a share of.
+func digestScope(
+	res *ladder.Result,
+) string {
+	if len(res.Sources) > 1 {
+		return "program, as many segments per video"
+	}
+
+	return "title"
+}
+
+// Per-video table column widths.
+const (
+	colVideo     = 28
+	colVideoRung = 8
+)
+
+// programTable reads every verified rung video by video, for the ladder of
+// a program: the VMAF of the rung on the frames of each video, and what
+// the top rung costs there.
+func programTable(
+	res *ladder.Result,
+) string {
+	if len(res.Sources) < 2 || len(res.Rungs) == 0 || res.Rungs[0].Measured == nil {
+		return ""
+	}
+
+	var head strings.Builder
+
+	fmt.Fprintf(&head, "  %-*s", colVideo, "video")
+
+	for i, r := range res.Rungs {
+		fmt.Fprintf(&head, " %*s", colVideoRung, fmt.Sprintf("%d·%dp", i+1, r.Height))
+	}
+
+	fmt.Fprintf(&head, " %*s", colBitrate, "top rung")
+
+	lines := []string{
+		section.Render("Per-video quality") + Subtle.Render("  (VMAF of each rung on the frames of each video)"),
+		Subtle.Render(head.String()),
+	}
+
+	for v := range res.Sources {
+		var line strings.Builder
+
+		fmt.Fprintf(&line, "  %-*s", colVideo, truncate(sourceName(res, v), colVideo))
+
+		for _, r := range res.Rungs {
+			cell := padLeft("–", colVideoRung)
+
+			if m := r.Measured; m != nil && v < len(m.Titles) && m.Titles[v].ScoredFrames > 0 {
+				cell = padLeft(scoreStyle(m.Titles[v].VMAF).Render(fmt.Sprintf("%.1f", m.Titles[v].VMAF)), colVideoRung)
+			}
+
+			line.WriteString(" " + cell)
+		}
+
+		top := "–"
+		if titles := res.Rungs[0].Measured.Titles; v < len(titles) {
+			top = Bitrate(float64(titles[v].Bitrate))
+		}
+
+		fmt.Fprintf(&line, " %*s", colBitrate, top)
+		lines = append(lines, line.String())
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// truncate keeps the end of a name longer than width, where file names
+// differ (an episode number), behind an ellipsis.
+func truncate(
+	name string,
+	width int,
+) string {
+	r := []rune(name)
+	if len(r) <= width {
+		return name
+	}
+
+	return "…" + string(r[len(r)-width+1:])
 }
 
 // grainLine describes film grain synthesis, when requested.
@@ -124,7 +234,7 @@ func renditionsTable(
 
 	for _, rd := range res.Renditions {
 		vmaf, bitrate := res.Prediction(rd)
-		line := fmt.Sprintf("  %-24s %-11s %*s %*s %*s", filepath.Base(rd.Path), fmt.Sprintf("%d×%d", rd.Width, rd.Height),
+		line := fmt.Sprintf("  %-24s %-11s %*s %*s %*s", rd.Name(), fmt.Sprintf("%d×%d", rd.Width, rd.Height),
 			colBitrate, Bitrate(bitrate), colBitrate, Bitrate(float64(rd.Bitrate)), colVMAF, fmt.Sprintf("%.1f", vmaf))
 
 		if c := rd.Checked; c != nil {

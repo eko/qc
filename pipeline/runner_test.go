@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,16 +116,18 @@ type fakeLadders struct {
 	codec   encode.Codec
 	built   []ladder.Options
 	sources []string
+	// programs lists the programs built.
+	programs [][]string
 	// prepared lists the sources prepared; prepareErr fails Prepare.
 	prepared   []string
 	prepareErr error
 }
 
-func (l *fakeLadders) Prepare(
+func (l *fakeLadders) PrepareProgram(
 	_ context.Context,
-	source string,
+	sources []string,
 ) (*ladder.Prepared, error) {
-	l.prepared = append(l.prepared, source)
+	l.prepared = append(l.prepared, strings.Join(sources, "+"))
 
 	if l.prepareErr != nil {
 		return nil, l.prepareErr
@@ -149,6 +153,16 @@ func (l *fakeLadders) Build(
 	}
 
 	return &ladder.Result{Rungs: l.rungs, Codec: l.codec}, nil
+}
+
+func (l *fakeLadders) BuildProgram(
+	ctx context.Context,
+	sources []string,
+	opts ladder.Options,
+) (*ladder.Result, error) {
+	l.programs = append(l.programs, sources)
+
+	return l.Build(ctx, sources[0], opts)
 }
 
 var errOverlay = errors.New("overlay failed")
@@ -860,4 +874,78 @@ func TestRunRenditionsDirectory(
 
 	_, err := r.renditions(t.Context(), "h264", Options{Renditions: ladder.RenditionOptions{Dir: dir}}, &Report{Ladders: []*ladder.Result{{}}}, nil)
 	require.ErrorContains(t, err, "renditions")
+}
+
+func TestRunProgram(
+	t *testing.T,
+) {
+	dir := t.TempDir()
+	ladders := &fakeLadders{rungs: []ladder.Rung{{Height: 1080, Bitrate: 4_500_000}}}
+	encoder := &fakeEncoder{}
+
+	opts := Options{
+		Source: "show/episode.mp4", Program: []string{"show/special.mov", "other/episode.mp4"},
+		SkipAnalysis: true, Codecs: []string{"h264", "av1"},
+		Renditions: ladder.RenditionOptions{Dir: dir},
+	}
+
+	var ev events
+
+	rep, err := NewRunner(&fakeAnalyzer{}, ladders, WithLadderEncoder(encoder)).Run(t.Context(), opts, ev.hooks())
+	require.NoError(t, err)
+	require.Len(t, rep.Ladders, 2)
+
+	// One ladder per codec for the three videos, prepared once for both.
+	videos := []string{"show/episode.mp4", "show/special.mov", "other/episode.mp4"}
+	assert.Equal(t, [][]string{videos, videos}, ladders.programs)
+	assert.Equal(t, []string{"show/episode.mp4+show/special.mov+other/episode.mp4"}, ladders.prepared)
+	require.Len(t, ladders.built, 2)
+	assert.NotNil(t, ladders.built[0].Prepared)
+	assert.Same(t, ladders.built[0].Prepared, ladders.built[1].Prepared)
+
+	// Every video is encoded, into a folder of its own: videos share the
+	// names of their renditions, and two of these their own name.
+	assert.Equal(t, append(slices.Clone(videos), videos...), encoder.sources)
+	assert.Equal(t, []string{
+		filepath.Join(dir, "h264", "episode"), filepath.Join(dir, "h264", "special"), filepath.Join(dir, "h264", "episode-3"),
+		filepath.Join(dir, "av1", "episode"), filepath.Join(dir, "av1", "special"), filepath.Join(dir, "av1", "episode-3"),
+	}, encoder.dirs)
+
+	for _, folder := range encoder.dirs {
+		assert.DirExists(t, folder)
+	}
+
+	// The ladder holds the renditions of all of them.
+	require.Len(t, rep.Ladders[0].Renditions, 3)
+	assert.Equal(t, rep.Ladders[1].Renditions, ev.results[len(ev.results)-1].Renditions)
+	assert.Equal(t, filepath.Join(dir, "av1", "episode-3", "01-1080p.mp4"), rep.Ladders[1].Renditions[2].Path)
+}
+
+func TestRunProgramErrors(
+	t *testing.T,
+) {
+	opts := Options{Source: "a.mp4", Program: []string{"b.mp4"}, SkipAnalysis: true, Codecs: []string{"h264"}}
+
+	// The ladder of the program fails.
+	_, err := NewRunner(&fakeAnalyzer{}, &fakeLadders{err: errLadder}).Run(t.Context(), opts, Hooks{})
+	require.ErrorIs(t, err, errLadder)
+
+	// A file where the folder of the second video goes.
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "h264"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "h264", "b"), nil, 0o600))
+
+	opts.Renditions = ladder.RenditionOptions{Dir: dir}
+	ladders := &fakeLadders{rungs: []ladder.Rung{{Height: 1080, Bitrate: 4_500_000}}}
+
+	_, err = NewRunner(&fakeAnalyzer{}, ladders, WithLadderEncoder(&fakeEncoder{})).Run(t.Context(), opts, Hooks{})
+	require.ErrorContains(t, err, "renditions")
+}
+
+func TestOptionsVideos(
+	t *testing.T,
+) {
+	assert.Equal(t, []string{"a.mp4"}, Options{Source: "a.mp4"}.videos())
+	assert.Equal(t, []string{"a.mp4", "b.mp4"}, Options{Source: "a.mp4", Program: []string{"b.mp4"}}.videos())
+	assert.Equal(t, []string{"mezzanine.mov", "b.mp4"}, Options{Source: "a.mp4", LadderSource: "mezzanine.mov", Program: []string{"b.mp4"}}.videos())
 }

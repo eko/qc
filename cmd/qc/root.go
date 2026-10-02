@@ -7,7 +7,7 @@ import (
 func newRootCommand(
 	env environment,
 ) *cobra.Command {
-	runCmd := newRunCommand(env)
+	runCmd, ladderCmd := newRunCommand(env), newLadderCommand(env)
 
 	root := &cobra.Command{
 		Use:   "qc",
@@ -29,7 +29,7 @@ func newRootCommand(
 				return cmd.Help()
 			}
 
-			return runWizard(cmd, runCmd, env)
+			return runWizard(cmd, runCmd, ladderCmd, env)
 		},
 	}
 
@@ -43,7 +43,7 @@ func newRootCommand(
 		runCmd,
 		newAnalyzeCommand(env),
 		newVMAFCommand(env),
-		newLadderCommand(env),
+		ladderCmd,
 		newVersionCommand(),
 	)
 

@@ -40,7 +40,8 @@ reliability you ask for allows.
   fraction of the time. Impose the shape (`--rungs 1080,720,540`), probe
   adaptively where the rungs are uncertain, add per-shot rungs, or let AV1
   synthesise film grain; verified rungs are checked for banding and for
-  VMAF/XPSNR disagreements.
+  VMAF/XPSNR disagreements. Several videos get one ladder for all of them
+  (per-program encoding), every rung read video by video.
 - **HDR aware**: HDR10/HLG checked, MaxCLL/MaxFALL measured, wPSNR and ΔE ITP
   next to VMAF, 10-bit ladders carrying the HDR10 metadata ([HDR](docs/hdr.md)).
 - **See what was measured**: `--overlay annotated.mp4` burns the analysis
@@ -100,6 +101,7 @@ qc vmaf reference.mov distorted.mp4 --exact --overlay annotated.mp4   # + a copy
 qc ladder source.mov -c av1 --encode-bit-depth 10         # per-title Main10 AV1 ladder
 qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93   # impose the rungs, bitrates computed
 qc ladder source.mov -c av1 --encode-ladder renditions/    # + the renditions, checked on the whole title
+qc ladder ep1.mov ep2.mov ep3.mov -c h264,av1             # one ladder per codec for a programme, read video by video
 ```
 
 Every command accepts `-o report.json`, `--html report.html` and `-f json`.
@@ -196,6 +198,12 @@ for shot, cell := range res.ShotLadder(0) {    // the top rung, shot by shot
 }
 if top := res.Rungs[0].PerShot; top != nil {
 	fmt.Println(top.PooledBitrate(res.Shots))  // its bitrate over the whole title
+}
+
+// One ladder for the episodes of a programme, each rung read video by video.
+res, err = engine.BuildProgram(ctx, []string{"ep1.mov", "ep2.mov", "ep3.mov"}, ladder.Options{Codec: "av1"})
+for i, video := range res.Sources {
+	fmt.Println(video.Info.Path, res.Rungs[0].Measured.Titles[i].VMAF)
 }
 
 // The renditions: every rung (and per-shot version) encoded on the whole

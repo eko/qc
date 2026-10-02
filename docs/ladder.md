@@ -3,7 +3,8 @@
 `qc ladder source -c h264|hevc|av1` builds a **per-title adaptive streaming
 ladder**: a set of renditions (resolution, bitrate, encoder settings) chosen
 for this title rather than from a static table. Each rung is verified with a
-real encode.
+real encode. Given several sources, it builds [one ladder for all of
+them](#12-one-ladder-for-several-videos).
 
 ```mermaid
 flowchart TD
@@ -74,8 +75,8 @@ leaves uniform segments (`digest.sampling`).
 
 ### One digest for every codec
 
-A run with several codecs (`qc run --codecs h264,av1`) prepares its source
-**once**: the first ladder analyses the source and extracts the digest, the
+A run with several codecs (`qc run --codecs h264,av1`, or `qc ladder -c
+h264,av1`) prepares its source **once**: the first ladder analyses the source and extracts the digest, the
 next ones read them. Every codec is then encoded from, and scored against,
 the very same file, by construction, and nothing is decoded twice: on a
 10-minute title with `--skip-analysis`, the second ladder skipped 20 s of
@@ -94,7 +95,8 @@ av1, err := engine.Build(ctx, "source.mov", ladder.Options{Codec: "av1", Prepare
 
 Builds asking for other segments (another `--digest`, another length) get
 their own digest, on the analysis made once. `pipeline.Runner` does this
-for the ladders of a run.
+for the ladders of a run. `Engine.PrepareProgram` is the same for the
+ladders of [several videos](#12-one-ladder-for-several-videos).
 
 ### A digest of the most complex scenes
 
@@ -756,6 +758,93 @@ with, and `Result.Prediction` what the ladder predicted for a rendition.
 The renditions are ready to package (`shaka-packager`, `mp4box`, `ffmpeg
 -f hls`): every rung shares the GOP, so their keyframes align.
 
+## 12. One ladder for several videos
+
+```sh
+qc ladder episode-01.mov episode-02.mov episode-03.mov -c av1
+qc ladder episode-01.mov episode-02.mov episode-03.mov -c h264,av1   # one ladder per codec
+```
+
+Several sources get **one ladder for all of them**: the episodes of a
+programme, the titles of a collection, encoded with the same rungs
+(per-program, per-category encoding). The stages are those of a title; what
+changes is the digest and how the rungs are read.
+
+- **Each video weighs the same.** The digest takes as many segments in
+  every video, whatever its length: the 20 segments of a title are shared
+  between them (two videos give 10 each, three 7), and no video gives fewer
+  than 4, so six videos make a 48 s digest. `--digest-duration` is the
+  length of the whole digest, shared equally. An hour-long episode does not
+  outweigh a one-minute trailer.
+- **Each video is balanced on its own.** With the default `--digest
+  balanced`, the segments of a video are moved until they have *that
+  video's* SI and TI; the digest then has the average of the videos'. The
+  digest could also be balanced as a whole, which reaches the same average
+  with segments that represent no video in particular: on three real
+  titles it gave a cartoon segments half as busy as the cartoon and a
+  reality show segments 40% busier than the show, and under-read the
+  cartoon by 2 VMAF and more than 15% of its bitrate
+  ([validation](validation.md#one-ladder-for-several-videos)). `--digest
+  top` takes the most complex scenes of each video, `--digest uniform`
+  evenly spaced segments, without analysis. Videos shorter than their share
+  are taken whole.
+- **The videos share their format**: resolution, frame rate, bit depth and
+  dynamic range (SDR, or the same HDR transfer). Their frames are
+  concatenated as they are, and one set of rungs has one frame rate and one
+  top resolution. Anything else is refused before any work, naming the two
+  files and what differs.
+- **Every verified rung is read video by video.** The verification encode
+  of a rung is one encode of the digest; its VMAF and its bitrate are also
+  computed on the frames (and packets) of each video (`measured.titles` in
+  the JSON, the *Per-video quality* table of the reports). Probes and rungs
+  are otherwise selected on the whole digest.
+
+Three findings read these numbers:
+
+- **a video under the program** (warning): on the top rung, a video scores
+  more than 2 VMAF below the program. The shared ladder under-serves it; a
+  ladder of its own would reach the target;
+- **a video above the program** (note): more than 2 VMAF above, it would
+  reach the target with fewer bits; otherwise **every video is within N
+  VMAF of the program on the top rung**;
+- **videos apart down the ladder** (note): below the top rung, the rung
+  where the videos differ most, when by more than 6 VMAF (a rung step). One
+  CRF for all gives the top rung one quality at different bitrates, and the
+  lower rungs different qualities: an animated title holds up at 360p where
+  a handheld documentary does not.
+
+`--encode-ladder` encodes **every video** with the ladder, into a folder
+each (`<folder>/<codec>/<video name>/01-1080p.mp4`…), and checks each
+rendition against its own video. Its prediction is then what the rung
+measured on the segments of that video, not over the program.
+
+A program ladder costs what a title's does, plus the frame analysis of every
+video (they are analysed one after the other): three videos of 71 minutes
+in all took 6 min 08 s, 1 min 16 s of it analysing them. Several codecs
+(`-c h264,av1`) share those analyses and the digest, as for one title: the
+videos are analysed once, and every codec is measured on the same frames.
+Per-shot rungs
+are not available (`--per-shot` is refused), `qc run` works on one video,
+and the commands printed with `--commands` read the first video: replace its
+path to encode the others.
+
+From the library:
+
+```go
+res, err := engine.BuildProgram(ctx, []string{"ep1.mov", "ep2.mov", "ep3.mov"}, ladder.Options{Codec: "av1"})
+
+for i, video := range res.Sources {                 // the videos, in order
+	top := res.Rungs[0].Measured.Titles[i]          // the top rung on that video
+	fmt.Println(video.Info.Path, top.VMAF, top.Bitrate)
+}
+```
+
+`Result.Source` is the first video, `Result.Digest.Titles` what the digest
+took of each (with its SI and TI next to the video's).
+`ladder.FormatDifference` is the format check, `pipeline.Options.Program`
+the other videos of a run's ladders, and `Engine.PrepareProgram` what the
+builds of several codecs share (`Options.Prepared`).
+
 ## Cost and accuracy
 
 | Title | Codec | Wall time (M2 Max) | Check |
@@ -770,6 +859,7 @@ The renditions are ready to package (`shaka-packager`, `mp4box`, `ffmpeg
 | Drama, 30 s | H.264 / AV1, `--per-shot` | +2–4 min | full title: −2.1% / −4.1% bitrate at equal VMAF |
 | Drama, 1 min | H.264, `--per-shot` | 5 min 35 s (per-shot stage 3 min 15 s) | before parallel chunks and verifications: 6 min 29 s (4 min 05 s), same allocations |
 | Drama, 1 min | AV1 preset 4, `--probe-preset 8` | 4 min 03 s | 5 min 21 s probed at preset 4, same rungs ([details](#faster-probes-at-another-preset)) |
+| Cartoon 10:36 + drama 1 min + reality show 59 min, [one ladder](#12-one-ladder-for-several-videos) | H.264 | 6 min 08 s (analysis 1 min 16 s) | top rung on the three whole videos: VMAF 95.3 at 5.25 Mb/s on average for 95.3 at 5.21 on the digest; each video within 1.0 VMAF and 7% of its reading |
 | Drama, 12 s + synthetic grain σ 5.8 | AV1, `--film-grain auto` | +1.5 min (calibration) | top rung 5.8 Mb/s instead of 104.6 Mb/s, 81% of the grain given back |
 
 The cost grows with the digest (capped at 40 s), not with the title length. An

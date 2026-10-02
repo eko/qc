@@ -18,6 +18,39 @@ import (
 	"github.com/eko/qc/probe"
 )
 
+func TestDigestArgsOfAProgram(
+	t *testing.T,
+) {
+	spec := DigestSpec{
+		Destination: "out.nut", Rate: media.Rational{Num: 25, Den: 1}, BitDepth: 8,
+		Parts: []DigestPart{
+			{Source: "one.mov", Segments: []media.Interval{{Start: media.Seconds(1), End: media.Seconds(3)}, {Start: media.Seconds(9), End: media.Seconds(11)}}},
+			{Source: "two.mov", Origin: media.Seconds(0.5), Segments: []media.Interval{{Start: media.Seconds(4), End: media.Seconds(6)}}},
+		},
+	}
+
+	args := digestArgs(spec)
+
+	// Every segment of every source is an input, seeked on its own source's
+	// timeline, and they are joined in the order of the parts.
+	assert.Equal(t, []string{
+		"-seek_timestamp", "1", "-ss", "1.000000", "-t", "2.000000", "-i", "one.mov",
+		"-seek_timestamp", "1", "-ss", "9.000000", "-t", "2.000000", "-i", "one.mov",
+		"-seek_timestamp", "1", "-ss", "4.500000", "-t", "2.000000", "-i", "two.mov",
+	}, args[4:28])
+	assert.Contains(t, args,
+		"[0:v:0]format=yuv420p,setsar=1[v0];[1:v:0]format=yuv420p,setsar=1[v1];[2:v:0]format=yuv420p,setsar=1[v2];"+
+			"[v0][v1][v2]concat=n=3:v=1:a=0,setpts=N/(25/1*TB)[out]")
+
+	assert.Equal(t, "one.mov and 1 more", spec.name())
+	assert.Equal(t, 3, spec.segments())
+	assert.Equal(t, "in.mov", DigestSpec{Source: "in.mov"}.name())
+
+	err := NewFFmpeg("ffmpeg").Digest(t.Context(), DigestSpec{Destination: "out.nut", Parts: []DigestPart{{Source: "one.mov"}, {Source: "two.mov"}}})
+	require.ErrorIs(t, err, ErrNoSegments)
+	assert.ErrorContains(t, err, "digest one.mov and 1 more")
+}
+
 func TestDigestArgs(
 	t *testing.T,
 ) {

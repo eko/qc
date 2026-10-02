@@ -28,10 +28,16 @@ var ErrPreparedSource = errors.New("prepared for another source")
 type Prepared struct {
 	source     string
 	inspection *analysis.Report
+	// program lists the videos of a program, the source first (see
+	// PrepareProgram); nil for one title.
+	program []string
 
 	mu sync.Mutex
 	// frames is the frame analysis of the source, once a build made one.
 	frames *analysis.Report
+	// titles are what the builds made of the videos of a program, by path:
+	// their inspections and frame analyses.
+	titles map[string]preparedTitle
 	// dir holds the digest and cleanup removes it; both are unset for the
 	// Prepared a build makes for itself.
 	dir     string
@@ -41,6 +47,11 @@ type Prepared struct {
 	digest       []media.Interval
 	digestPath   string
 	digestReport *analysis.Report
+}
+
+// preparedTitle is what the builds share of a video of a program.
+type preparedTitle struct {
+	inspection, frames *analysis.Report
 }
 
 // Prepare inspects source and returns what the builds of its ladders share
@@ -60,6 +71,29 @@ func (e *Engine) Prepare(
 
 	if prepared.dir, prepared.cleanup, err = workDir(""); err != nil {
 		return nil, err
+	}
+
+	return prepared, nil
+}
+
+// PrepareProgram is Prepare for the ladders of a program
+// (Engine.BuildProgram): the builds of its codecs share the inspections and
+// the frame analyses of its videos, and one digest.
+func (e *Engine) PrepareProgram(
+	ctx context.Context,
+	sources []string,
+) (*Prepared, error) {
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("ladder: %w", ErrNoSource)
+	}
+
+	prepared, err := e.Prepare(ctx, sources[0])
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sources) > 1 {
+		prepared.program = slices.Clone(sources)
 	}
 
 	return prepared, nil
@@ -114,6 +148,31 @@ func (p *Prepared) keepAnalysis(
 	defer p.mu.Unlock()
 
 	p.frames = report
+}
+
+// title returns what the builds made of the video of a program at path.
+func (p *Prepared) title(
+	path string,
+) preparedTitle {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.titles[path]
+}
+
+// keepTitle records what a build made of the video of a program at path.
+func (p *Prepared) keepTitle(
+	path string,
+	title preparedTitle,
+) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.titles == nil {
+		p.titles = map[string]preparedTitle{}
+	}
+
+	p.titles[path] = title
 }
 
 // sharedDigest returns the file and inspection of the digest of these

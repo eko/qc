@@ -173,7 +173,7 @@ func TestHandoff(
 	s := newWizardStyle(func(string) string { return "" }, termenv.Ascii)
 
 	assert.Equal(t, "  equivalent command · run it again without the wizard\n  $ qc run 'my clip.mp4' --codecs=",
-		ansi.Strip(handoff([]string{"my clip.mp4", "--codecs="}, s)))
+		ansi.Strip(handoff([]string{"qc", "run", "my clip.mp4", "--codecs="}, s)))
 }
 
 func TestWizardStyle(
@@ -230,21 +230,36 @@ func TestRunAccessible(
 	t *testing.T,
 ) {
 	testCases := []struct {
-		name      string
-		lines     []string
-		wantErr   error
-		wantHTML  string
-		wantShown []string
+		name     string
+		lines    []string
+		wantErr  error
+		wantHTML string
+		// wantProgram are the videos picked after the source.
+		wantProgram []string
+		wantShown   []string
 	}{
 		{
 			name:      "defaults, run",
-			lines:     []string{"source.mp4", "0", "0", "0", "0", "", "", "", "", "", "1"},
+			lines:     []string{"source.mp4", "", "0", "0", "0", "0", "", "", "", "", "", "1"},
 			wantShown: []string{"Review", "Command: qc run source.mp4 --codecs=h264", "Run this command?"},
+		},
+		{
+			name: "several videos: one ladder, nothing else asked",
+			lines: []string{
+				"source.mp4", "ref.mov", "episode.mp4", "",
+				"0", "0", "3", "0", "", "", "", "", "1",
+			},
+			wantProgram: []string{"episode.mp4"},
+			wantShown: []string{
+				"Another video for the same ladder", "not 1920×1080 like source.mp4",
+				"Compute    One ladder per codec for the 2 videos", "Video 2    episode.mp4", "Codecs     H.264, AV1",
+				"Command: qc ladder source.mp4 episode.mp4 -c h264,av1",
+			},
 		},
 		{
 			name: "edit the outputs, then cancel",
 			lines: []string{
-				"source.mp4", "0", "0", "0", "0", "", "", "", "", "",
+				"source.mp4", "", "0", "0", "0", "0", "", "", "", "", "",
 				"2", "5", "report.html", "", "",
 				"3",
 			},
@@ -260,7 +275,7 @@ func TestRunAccessible(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			wizardDir(t)
+			programDir(t)
 
 			a := newWizardAnswers()
 
@@ -276,6 +291,7 @@ func TestRunAccessible(
 			}
 
 			assert.Equal(t, testCase.wantHTML, a.HTML)
+			assert.Equal(t, testCase.wantProgram, a.Program)
 
 			for _, want := range testCase.wantShown {
 				assert.Contains(t, ansi.Strip(out.String()), want)
@@ -298,7 +314,7 @@ func TestAskWizardWith(
 		{
 			name:        "accessible",
 			env:         map[string]string{"ACCESSIBLE": "1"},
-			input:       &lineReader{lines: []string{"source.mp4", "0", "0", "0", "0", "", "", "", "", "1"}},
+			input:       &lineReader{lines: []string{"source.mp4", "", "0", "0", "0", "0", "", "", "", "", "1"}},
 			wantSource:  "source.mp4",
 			wantDrawing: "Command: qc run source.mp4 --codecs=h264",
 		},

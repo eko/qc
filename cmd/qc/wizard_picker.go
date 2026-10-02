@@ -54,6 +54,12 @@ type videoPicker struct {
 	// startDir is where to browse first when nothing is picked yet (the
 	// folder of the source, for the reference); "" is the working directory.
 	startDir func() string
+	// more, when set, lets the picker take several videos (see Several);
+	// marked are those selected, marking is set while the one being added is
+	// probed.
+	more    *[]string
+	marked  []string
+	marking bool
 
 	cwd, dir string
 	entries  []pickerEntry
@@ -107,6 +113,8 @@ func (f *videoPicker) StartIn(
 // open lists the folder of the picked file, else the start folder.
 func (f *videoPicker) open() {
 	f.opened = true
+	f.restore()
+
 	dir, name := f.cwd, ""
 
 	switch {
@@ -324,6 +332,13 @@ func (f *videoPicker) Update(
 		if m.path == f.pending && f.pending != "" {
 			f.pending = ""
 
+			if f.marking {
+				f.marking = false
+				f.mark(m.path)
+
+				return f, nil
+			}
+
 			return f, f.pick(m.path)
 		}
 	case tea.KeyMsg:
@@ -339,6 +354,7 @@ func (f *videoPicker) Update(
 var pickerKeys = struct {
 	up, down, pageUp, pageDown, top, bottom key.Binding
 	open, parent, back, clear, next, prev   key.Binding
+	mark                                    key.Binding
 }{
 	up:       key.NewBinding(key.WithKeys("up", "ctrl+p", "ctrl+k"), key.WithHelp("↑↓", "move")),
 	down:     key.NewBinding(key.WithKeys("down", "ctrl+n", "ctrl+j")),
@@ -352,6 +368,7 @@ var pickerKeys = struct {
 	clear:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear filter")),
 	next:     key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next")),
 	prev:     key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back")),
+	mark:     key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "select")),
 }
 
 // handleKey navigates, filters or picks.
@@ -368,6 +385,8 @@ func (f *videoPicker) handleKey(
 		return f.highlighted()
 	case key.Matches(m, k.open):
 		return f.activate(m.String() == "right")
+	case f.more != nil && key.Matches(m, k.mark):
+		return f.toggle()
 	case key.Matches(m, k.parent), key.Matches(m, k.back) && f.filter.Value() == "":
 		return f.up()
 	case key.Matches(m, k.clear) && f.filter.Value() != "":
@@ -444,6 +463,10 @@ func (f *videoPicker) activate(
 		return nil
 	}
 
+	if len(f.marked) > 0 {
+		return f.confirm()
+	}
+
 	path := f.currentPath()
 	if _, known := f.cache.cached(path); known {
 		return f.pick(path)
@@ -475,11 +498,20 @@ func (f *videoPicker) pick(
 
 	*f.value = f.relative(path)
 
+	if f.more != nil {
+		*f.more = nil
+	}
+
 	return huh.NextField
 }
 
-// keep moves on with the file picked before, if any.
+// keep moves on with the selected videos, else with the file picked
+// before, if any.
 func (f *videoPicker) keep() tea.Cmd {
+	if len(f.marked) > 0 {
+		return f.confirm()
+	}
+
 	if err := requirePath(*f.value); err != nil {
 		f.err = err
 
@@ -521,10 +553,16 @@ func (f *videoPicker) Zoom() bool { return f.focused }
 func (f *videoPicker) KeyBinds() []key.Binding {
 	k := pickerKeys
 	k.clear.SetEnabled(f.filter.Value() != "")
-	k.next.SetEnabled(*f.value != "")
+	k.next.SetEnabled(*f.value != "" || len(f.marked) > 0)
 	k.prev.SetEnabled(!f.position.IsFirst())
+	k.mark.SetEnabled(f.more != nil)
 
-	return []key.Binding{k.up, k.open, k.parent, k.clear, k.next, k.prev}
+	if len(f.marked) > 0 {
+		k.open.SetHelp("enter", "continue")
+		k.mark.SetHelp("space", "add/remove")
+	}
+
+	return []key.Binding{k.up, k.open, k.mark, k.parent, k.clear, k.next, k.prev}
 }
 
 // Init implements huh.Field.
@@ -560,7 +598,11 @@ func (f *videoPicker) RunAccessible(
 
 		*f.value = path
 
-		return nil
+		if f.more == nil {
+			return nil
+		}
+
+		return f.askMore(w, scanner)
 	}
 }
 

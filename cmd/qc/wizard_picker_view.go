@@ -134,6 +134,8 @@ func (f *videoPicker) footView() string {
 		b.WriteString("\n" + f.style.danger.Render(f.style.g.cross+" cannot open this folder"))
 	case f.pending != "":
 		b.WriteString("\n" + f.style.muted.Render("checking "+filepath.Base(f.pending)+f.style.g.ellipsis))
+	case f.more != nil:
+		b.WriteString("\n" + truncate(f.selectionView(), f.width, f.style.g.ellipsis))
 	default:
 		b.WriteString("\n")
 	}
@@ -192,11 +194,21 @@ func (f *videoPicker) rowView(
 		cursor, style = s.accent.Render(s.g.cursor+" "), s.accent.Bold(true)
 	}
 
-	right := f.rowDetail(e)
-	name = truncate(name, width-2-lipgloss.Width(right)-2, s.g.ellipsis)
-	gap := max(1, width-2-lipgloss.Width(name)-lipgloss.Width(right))
+	// A column of marks, once videos are selected.
+	mark := ""
+	if len(f.marked) > 0 {
+		mark = "  "
+		if !e.dir && f.isMarked(filepath.Join(f.dir, e.name)) {
+			mark = s.success.Render(s.g.check + " ")
+		}
+	}
 
-	return cursor + style.Render(name) + strings.Repeat(" ", gap) + s.faint.Render(right)
+	left := 2 + lipgloss.Width(mark)
+	right := f.rowDetail(e)
+	name = truncate(name, width-left-lipgloss.Width(right)-2, s.g.ellipsis)
+	gap := max(1, width-left-lipgloss.Width(name)-lipgloss.Width(right))
+
+	return cursor + mark + style.Render(name) + strings.Repeat(" ", gap) + s.faint.Render(right)
 }
 
 // rowDetail is the right column of an entry: its size, with the height and
@@ -322,6 +334,10 @@ func (f *videoPicker) blurredView() string {
 		value = s.success.Render(s.g.check+" ") + s.text.Render(*f.value)
 		if sum, ok := f.cache.cached(*f.value); ok && sum.hasVideo {
 			value += s.faint.Render("  " + sum.format())
+		}
+
+		if f.more != nil && len(*f.more) > 0 {
+			value += s.muted.Render(fmt.Sprintf("  + %d more", len(*f.more)))
 		}
 	}
 

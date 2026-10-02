@@ -269,6 +269,32 @@ func ladderRank(
 	return 0
 }
 
+// programLine words a finding of the ladder of a program, read video by
+// video; ok is false for the other findings.
+func programLine(
+	f findings.Finding,
+	res *ladder.Result,
+) (string, bool) {
+	switch f.Code {
+	case findings.TitleBelowProgram:
+		return findingLine(f.Level, "%s: VMAF %.1f on the top rung for %.1f over the program: the shared ladder under-serves it, a ladder of its own would reach the target",
+			sourceName(res, f.Index), f.Value, f.Limit), true
+	case findings.TitleAboveProgram:
+		return findingLine(f.Level, "%s: VMAF %.1f on the top rung for %.1f over the program: it would reach the target with fewer bits on a ladder of its own",
+			sourceName(res, f.Index), f.Value, f.Limit), true
+	case findings.ProgramEven:
+		return findingLine(f.Level, "every video within %.1f VMAF of the program on the top rung", f.Value), true
+	case findings.ProgramSpread:
+		titles := res.Rungs[f.Index].Measured.Titles
+		_, high, _ := findings.Spread(res.Rungs[f.Index].Measured)
+
+		return findingLine(f.Level, "rung %d (%dp): %.1f VMAF between %s (%.1f) and %s (%.1f): one CRF for all does not give the videos one quality down the ladder",
+			f.Index+1, res.Rungs[f.Index].Height, f.Value, sourceName(res, f.Other), titles[f.Other].VMAF, sourceName(res, high), titles[high].VMAF), true
+	}
+
+	return "", false
+}
+
 // ladderLine words a finding of a ladder.
 func ladderLine(
 	f findings.Finding,
@@ -276,6 +302,10 @@ func ladderLine(
 ) string {
 	if f.Code == findings.NoRungs {
 		return findingLine(f.Level, "no rung could be selected")
+	}
+
+	if line, ok := programLine(f, res); ok {
+		return line
 	}
 
 	r := res.Rungs[f.Index]
@@ -370,6 +400,14 @@ func rateShare(
 	return fmt.Sprintf("%.0f%% more", gap*100)
 }
 
+// sourceName is the file name of video i of a program.
+func sourceName(
+	res *ladder.Result,
+	i int,
+) string {
+	return filepath.Base(res.Sources[i].Info.Path)
+}
+
 // xpsnr is the luma XPSNR of a verified rung, which rank conflicts compare.
 func xpsnr(
 	r ladder.Rung,
@@ -396,5 +434,5 @@ func rungBitrate(
 func renditionName(
 	rd ladder.Rendition,
 ) string {
-	return filepath.Base(rd.Path)
+	return rd.Name()
 }
