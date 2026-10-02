@@ -214,6 +214,14 @@ func TestRenderRunComparesCodecs(
 	require.NoError(t, renderRun(&out, run, defaultWidth, false))
 	assert.Contains(t, out.String(), "av1 needs 30% less bitrate than h264 at VMAF 93.0")
 
+	// The ladders of several codecs, without what a run says of its source.
+	run.Analysis = run.Ladders[0].Source
+	out.Reset()
+	require.NoError(t, renderLadders(&out, run, defaultWidth, false))
+	assert.Contains(t, out.String(), "av1 needs 30% less bitrate than h264 at VMAF 93.0")
+	assert.Equal(t, 3, strings.Count(out.String(), "◆ qc"), "the two ladders and their comparison, nothing of the source")
+
+	run.Analysis = nil
 	out.Reset()
 
 	run.Ladders = run.Ladders[:1]

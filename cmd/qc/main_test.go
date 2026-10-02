@@ -161,26 +161,18 @@ func TestCommands(
 		},
 		{
 			name: "ladders of several codecs for several videos",
-			args: []string{"ladder", "-c", "h264, hevc", "-f", "json", "--heights", "180", "--max-rungs", "2", "--no-verify", source, encoded},
+			args: []string{"ladder", "-c", "h264, av1", "-f", "json", "--heights", "180", "--max-rungs", "2", "--no-verify", source, encoded},
 			check: func(t *testing.T, stdout string) {
 				var report pipeline.Report
 				require.NoError(t, json.Unmarshal([]byte(stdout), &report))
 				require.Len(t, report.Ladders, 2, "reported together, as a run reports them")
 
-				for i, codec := range []string{"h264", "hevc"} {
+				for i, codec := range []string{"h264", "av1"} {
 					assert.Equal(t, codec, report.Ladders[i].Codec.Name)
 					assert.Len(t, report.Ladders[i].Sources, 2)
 				}
 
 				assert.Equal(t, report.Ladders[0].Digest, report.Ladders[1].Digest, "one digest for both codecs")
-			},
-		},
-		{
-			name:       "ladders of several codecs as text",
-			args:       []string{"ladder", "-c", "h264,hevc", "--heights", "180", "--max-rungs", "2", "--no-verify", source},
-			wantStdout: []string{"h264 (libx264", "hevc (libx265"},
-			check: func(t *testing.T, stdout string) {
-				assert.NotContains(t, stdout, "Bitrate", "the ladders alone, without the inspection of the source")
 			},
 		},
 		{

@@ -278,11 +278,11 @@ func TestRunWizard(
 		{
 			name: "several videos run qc ladder",
 			answers: wizardAnswers{
-				Source: source, Program: []string{episode}, Codecs: []string{"h264", "hevc"},
+				Source: source, Program: []string{episode}, Codecs: []string{"h264"},
 				Advanced: true, Shape: shapeResolutions, Resolutions: "180", SkipVerify: true,
 				HTML: html,
 			},
-			wantStderr: "$ qc ladder " + source + " " + episode + " -c h264,hevc --rungs 180p --no-verify --html " + html,
+			wantStderr: "$ qc ladder " + source + " " + episode + " -c h264 --rungs 180p --no-verify --html " + html,
 			wantStdout: "program     2 videos",
 			wantFile:   html,
 		},

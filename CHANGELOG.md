@@ -9,6 +9,8 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-02
+
 ### Added
 
 - **Prebuilt binaries** on every GitHub release: Linux amd64 and arm64
@@ -443,5 +445,6 @@ The packages of the first release, for Go programs that embed qc:
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before
   a long run (`nvidia.Check`, `nvidia.Available`).
 
-[Unreleased]: https://github.com/eko/qc/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/eko/qc/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/eko/qc/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/eko/qc/releases/tag/v1.0.0

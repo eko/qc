@@ -79,6 +79,11 @@ func decodedMeter() *Meter {
 	return NewMeter(decode.NewFFmpeg("ffmpeg", 0), libvmaf.NewEngine())
 }
 
+// measureDeadline is how long a Measure of the test clips may take before
+// it is said to hang: they take a few seconds, and a busy CI runner, which
+// runs the packages side by side, has taken over 30.
+const measureDeadline = 3 * time.Minute
+
 // measureWithin runs Measure and fails instead of hanging when it does not
 // return in time.
 func measureWithin(
@@ -104,7 +109,7 @@ func measureWithin(
 	select {
 	case o := <-done:
 		return o.res, o.err
-	case <-time.After(30 * time.Second):
+	case <-time.After(measureDeadline):
 		require.FailNow(t, "Measure did not return")
 
 		return nil, nil
