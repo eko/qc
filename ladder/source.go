@@ -72,7 +72,12 @@ func (b *build) analyseSource(
 		report, err = b.engine.inspector.Analyze(ctx, b.source, opts)
 		if err != nil {
 			err = fmt.Errorf("ladder: analyse %s: %w", b.source, err)
+
+			return
 		}
+
+		// The next builds of the source read this analysis.
+		b.prepared.keepAnalysis(report)
 	}()
 
 	return func(wait context.Context) (*analysis.Report, error) {

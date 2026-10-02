@@ -53,9 +53,15 @@ tell of a frame's cost; on real ladders of that title, the whole title cost
 7% more than the balanced digest and 13% more than the uniform one
 ([validation](validation.md#digest-balanced-or-uniform-benchdigestsim)).
 What it buys is the **bitrate** of the rungs (hence `BANDWIDTH`, and where a
-`--max-bitrate` cap falls); the quality level of the digest is not closer to
-the title's on average, SI and TI explaining little of a frame's VMAF. Under
-about 18 segments it buys nothing.
+`--max-bitrate` cap falls); the quality level of the digest was closer to
+the title's on one long title and not on the other, SI and TI explaining
+little of a frame's VMAF. Under about 18 segments it buys nothing.
+
+The digest lasts 40 s whatever the title (`--digest-duration` sets another
+length; a ladder costs in proportion to it). On a title of an hour, a
+balanced digest of 40 s was 2.1% off the title's bitrate where a uniform one
+was 13.9% off, and a balanced digest of 4 min did no better (2.7%): once
+balanced, a longer digest was not measured to help.
 
 `balanced` and `top` read the **frame analysis** of the source. `qc run` has
 already made it; a standalone `qc ladder`, or a run with `--skip-analysis`,
@@ -65,6 +71,30 @@ analyses the source first (no audio, no camera motion: 13 s for a 10-minute
 the digest's SI and TI next to the title's (`digest.complexity`). An
 analysis without SI and TI, or with frames missing from a part of the title,
 leaves uniform segments (`digest.sampling`).
+
+### One digest for every codec
+
+A run with several codecs (`qc run --codecs h264,av1`) prepares its source
+**once**: the first ladder analyses the source and extracts the digest, the
+next ones read them. Every codec is then encoded from, and scored against,
+the very same file, by construction, and nothing is decoded twice: on a
+10-minute title with `--skip-analysis`, the second ladder skipped 20 s of
+analysis and 10 s of extraction; on an hour, a minute of analysis.
+
+From the library, `Engine.Prepare` returns what the builds share, passed to
+each as `Options.Prepared` and closed after the last one:
+
+```go
+prepared, err := engine.Prepare(ctx, "source.mov")
+defer prepared.Close() // removes the digest
+
+h264, err := engine.Build(ctx, "source.mov", ladder.Options{Codec: "h264", Prepared: prepared})
+av1, err := engine.Build(ctx, "source.mov", ladder.Options{Codec: "av1", Prepared: prepared})
+```
+
+Builds asking for other segments (another `--digest`, another length) get
+their own digest, on the analysis made once. `pipeline.Runner` does this
+for the ladders of a run.
 
 ### A digest of the most complex scenes
 
@@ -450,7 +480,7 @@ rate-quality slope, a lighter version of Netflix's Dynamic Optimizer.
 flowchart LR
     shots["shots<br/>scene cuts of the source,<br/>moved to the GOP grid"] --> probes
     probes["2 exact chunked probes of the digest<br/>per rung resolution<br/>(rung CRFs ± 30% of the probe span)"] --> models
-    models["model per digest piece:<br/>ln R linear in CRF,<br/>VMAF quadratic in ln R"] --> predict["models of the other shots:<br/>ridge regression on source<br/>bitrate and TI of the shot"]
+    models["model per digest piece:<br/>ln R and VMAF parabolas in CRF,<br/>bent as the title's curves"] --> predict["models of the other shots:<br/>ridge regression on the SI<br/>and TI of the shot"]
     models --> lambda["λ by bisection on the digest:<br/>pooled VMAF = the rung's, as modelled"]
     predict --> title["same λ on every shot of the title"]
     lambda --> title
@@ -469,11 +499,28 @@ flowchart LR
   rungs will be (a chunk restarts rate control and lookahead: ~3% bitrate at
   equal CRF), and **every frame** is scored.
   Every digest piece (the part of a shot inside a digest segment) gets its
-  bitrate and VMAF at both CRFs: log bitrate is linear in CRF, VMAF quadratic
-  in log bitrate with the curvature of the title's curve at that resolution.
+  bitrate and VMAF at both CRFs. Between and around them, its log bitrate
+  and its VMAF are each a parabola in CRF through both measurements, bent
+  as the title's own curves are at that resolution (the curvature of the
+  per-title probes nearest to those CRFs): a shot has its level and its
+  slope, and the title's curvature. A first model, VMAF quadratic in log
+  bitrate, promised the shots of the top rungs up to 6 VMAF and 25% of
+  bitrate more than they delivered
+  ([validation](validation.md#long-titles-pieces-features-and-the-verification-guard)).
+- **A digest on the GOP grid**: with `--per-shot`, every segment of the
+  digest starts where a GOP of the title does. Shots being runs of whole
+  GOPs, a segment is then one GOP of one shot, encoded as the title encodes
+  it. A segment starting anywhere straddles shots and GOPs: its pieces
+  start with a keyframe the title has not there and stop short of a GOP,
+  and the shot they stand for inherits a model that is not its own. In
+  replays of the allocation on a title encoded whole, this alone turned a
+  loss of 1% into a gain of 0.5%
+  ([validation](validation.md#long-titles-pieces-features-and-the-verification-guard)).
 - **Shots outside the digest** (most of a long title) get a model predicted
-  from their analysis features — log source bitrate and mean temporal
-  information — by a ridge regression fitted on the measured shots.
+  from the logarithms of their mean spatial and temporal information, by a
+  ridge regression on standardised features, fitted on the measured shots.
+  The source's own bitrate, used at first, says nothing of the shots of a
+  near-constant-bitrate mezzanine.
 - **Allocation**: for a slope λ, each shot takes the CRF maximising
   VMAF − λ·bitrate; at the optimum every shot has the same dVMAF/dbitrate.
   Equal slope in **bitrate**, not in log bitrate, is what maximises the pooled
@@ -543,12 +590,20 @@ it (`Shots`, and per rung `PerShot.Shots`, in the same order).
   sortable table below lists every shot; sorting a rung's column by bitrate
   ranks the shots by cost, and a shot's start time zooms the chart on it.
 
+**Rejected versions.** A per-shot version whose verification costs more
+than its rung at equal VMAF is dropped (`Rung.PerShotRejected` keeps what
+was tried, and the report says so): a measurement on the digest outweighs
+the models that placed it. It happens where quality saturates, at the top
+of the ladder, where the shot models are least exact.
+
 Per-shot rungs cost two exact measurements per rung resolution plus one
 verification per rung, on top of the per-title ladder. They are opt-in: on
 short titles they saved 0–4% at equal VMAF (60–100% of the exhaustive
 per-shot optimum, itself only 0.5–5.5% on this corpus); on a long title,
-where most shots are predicted rather than measured, they lost 1% over the
-whole title (7–12% by their digest verification; see
+where most shots are predicted rather than measured, they saved 0.6–1.9%
+on the five rungs delivered (1.3% on average; the top rung's version was
+rejected), where they lost about 1% before the digest followed the GOP grid
+(see
 [validation](validation.md#per-shot-rungs-ladderval--per-shot--shot-optimum)).
 
 ### Per-shot resolution (experimental)

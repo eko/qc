@@ -114,6 +114,22 @@ type fakeLadders struct {
 	codec   encode.Codec
 	built   []ladder.Options
 	sources []string
+	// prepared lists the sources prepared; prepareErr fails Prepare.
+	prepared   []string
+	prepareErr error
+}
+
+func (l *fakeLadders) Prepare(
+	_ context.Context,
+	source string,
+) (*ladder.Prepared, error) {
+	l.prepared = append(l.prepared, source)
+
+	if l.prepareErr != nil {
+		return nil, l.prepareErr
+	}
+
+	return &ladder.Prepared{}, nil
 }
 
 func (l *fakeLadders) Build(
@@ -532,6 +548,39 @@ func TestRunStageResults(
 	}
 }
 
+func TestRunSharesThePreparedSource(
+	t *testing.T,
+) {
+	ladders := &fakeLadders{rungs: []ladder.Rung{{Height: 720}}}
+
+	_, err := NewRunner(&fakeAnalyzer{}, ladders).Run(t.Context(),
+		Options{Source: "a.mp4", Codecs: []string{"h264", "hevc", "av1"}}, Hooks{})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"a.mp4"}, ladders.prepared, "the source is prepared once for the three codecs")
+	require.Len(t, ladders.built, 3)
+	require.NotNil(t, ladders.built[0].Prepared)
+	assert.Same(t, ladders.built[0].Prepared, ladders.built[1].Prepared)
+	assert.Same(t, ladders.built[0].Prepared, ladders.built[2].Prepared)
+
+	t.Run("a run without ladders prepares nothing", func(t *testing.T) {
+		none := &fakeLadders{}
+
+		_, err := NewRunner(&fakeAnalyzer{}, none).Run(t.Context(), Options{Source: "a.mp4"}, Hooks{})
+		require.NoError(t, err)
+		assert.Empty(t, none.prepared)
+	})
+
+	t.Run("a source that cannot be prepared fails its first ladder", func(t *testing.T) {
+		failing := &fakeLadders{prepareErr: errOverlay}
+
+		_, err := NewRunner(&fakeAnalyzer{}, failing).Run(t.Context(), Options{Source: "a.mp4", Codecs: []string{"h264", "av1"}}, Hooks{})
+		require.ErrorIs(t, err, errOverlay)
+		assert.ErrorContains(t, err, "Ladder · h264")
+		assert.Empty(t, failing.built)
+	})
+}
+
 func TestRunLadderSource(
 	t *testing.T,
 ) {
@@ -569,7 +618,7 @@ func TestRunStageUnknownKind(
 ) {
 	r := NewRunner(&fakeAnalyzer{}, &fakeLadders{})
 
-	_, err := r.runStage(t.Context(), 0, Stage{Kind: "teleport"}, Options{}, Hooks{}, &Report{})
+	_, err := r.runStage(t.Context(), 0, Stage{Kind: "teleport"}, Options{}, Hooks{}, &Report{}, &sharedSource{})
 
 	require.ErrorContains(t, err, `unknown stage "teleport"`)
 }

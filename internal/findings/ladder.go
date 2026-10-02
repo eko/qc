@@ -46,6 +46,10 @@ const (
 	// predicted on the digest by Value (VMAF), beyond its confidence
 	// interval plus Limit.
 	RenditionQuality Code = "rendition-quality"
+	// PerShotRejected: the per-shot version of the rung was dropped, its
+	// verification on the digest costing Value (a share) more than the
+	// rung at equal VMAF (ladder.Rung.PerShotRejected).
+	PerShotRejected Code = "per-shot-rejected"
 	// TopDigest: the ladder was estimated on the most complex scenes of the
 	// title (ladder.DigestTop), whose temporal information is Value for
 	// Limit over the title: its bitrates are those scenes', not the title's.
@@ -215,6 +219,10 @@ func rungFindings(
 		}
 
 		out = append(out, Finding{Level: Info, Code: Calibrated, Index: i, Limit: limit})
+	}
+
+	if ps := rung.PerShotRejected; ps != nil {
+		out = append(out, Finding{Level: Info, Code: PerShotRejected, Index: i, Value: -ps.Gain})
 	}
 
 	return out

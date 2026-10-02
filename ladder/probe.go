@@ -27,10 +27,13 @@ const extraProbeCRFOffset = 7
 
 // build holds the state of one ladder build.
 type build struct {
-	engine       *Engine
-	codec        encode.Codec
-	opts         Options
-	source       string
+	engine *Engine
+	codec  encode.Codec
+	opts   Options
+	source string
+	// prepared is what the build reads of the source, and what it leaves
+	// for the next builds of the same source (see Prepared).
+	prepared     *Prepared
 	digest       string
 	digestReport *analysis.Report
 	workDir      string
@@ -496,7 +499,16 @@ func measurementOf(
 
 // gop is the fixed keyframe interval in frames.
 func (b *build) gop() int {
-	return max(1, int(math.Round(b.opts.GOPDuration.Seconds()*b.video.AvgFrameRate.Float())))
+	return gopFrames(b.opts.GOPDuration, b.video.AvgFrameRate.Float())
+}
+
+// gopFrames is the length in frames of a GOP lasting duration at rate
+// frames a second.
+func gopFrames(
+	duration media.Duration,
+	rate float64,
+) int {
+	return max(1, int(math.Round(duration.Seconds()*rate)))
 }
 
 // resetProgress starts a new batch of measurements.

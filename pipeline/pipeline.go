@@ -152,6 +152,12 @@ type Analyzer interface {
 
 // LadderBuilder builds streaming ladders. *ladder.Engine implements it.
 type LadderBuilder interface {
+	// Prepare returns what the ladders of every codec of a run share of
+	// their source: its frame analysis and its digest, made once.
+	Prepare(
+		ctx context.Context,
+		source string,
+	) (*ladder.Prepared, error)
 	Build(
 		ctx context.Context,
 		source string,
@@ -287,10 +293,15 @@ func (r *Runner) Run(
 
 	rep := &Report{SchemaVersion: analysis.SchemaVersion, GeneratedAt: started.UTC()}
 
+	// What the ladders of the run share of their source, prepared by the
+	// first of them.
+	shared := &sharedSource{}
+	defer shared.close()
+
 	for i, stage := range stages {
 		hooks.start(i)
 
-		result, err := r.runStage(ctx, i, stage, opts, hooks, rep)
+		result, err := r.runStage(ctx, i, stage, opts, hooks, rep, shared)
 		if err != nil {
 			return rep, fmt.Errorf("%s: %w", stage.Label, err)
 		}
@@ -313,6 +324,7 @@ func (r *Runner) runStage(
 	opts Options,
 	hooks Hooks,
 	rep *Report,
+	shared *sharedSource,
 ) (StageResult, error) {
 	switch stage.Kind {
 	case KindInspect:
@@ -322,7 +334,7 @@ func (r *Runner) runStage(
 	case KindVMAF:
 		return r.compare(ctx, opts, rep, func(p quality.Progress) { hooks.quality(i, p) })
 	case KindLadder:
-		return r.ladder(ctx, stage.Codec, opts, rep, func(p ladder.Progress) { hooks.ladder(i, p) })
+		return r.ladder(ctx, stage.Codec, opts, rep, shared, func(p ladder.Progress) { hooks.ladder(i, p) })
 	case KindOverlay:
 		return r.overlay(ctx, opts, rep, func(p overlay.Progress) { hooks.overlay(i, p) })
 	case KindRenditions:
@@ -411,11 +423,21 @@ func (r *Runner) ladder(
 	codec string,
 	opts Options,
 	rep *Report,
+	shared *sharedSource,
 	progress func(ladder.Progress),
 ) (StageResult, error) {
 	lopts := opts.Ladder
 	lopts.Codec = codec
 	lopts.Progress = progress
+
+	source := cmp.Or(opts.LadderSource, opts.Source)
+
+	prepared, err := shared.prepare(ctx, r.ladders, source)
+	if err != nil {
+		return StageResult{}, err
+	}
+
+	lopts.Prepared = prepared
 
 	if opts.LadderSource == "" {
 		// The ladder is built on the analysed source: its per-shot rungs
@@ -427,7 +449,7 @@ func (r *Runner) ladder(
 		}
 	}
 
-	res, err := r.ladders.Build(ctx, cmp.Or(opts.LadderSource, opts.Source), lopts)
+	res, err := r.ladders.Build(ctx, source, lopts)
 	if err != nil {
 		return StageResult{}, err
 	}
@@ -439,6 +461,35 @@ func (r *Runner) ladder(
 	rep.Ladders = append(rep.Ladders, res)
 
 	return StageResult{Ladder: res}, nil
+}
+
+// sharedSource is the source of the ladders of a run, prepared once: every
+// codec then reads the same frame analysis and the same digest file.
+type sharedSource struct {
+	prepared *ladder.Prepared
+}
+
+// prepare returns the prepared source, preparing it on the first call.
+func (s *sharedSource) prepare(
+	ctx context.Context,
+	ladders LadderBuilder,
+	source string,
+) (*ladder.Prepared, error) {
+	if s.prepared == nil {
+		prepared, err := ladders.Prepare(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+
+		s.prepared = prepared
+	}
+
+	return s.prepared, nil
+}
+
+// close removes what the ladders shared.
+func (s *sharedSource) close() {
+	s.prepared.Close()
 }
 
 // overlay writes the annotated copy of the source: its analysis, and its

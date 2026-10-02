@@ -401,6 +401,21 @@ from 16 s to 50 s: balanced 0.51 VMAF and 3.0%, every phase 0.28 and 3.3%. At
 40 s, where the digest is two thirds of the title: balanced 0.19 and 0.6%,
 uniform 0.07 and 1.4%.
 
+Reality TV (59:16, 1080p25), two x264 fast encodes of the whole title
+(1080p CRF 25.5: VMAF 93.40, 5.23 Mb/s; 720p CRF 29: 81.53, 1.35 Mb/s). Title:
+SI 52.07, TI 13.22; balanced digest of 40 s 52.07 and 13.23; uniform 52.86
+and 12.68.
+
+| Digest length | 30 s | 40 s | 50 s | 60 s | 70 s | 80 s | 98 s | 2 min | 160 s | 4 min | all |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Balanced Δbitrate | 0.9% | 2.1% | 7.2% | 0.7% | 4.8% | 1.8% | 3.6% | 2.2% | 3.3% | 2.7% | **3.5%** |
+| Uniform, every phase | 12.0% | 14.2% | 12.0% | 8.1% | 7.6% | 8.8% | 6.7% | 7.0% | 6.7% | 4.9% | 9.2% |
+| Balanced ΔVMAF | 0.06 | 0.38 | 0.13 | 0.10 | 0.11 | 0.22 | 0.03 | 0.15 | 0.10 | 0.14 | **0.17** |
+| Uniform, every phase | 0.71 | 0.64 | 0.51 | 0.50 | 0.41 | 0.35 | 0.37 | 0.32 | 0.28 | 0.19 | 0.46 |
+
+At 40 s the engine's uniform digest costs 13.9% less than the title on both
+encodes, the balanced one 1.9% and 2.2% more.
+
 - **The bitrate error is about halved** on the long title (4.7% against
   8.9% over the twelve lengths; 2.8% against 7.6% from 18 segments up), which
   is what its features can give: SI and TI explain 62–78% of the variance
@@ -410,8 +425,17 @@ uniform 0.07 and 1.4%.
   good draw, the 11.1% at 30 s a bad one. The 3–10% of bitrate the full
   title cost above its predictions, measured on this title, came largely
   from its uniform digest.
-- **The quality level is not closer** (0.69 against 0.67 VMAF on the
-  cartoon). SI and TI explain 17–40% of the variance of the VMAF of a 2 s
+- **A longer digest does not help a balanced one** on the title of an
+  hour: 2.1% at 40 s, 3.6% at 98 s, 2.7% at 4 min (read frame by frame
+  rather than per second: +0.7 to +1.3% at 40 s, −1.7 to −2.6% at 4 min).
+  The uniform digest does improve with length, as sampling does, and needs
+  4 min to do as well as the balanced one at 40 s. An automatic lengthening
+  for long titles (40 s × √(duration / 10 min), up to 2 min) was built on
+  the cartoon's figures, where the error falls with the length, and
+  removed on these: it would have cost 2.4 times the ladder on this title
+  for nothing measured. `--digest-duration` sets a length by hand.
+- **The quality level is closer on the title of an hour** (0.17 against
+  0.46 VMAF) **and not on the cartoon** (0.69 against 0.67). SI and TI explain 17–40% of the variance of the VMAF of a 2 s
   window there (9–72% on the drama). Mean luma raises that to 33–61% on the
   cartoon, but balancing on it too did not lower the VMAF error in replays
   (0.64 against 0.65) and was left out. The level correction of the probes
@@ -600,8 +624,8 @@ Results (full title, exact VMAF):
 
 † Long title: 166 of 198 shots get models predicted from their analysis
 features. Per-shot rungs came out 0.5–2 VMAF under the per-title rungs on
-the digest: the regression does not predict shots well enough, so per-shot
-rungs are **not recommended on long titles** yet.
+the digest. The cause was found later, and it was not the regression: see
+[long titles](#long-titles-pieces-features-and-the-verification-guard).
 
 ‡ Later runs (other excerpts, and the whole long title), after the chunk
 pre-roll fix below.
@@ -639,9 +663,98 @@ pre-roll fix below.
   chunked probes and aiming at the rung as the same models see it removed the
   bias (per-shot within 0.1 VMAF of per-title on the cartoon's top rungs).
 
+### Long titles: pieces, features and the verification guard
+
+The loss on the long title was first blamed on the features predicting the
+shots the digest misses. Replaying the allocation says otherwise. The
+cartoon was encoded whole at 720p at CRF 28 and 34 (exact VMAF, the size of
+every frame), which gives every one of its 199 shots a rate-quality model;
+the engine's steps were then replayed on them: models of the digest's pieces,
+prediction of the other shots, λ on the digest, allocation of every shot,
+and the result read on the shots' own models, against one CRF for the whole
+title at equal pooled VMAF (rung at CRF 31: VMAF 83.5, 613 kb/s).
+
+| Digest (shots measured of 199) | Every shot measured | Before | Segments on the GOP grid | + log SI, log TI | Whole shots measured, same features |
+|---|---|---|---|---|---|
+| Balanced 40 s (21) | +2.50% | −0.95% | +0.51% | **+0.64%** | +1.25% |
+| Uniform 40 s (20) | +2.53% | −1.48% | +0.50% | +0.43% | +1.46% |
+| Balanced 80 s (40) | +2.49% | +0.04% | +0.29% | +0.52% | +1.51% |
+| Balanced 2 min (60) | +2.48% | −0.44% | +0.28% | +0.45% | +1.56% |
+
+- **The replay reproduces the loss measured on the title** (−0.95% for
+  −1.1%), and the ceiling: +2.5% with every shot measured.
+- **Features alone repair nothing.** With segments placed anywhere, no set
+  tried gains: SI and TI, their logarithms, √TI, with the penalty of the
+  regression at 0.001, 0.3 or 3, give −1.0 to −0.4% at 40 s. Giving every
+  unmeasured shot the mean model, or leaving it at the rung's CRF, loses
+  0.5 to 1.1% too: the shots the digest *does* measure are misplaced.
+- **The pieces are the cause.** A segment starting anywhere cuts across
+  shots and GOPs; each piece is read as the model of its whole shot. With
+  the shots' own models in place of their pieces' (last column), the same
+  predictions gain 1.2 to 1.6%, half the ceiling.
+- **On the GOP grid**, a segment is one GOP of one shot: the loss becomes a
+  gain of 0.3 to 0.5% with the features as they were, 0.4 to 0.6% with
+  log SI and log TI on a standardised ridge (penalty 0.3). The engine does
+  both. One GOP still stands for a whole shot: the rest of the way to the
+  last column would take measuring whole shots.
+- **The source's bitrate** explains 7% of what a 2 s window of this
+  near-constant-bitrate mezzanine costs once encoded; it was the first
+  feature of the predictions.
+
+**The shot model.** With the digest on the grid, the rungs of the lower
+resolutions gained and the top one lost 18% on the digest: its shots were
+promised up to 6 VMAF and 25% of bitrate more than they delivered. The
+model read VMAF as a parabola in ln(bitrate) with the title's coefficient,
+and ln(bitrate) as linear in CRF: between probes 15 CRF apart, the bump of
+that parabola grows as the square of the gap between a shot's two bitrates,
+and reaches 100 where 94 is measured. Both are now parabolas **in CRF**,
+through the shot's two probes, bent as the title's own curves are. On the
+720p encodes of the whole title at CRF 22, 28 and 34, predicting every
+shot at 28 from its two ends: VMAF error 0.35 (rms) instead of 0.83,
+bitrate 1.7% instead of 5.4%. On the digest of the real ladder, measured
+shots against their predictions:
+
+| Rung | VMAF, measured − predicted | Bitrate, measured / predicted |
+|---|---|---|
+| 720p CRF 19 | −3.69 → **−0.67** | −16% → −6% |
+| 720p CRF 26.5 | −2.64 → **+0.24** | −13% → −3% |
+| 540p and below (four rungs) | −0.15 to +0.13 → −0.22 to +0.26 | −4 to −1% → −1 to 0% |
+
+**On the whole title** (cartoon 10:36, H.264, 198 shots, 20 of them
+measured; `ladderval -per-shot`, every rung encoded whole, exact VMAF),
+bitrate saved by the per-shot rung at equal pooled VMAF, as verified on the
+digest and as measured on the title:
+
+| Rung | Digest on the grid, new features: digest → title | + shot model in CRF: digest → title |
+|---|---|---|
+| 720p CRF 19 | −18.0% → −4.6% | −1.2%: rejected, no per-shot version |
+| 720p CRF 26.5 | +2.3% → +1.4% | +4.9% → **+1.2%** |
+| 540p CRF 27.5 | +4.4% → +1.7% | +4.4% → **+1.6%** |
+| 540p CRF 31.5 | +2.0% → +1.8% | +2.9% → **+1.9%** |
+| 360p CRF 30 | +1.8% → +1.4% | +2.6% → **+1.3%** |
+| 270p CRF 30 | +1.5% → +0.5% | +1.9% → **+0.6%** |
+| **Mean of the rungs delivered** | +0.4% | **+1.3%** |
+
+Before these changes, the same title lost on both rungs checked: 1080p
+−1.1% (−1.2% on the digest) and 720p −0.6% (+2.3% on the digest); its other
+rungs were not measured (the run was stopped).
+
+- **Per-shot rungs gain on the long title**: 0.6 to 1.9% on the five rungs
+  delivered, half the 2.5% the replay gives with every shot measured.
+- **The gain comes from the grid**; the model in CRF changes little below
+  the top rungs, where the first one was accurate, and makes the top rungs'
+  predictions right. The top rung still does not gain: at VMAF 95 the
+  curve is flat, and there is little to move between shots.
+- **The verification's sign can be trusted, not its size**: the digest
+  overstates the gain two to four times, but said whether a rung gains in
+  14 of the 15 rungs checked on whole titles (the exception is the 720p
+  rung above, before the grid). Hence the guard: a per-shot version its
+  verification shows no cheaper than its rung is dropped, and reported.
+
 Per-shot rungs stay **opt-in**: they cost two exact probes per rung resolution
-and a verification per rung (≈ +100% of the ladder's time on short titles)
-for 0–4% at equal quality on short titles, and lose on the long one.
+and a verification per rung (≈ +100% of the ladder's time on short titles;
+3 min 35 s of an 11 min ladder on the long one) for 0–4% at equal quality on
+short titles and 1.3% on the long one.
 
 ### Per-shot resolution (`ladderval -shot-resolutions`)
 
@@ -1088,9 +1201,10 @@ channel finding on the programmes.
 
 ## What is not validated yet
 
-- The balanced digest: two titles, both SDR and x264; a film with long
-  takes, sport and a title of an hour or more are missing, and the features
-  it balances on were chosen on these two.
+- The balanced digest: three titles, all SDR and x264; a film with long
+  takes and sport are missing. The features it balances on were chosen on
+  the cartoon and the drama; the title of an hour, measured afterwards, is
+  the only one that did not take part in that choice.
 
 - Camera motion: the real-content check is a visual review of stills by
   one reviewer, not an annotated ground truth; shake on real content and

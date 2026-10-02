@@ -37,8 +37,9 @@ type Shot struct {
 	// measured rather than predicted from similar shots.
 	Measured bool `json:"measured,omitempty"`
 	// SourceBitrate (b/s, geometric mean over the source's scenes) and TI
-	// (mean temporal information) describe the shot's complexity: they are
-	// the features predicting the models of the shots the digest misses.
+	// (mean temporal information) describe the shot's complexity. The
+	// models of the shots the digest misses are predicted from their
+	// spatial and temporal information (see shotFeatures).
 	SourceBitrate int64   `json:"sourceBitrate,omitempty"`
 	TI            float64 `json:"ti,omitempty"`
 }
@@ -239,7 +240,30 @@ func (b *build) verifyPerShots(
 		})
 	}
 
-	return group.Wait()
+	if err := group.Wait(); err != nil {
+		return err
+	}
+
+	for i := range rungs {
+		rejectPerShot(&rungs[i])
+	}
+
+	return nil
+}
+
+// rejectPerShot drops the per-shot version of a rung its verification
+// showed costlier than the rung at equal VMAF: a measurement on the digest
+// outweighs the models that placed it. On whole titles, the sign of that
+// measurement was the sign of the gain over the title (docs/validation.md).
+func rejectPerShot(
+	r *Rung,
+) {
+	ps := r.PerShot
+	if ps == nil || ps.Measured == nil || r.Measured == nil || ps.Gain > 0 {
+		return
+	}
+
+	r.PerShot, r.PerShotRejected = nil, ps
 }
 
 // planShots analyses the source into shots of whole GOPs, cuts the digest
@@ -269,8 +293,9 @@ func (b *build) planShots(
 	}
 
 	plan.pieces = piecesOf(plan.shots, starts, lengths)
-	plan.features = shotFeatures(report, plan.shots)
-	describeShots(plan.shots, plan.features)
+	complexities := shotComplexities(report, plan.shots)
+	plan.features = shotFeatures(complexities)
+	describeShots(plan.shots, complexities)
 
 	plan.spread = shotSpreadShare * (b.codec.ProbeCRFs[len(b.codec.ProbeCRFs)-1] - b.codec.ProbeCRFs[0])
 	plan.heights = shotHeights(rungs)
@@ -304,12 +329,12 @@ func (b *build) fitLevels(
 	levels := map[int][]shotLevel{}
 
 	for _, h := range plan.heights {
-		q := fitCurve(probesAt(probes, h), defaultPrior).mean[2]
 		set := probesOfHeight(measured, h)
 
 		for k := range len(set) - 1 {
 			low, high := set[k], set[k+1]
-			pieceModels := pieceModelsOf(plan.pieces, low, high, rate, q)
+			bend := titleBend(probesAt(probes, h), low.crf, high.crf)
+			pieceModels := pieceModelsOf(plan.pieces, low, high, rate, bend)
 			shotModels, covered := shotModelsOf(plan.shots, plan.pieces, pieceModels, plan.features)
 
 			// The outer ends reach half a spread beyond the widened range,

@@ -8,55 +8,82 @@ package shotalloc
 import "math"
 
 // Model is the local rate-quality model of a shot at one resolution, from
-// two probes: ln(bitrate) linear in CRF, and VMAF quadratic in ln(bitrate)
-// around the probes' midpoint with the curvature of the title's curve at
-// that resolution. Two probes give each shot its level, bitrate and slope;
-// its curvature is the title's.
+// two probes: ln(bitrate) and VMAF are each a parabola in CRF through the
+// shot's two measurements, bent as the title's own curves are at that
+// resolution (Bend). Two probes give each shot its level and its slope; its
+// curvature is the title's.
+//
+// VMAF was first a parabola in ln(bitrate), with one coefficient for the
+// title. Its bump between the probes then grows as the square of the gap
+// between the shot's two bitrates: over probes 15 CRF apart, shots were
+// promised VMAF 100 where 94 was measured, and 10 to 25% more bitrate than
+// they took, ln(bitrate) being taken as linear in CRF. In CRF, the bump is
+// the one measured on the title, the same for every shot (see
+// docs/validation.md).
 type Model struct {
-	// x0 is ln(bitrate) at crf0 and beta its derivative in CRF.
-	crf0, x0, beta float64
-	// vMid is the VMAF at ln(bitrate) xMid, k its slope there and q the
-	// quadratic coefficient.
-	xMid, vMid, k, q float64
+	// crfA and crfB are the CRFs of the probes; xA and xB the ln(bitrate)
+	// and vA and vB the VMAF of the shot at them.
+	crfA, crfB float64
+	xA, xB     float64
+	vA, vB     float64
+	// bend is the curvature of both parabolas.
+	bend Bend
+}
+
+// Bend is the curvature in CRF of the curves of a title at one resolution:
+// the coefficient of CRF² of its ln(bitrate) and of its VMAF. The zero
+// value is no curvature: both linear in CRF between the probes.
+type Bend struct {
+	Rate, VMAF float64
 }
 
 // NewModel fits the model of a shot measured at two CRFs a and b (with
-// their bitrates and VMAFs), with quadratic coefficient q: the parabola goes
-// through both measurements.
+// their bitrates and VMAFs): both parabolas go through both measurements.
 func NewModel(
 	crfA, crfB float64,
 	rateA, rateB, vmafA, vmafB float64,
-	q float64,
+	bend Bend,
 ) Model {
-	xA, xB := math.Log(rateA), math.Log(rateB)
-	half := (xB - xA) / 2
-	m := Model{crf0: crfA, x0: xA, xMid: (xA + xB) / 2, vMid: (vmafA+vmafB)/2 - q*half*half, q: q}
-
-	if crfB != crfA {
-		m.beta = (xB - xA) / (crfB - crfA)
-	}
-
-	if xB != xA {
-		m.k = (vmafB - vmafA) / (xB - xA)
-	}
-
-	return m
+	return Model{crfA: crfA, crfB: crfB, xA: math.Log(rateA), xB: math.Log(rateB), vA: vmafA, vB: vmafB, bend: bend}
 }
 
 // At returns the modelled bitrate (b/s) and VMAF at crf.
 func (m Model) At(
 	crf float64,
 ) (float64, float64) {
-	x := m.x0 + m.beta*(crf-m.crf0)
-	d := x - m.xMid
+	x := m.parabola(crf, m.xA, m.xB, m.bend.Rate)
+	v := m.parabola(crf, m.vA, m.vB, m.bend.VMAF)
 
-	// Past the top of the parabola quality stays flat: more bits never
-	// lower VMAF.
-	if m.q < 0 && m.k > 0 {
-		d = math.Min(d, -m.k/(2*m.q))
+	return math.Exp(x), math.Min(v, 100)
+}
+
+// parabola is the value at crf of the parabola through a at crfA and b at
+// crfB with the quadratic coefficient bend. Where a bent curve would turn
+// back (a higher CRF giving more bits or more quality, or a lower one
+// less), it stays flat from its turning point on: neither ever grows with
+// the CRF.
+func (m Model) parabola(
+	crf, a, b, bend float64,
+) float64 {
+	span := m.crfB - m.crfA
+	if span == 0 {
+		return a
 	}
 
-	return math.Exp(x), math.Min(m.vMid+m.k*d+m.q*d*d, 100)
+	slope := (b - a) / span
+
+	if bend != 0 {
+		// The turning point: a parabola opening upwards (bend > 0) falls
+		// before it, one opening downwards falls after it.
+		turn := (m.crfA+m.crfB)/2 - slope/(2*bend)
+		if bend > 0 {
+			crf = math.Min(crf, turn)
+		} else {
+			crf = math.Max(crf, turn)
+		}
+	}
+
+	return a + slope*(crf-m.crfA) + bend*(crf-m.crfA)*(crf-m.crfB)
 }
 
 // Blend is the weighted average of models (weights summing to one): a shot
@@ -69,13 +96,14 @@ func Blend(
 
 	for i, s := range models {
 		w := weights[i]
-		m.crf0 += w * s.crf0
-		m.x0 += w * s.x0
-		m.beta += w * s.beta
-		m.xMid += w * s.xMid
-		m.vMid += w * s.vMid
-		m.k += w * s.k
-		m.q += w * s.q
+		m.crfA += w * s.crfA
+		m.crfB += w * s.crfB
+		m.xA += w * s.xA
+		m.xB += w * s.xB
+		m.vA += w * s.vA
+		m.vB += w * s.vB
+		m.bend.Rate += w * s.bend.Rate
+		m.bend.VMAF += w * s.bend.VMAF
 	}
 
 	return m

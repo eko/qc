@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/internal/linalg"
 	"github.com/eko/qc/ladder/internal/shotalloc"
 )
 
@@ -97,12 +98,72 @@ func probesOfHeight(
 	return out
 }
 
+// minBendProbes is the number of probe CRFs a curvature takes: three points
+// define a parabola.
+const minBendProbes = 3
+
+// titleBend is the curvature in CRF of the title's curves at one
+// resolution between the CRFs low and high: the coefficient of CRF² of the
+// parabolas fitted, by least squares, to the ln(bitrate) and to the VMAF of
+// the per-title probes of that resolution. The probes are those within half
+// the gap of low and high, or the three nearest to their middle when fewer
+// lie there: curves bend more where quality saturates, and probes far from
+// the shots' CRFs would say how the curve bends elsewhere. Without three
+// probe CRFs, no curvature.
+func titleBend(
+	probes []Probe,
+	low, high float64,
+) shotalloc.Bend {
+	mid, reach := (low+high)/2, high-low
+
+	usable := slices.DeleteFunc(slices.Clone(probes), func(p Probe) bool { return p.Bitrate <= 0 })
+	slices.SortStableFunc(usable, func(a, b Probe) int {
+		return cmp.Compare(math.Abs(a.CRF-mid), math.Abs(b.CRF-mid))
+	})
+
+	var (
+		xs           [][]float64
+		rates, vmafs []float64
+		crfs         []float64
+	)
+
+	for _, p := range usable {
+		// Nearest first: beyond the reach, only what three CRFs still need.
+		if math.Abs(p.CRF-mid) > reach && len(crfs) >= minBendProbes {
+			break
+		}
+
+		if !slices.Contains(crfs, p.CRF) {
+			crfs = append(crfs, p.CRF)
+		}
+
+		d := p.CRF - mid
+		xs = append(xs, []float64{1, d, d * d})
+		rates, vmafs = append(rates, math.Log(float64(p.Bitrate))), append(vmafs, p.VMAF)
+	}
+
+	if len(crfs) < minBendProbes {
+		return shotalloc.Bend{}
+	}
+
+	weights := make([]float64, len(xs))
+	for i := range weights {
+		weights[i] = 1
+	}
+
+	return shotalloc.Bend{
+		Rate: linalg.Ridge(xs, rates, weights, 0)[2],
+		VMAF: linalg.Ridge(xs, vmafs, weights, 0)[2],
+	}
+}
+
 // pieceModelsOf fits the model of every digest piece through two per-shot
-// probes of one resolution.
+// probes of one resolution, bent as the title's curves are there.
 func pieceModelsOf(
 	pieces []piece,
 	low, high shotProbe,
-	rate, q float64,
+	rate float64,
+	bend shotalloc.Bend,
 ) []shotalloc.Model {
 	models := make([]shotalloc.Model, len(pieces))
 
@@ -110,7 +171,7 @@ func pieceModelsOf(
 		rateLo, vmafLo := pieceStats(low, pc, rate)
 		rateHi, vmafHi := pieceStats(high, pc, rate)
 
-		models[i] = shotalloc.NewModel(low.crf, high.crf, rateLo, rateHi, vmafLo, vmafHi, q)
+		models[i] = shotalloc.NewModel(low.crf, high.crf, rateLo, rateHi, vmafLo, vmafHi, bend)
 	}
 
 	return models

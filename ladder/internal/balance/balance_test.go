@@ -179,6 +179,70 @@ func TestSegmentsIsDeterministic(
 	)
 }
 
+func TestSegmentsOnAStride(
+	t *testing.T,
+) {
+	const gop = 2 * frameRate
+
+	testCases := []struct {
+		name string
+		make func(balance.Frames) []media.Interval
+	}{
+		{
+			name: "balanced",
+			make: func(f balance.Frames) []media.Interval {
+				return balance.Segments(f, media.Seconds(600), media.Seconds(2), 20)
+			},
+		},
+		{
+			name: "top",
+			make: func(f balance.Frames) []media.Interval {
+				return balance.Top(f, cutsEvery(30, 600), media.Seconds(2), 20, first)
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			frames := title(600, bursts, ramp)
+			frames.Stride = gop
+
+			segments := testCase.make(frames)
+			require.Len(t, segments, 20)
+
+			for i, s := range segments {
+				// The first frame of a segment starts a GOP of the title.
+				first := int(math.Round(s.Start.Seconds() * frameRate))
+				assert.Zero(t, first%gop, "segment %d starts on frame %d", i, first)
+				assert.Equal(t, media.Seconds(2), s.Length())
+			}
+
+			// The bursts hold three GOPs in fifteen: the balanced digest
+			// still finds the title's share of them, the top one only them.
+			busy := 0
+
+			for _, s := range segments {
+				if int(math.Round(s.Start.Seconds()*frameRate))%slotFrames < 150 {
+					busy++
+				}
+			}
+
+			if testCase.name == "balanced" {
+				assert.Equal(t, 4, busy, "a fifth of the title is busy")
+			} else {
+				assert.Equal(t, 20, busy)
+			}
+		})
+	}
+
+	t.Run("a slot without a GOP start leaves no digest", func(t *testing.T) {
+		frames := title(60, bursts)
+		frames.Stride = 20 * frameRate
+
+		assert.Nil(t, balance.Segments(frames, media.Seconds(60), media.Seconds(2), 20))
+	})
+}
+
 func TestSegmentsUnusable(
 	t *testing.T,
 ) {

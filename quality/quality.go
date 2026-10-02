@@ -121,7 +121,8 @@ type Options struct {
 	// SkipHDRMetrics measures VMAF without the HDR metrics on an HDR
 	// reference, as the ladder's probes do: they only shape the curves.
 	SkipHDRMetrics bool
-	// Progress, when set, is called after each scored clip.
+	// Progress, when set, is called after each scored clip. Calls never
+	// overlap.
 	Progress func(Progress)
 }
 
@@ -376,9 +377,11 @@ type run struct {
 	decoders int
 	segments bool
 
-	mu      sync.Mutex
-	scored  int
-	decoded int
+	mu sync.Mutex
+	// reporting serialises the Progress callback (see notify).
+	reporting sync.Mutex
+	scored    int
+	decoded   int
 	// plans counts the decoding plans used, for reporting.
 	plans map[string]int
 	// live reports progress per frame pair (exact mode: a single long clip)
@@ -487,7 +490,7 @@ func (r *run) roundDone(
 	scored := r.scored
 	r.mu.Unlock()
 
-	r.opts.Progress(Progress{
+	r.notify(Progress{
 		FramesScored: scored,
 		FramesTotal:  r.n,
 		Round:        round,
@@ -561,9 +564,23 @@ func (r *run) report(
 	progress := Progress{FramesScored: r.scored, FramesTotal: r.n, Round: round, Mode: r.mode(), Sample: r.sample()}
 	r.mu.Unlock()
 
-	if r.opts.Progress != nil {
-		r.opts.Progress(progress)
+	r.notify(progress)
+}
+
+// notify reports progress, one report at a time: clips are scored by
+// several workers, and a callback collecting what it is told must not be
+// entered twice at once.
+func (r *run) notify(
+	p Progress,
+) {
+	if r.opts.Progress == nil {
+		return
 	}
+
+	r.reporting.Lock()
+	defer r.reporting.Unlock()
+
+	r.opts.Progress(p)
 }
 
 // mode is the reported measurement mode. The caller holds r.mu.
@@ -598,9 +615,7 @@ func (r *run) pairScored() {
 	progress := Progress{FramesScored: r.scored, FramesTotal: r.n, Mode: ModeExact}
 	r.mu.Unlock()
 
-	if r.opts.Progress != nil {
-		r.opts.Progress(progress)
-	}
+	r.notify(progress)
 }
 
 // sameVideoRate reports whether two videos run at the same frame rate: the

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/media"
 )
 
 func TestParseFilmGrain(
@@ -63,6 +64,11 @@ func TestLadderInnovationFlags(
 			want:   ladder.Options{DigestSampling: ladder.DigestTop},
 		},
 		{
+			name:   "digest length",
+			config: Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{DigestDuration: 80}},
+			want:   ladder.Options{DigestDuration: media.Seconds(80)},
+		},
+		{
 			name:   "uniform digest",
 			config: Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{Digest: "uniform"}},
 			want:   ladder.Options{DigestSampling: ladder.DigestUniform},
@@ -108,6 +114,7 @@ func TestLadderInnovationFlags(
 			got := ladderOptions(testCase.config)
 			assert.Equal(t, testCase.want.Probing, got.Probing)
 			assert.Equal(t, testCase.want.DigestSampling, got.DigestSampling)
+			assert.Equal(t, testCase.want.DigestDuration, got.DigestDuration)
 			assert.Equal(t, testCase.want.PerShot, got.PerShot)
 			assert.Equal(t, testCase.want.PerShotResolution, got.PerShotResolution)
 			assert.Equal(t, testCase.want.FilmGrain, got.FilmGrain)

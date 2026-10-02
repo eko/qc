@@ -403,6 +403,11 @@ func TestConfigValidate(
 			wantErr: ladder.ErrInvalidProbing.Error(),
 		},
 		{
+			name:    "digest length",
+			config:  Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{DigestDuration: -1}},
+			wantErr: ErrInvalidDigestDuration.Error(),
+		},
+		{
 			name:    "digest sampling",
 			config:  Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{Digest: "random"}},
 			wantErr: ladder.ErrInvalidDigestSampling.Error(),

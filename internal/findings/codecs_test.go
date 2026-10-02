@@ -114,6 +114,15 @@ func TestCodecs(
 	}
 }
 
+func TestLadderPerShotRejected(
+	t *testing.T,
+) {
+	r := verified()
+	r.Rungs[1].PerShotRejected = &ladder.PerShot{Gain: -0.18}
+
+	assert.Contains(t, Ladder(r), Finding{Level: Info, Code: PerShotRejected, Index: 1, Value: 0.18})
+}
+
 func TestLadderTopDigest(
 	t *testing.T,
 ) {

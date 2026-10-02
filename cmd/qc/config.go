@@ -126,6 +126,7 @@ type LadderConfig struct {
 	EncodeBitDepth    int     `mapstructure:"encode-bit-depth"`
 	Probing           string  `mapstructure:"probing"`
 	Digest            string  `mapstructure:"digest"`
+	DigestDuration    float64 `mapstructure:"digest-duration"`
 	PerShot           bool    `mapstructure:"per-shot"`
 	PerShotResolution bool    `mapstructure:"per-shot-resolution"`
 	FilmGrain         string  `mapstructure:"film-grain"`
@@ -273,8 +274,11 @@ func (c QualityConfig) validateSample() error {
 	return nil
 }
 
-// validate checks the ladder shape, the probing mode, the digest sampling
-// and the film grain setting.
+// ErrInvalidDigestDuration is returned for a negative --digest-duration.
+var ErrInvalidDigestDuration = errors.New("invalid --digest-duration")
+
+// validate checks the ladder shape, the probing mode, the digest and the
+// film grain setting.
 func (c LadderConfig) validate() error {
 	if _, _, err := parseRungs(c.Rungs); err != nil {
 		return err
@@ -286,6 +290,10 @@ func (c LadderConfig) validate() error {
 
 	if _, err := ladder.ParseDigestSampling(c.Digest); err != nil {
 		return err
+	}
+
+	if c.DigestDuration < 0 {
+		return fmt.Errorf("%w: %g", ErrInvalidDigestDuration, c.DigestDuration)
 	}
 
 	_, err := parseFilmGrain(c.FilmGrain)

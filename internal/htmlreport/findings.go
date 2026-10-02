@@ -334,6 +334,9 @@ func ladderFinding(
 		return worded(f, nil, "%dp rung: synthesised grain at %.0f%% of the source's (σ %.2f vs %.2f)", r.Height, g.Ratio*100, g.Output.Sigma, g.Source.Sigma), true
 	case findings.Calibrated:
 		return worded(f, nil, "%dp rung missed its prediction: CRF corrected and re-measured", r.Height), true
+	case findings.PerShotRejected:
+		return worded(f, nil, "Rung %d (%dp): no per-shot version, the one tried cost %.1f%% more than the rung at equal VMAF on the digest",
+			f.Index+1, r.Height, f.Value*100), true
 	case findings.BandedRung:
 		return worded(f, nil, "Rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
 			f.Index+1, r.Height, f.Value*100, f.Limit), true

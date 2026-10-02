@@ -95,6 +95,12 @@ type Rung struct {
 	Grain *GrainCheck `json:"grain,omitempty"`
 	// PerShot is the per-shot version of the rung (Options.PerShot).
 	PerShot *PerShot `json:"perShot,omitempty"`
+	// PerShotRejected is the per-shot version the verification rejected:
+	// encoded on the digest, it cost more than the rung itself at equal
+	// VMAF (its Gain is not positive). The rung then has no per-shot
+	// version: the shot models were wrong for it, most often where quality
+	// saturates, at the top of the ladder.
+	PerShotRejected *PerShot `json:"perShotRejected,omitempty"`
 }
 
 // Measurement is a measured encode.

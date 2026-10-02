@@ -95,7 +95,10 @@ type Options struct {
 	Heights []int
 	// SegmentDuration is the length of each digest segment. Default 2s.
 	SegmentDuration media.Duration
-	// DigestDuration caps the digest length. Default 40s.
+	// DigestDuration caps the digest length. Default 40s, whatever the
+	// length of the title: on a title of an hour, a balanced digest of 40 s
+	// stood for the title as well as one of 4 min (docs/validation.md),
+	// and a ladder costs what its digest lasts.
 	DigestDuration media.Duration
 	// DigestSampling places the segments of the digest: balanced on the
 	// content of the title (the default, see DigestBalanced) or on its
@@ -160,6 +163,11 @@ type Options struct {
 	// source is analysed before a balanced digest, or alongside the probes
 	// when only per-shot rungs need it.
 	Analysis *analysis.Report
+	// Prepared is the source as Engine.Prepare returned it, when the
+	// ladders of several codecs are built from it: the builds then share
+	// its inspection, the frame analysis the first of them made, and one
+	// digest. Without it, a build prepares the source for itself.
+	Prepared *Prepared
 	// ContentLight is the content light level of an HDR10 source that
 	// signals none, typically measured by its analysis (MaxCLL, MaxFALL):
 	// the encodes then carry it.
@@ -229,15 +237,19 @@ func (e *Engine) Build(
 		Constraints:   opts.Constraints,
 	}
 
-	res.Source, err = e.inspector.Analyze(ctx, source, analysis.Options{SkipVideo: true})
+	prepared, err := e.preparedFor(ctx, source, opts.Prepared)
 	if err != nil {
-		return nil, fmt.Errorf("ladder: inspect %s: %w", source, err)
+		return nil, err
 	}
+
+	res.Source = prepared.inspection
 
 	video, duration, err := usableVideo(res.Source)
 	if err != nil {
 		return nil, err
 	}
+
+	opts = opts.reading(prepared)
 
 	if err := opts.Constraints.Validate(video.Height); err != nil {
 		return nil, fmt.Errorf("ladder: %w", err)
@@ -257,7 +269,7 @@ func (e *Engine) Build(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	run := e.newBuild(ctx, codec, opts, source, dir, video, duration, res)
+	run := e.newBuild(ctx, codec, opts, prepared, dir, video, duration, res)
 	res.GOP, res.BitDepth = run.gop(), opts.BitDepth
 
 	if res.Timings, err = run.stages(ctx, res, duration); err != nil {
@@ -269,19 +281,40 @@ func (e *Engine) Build(
 	return res, nil
 }
 
-// newBuild prepares the build of the ladder of source, whose usable video
-// stream is video and inspection res holds, in the work directory dir.
+// preparedFor returns what the build of source reads of it: shared, the
+// Prepared of several builds, when given, or one the build makes for
+// itself.
+func (e *Engine) preparedFor(
+	ctx context.Context,
+	source string,
+	shared *Prepared,
+) (*Prepared, error) {
+	if shared == nil {
+		return e.inspect(ctx, source)
+	}
+
+	if shared.source != source {
+		return nil, fmt.Errorf("ladder: %w: %s, not %s", ErrPreparedSource, shared.source, source)
+	}
+
+	return shared, nil
+}
+
+// newBuild prepares the build of the ladder of the prepared source, whose
+// usable video stream is video and inspection res holds, in the work
+// directory dir.
 func (e *Engine) newBuild(
 	ctx context.Context,
 	codec encode.Codec,
 	opts Options,
-	source, dir string,
+	prepared *Prepared,
+	dir string,
 	video media.VideoStream,
 	duration media.Duration,
 	res *Result,
 ) *build {
 	run := &build{
-		engine: e, codec: codec, opts: opts, source: source, workDir: dir,
+		engine: e, codec: codec, opts: opts, source: prepared.source, prepared: prepared, workDir: dir,
 		video: video, origin: videoOrigin(res.Source, video),
 	}
 
@@ -386,8 +419,10 @@ func (b *build) stages(
 			stop = timings.start(s.name)
 		}
 
+		// Under the lock of every report: the source analysis may be
+		// reporting its progress from its own goroutine.
 		if s.announce {
-			b.opts.report(Progress{Stage: s.name})
+			b.reportProgress(Progress{Stage: s.name})
 		}
 
 		if err := s.run(ctx, res); err != nil {
@@ -505,9 +540,7 @@ func (o Options) withDefaults(
 
 	o = o.withDigestDefaults()
 
-	if o.GOPDuration <= 0 {
-		o.GOPDuration = media.Seconds(defaultGOPSeconds)
-	}
+	o = o.withGOPDefault()
 
 	if o.Precision <= 0 {
 		o.Precision = defaultPrecision
@@ -536,6 +569,15 @@ func (o Options) withDefaults(
 	return o
 }
 
+// withGOPDefault fills the keyframe interval.
+func (o Options) withGOPDefault() Options {
+	if o.GOPDuration <= 0 {
+		o.GOPDuration = media.Seconds(defaultGOPSeconds)
+	}
+
+	return o
+}
+
 // withDigestDefaults fills the options placing the digest.
 func (o Options) withDigestDefaults() Options {
 	if o.SegmentDuration <= 0 {
@@ -548,6 +590,18 @@ func (o Options) withDigestDefaults() Options {
 
 	if o.DigestSampling == "" {
 		o.DigestSampling = defaultDigestSampling
+	}
+
+	return o
+}
+
+// reading returns the options reading what an earlier build left of the
+// source: its frame analysis stands for the one this build would make.
+func (o Options) reading(
+	prepared *Prepared,
+) Options {
+	if frames := prepared.analysis(); frames != nil && !analysed(o.Analysis) {
+		o.Analysis = frames
 	}
 
 	return o

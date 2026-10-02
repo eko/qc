@@ -61,31 +61,65 @@ func piecesOf(
 	return out
 }
 
-// shotFeatures are the regressors predicting a shot's model from the
-// analysis of the source: a constant, the log of the source bitrate
-// (spatial and temporal complexity as the mezzanine encoder saw it) and the
-// mean temporal information.
-func shotFeatures(
+// shotComplexity is what the analysis of the source says of a shot: its
+// mean spatial and temporal information, and the bitrate of the source
+// over it.
+type shotComplexity struct {
+	si, ti, logRate float64
+}
+
+// shotComplexities reads the complexity of every shot off the analysis of
+// the source: the frame-weighted mean of the scenes a shot (a run of whole
+// GOPs) overlaps.
+func shotComplexities(
 	report *analysis.Report,
 	shots []Shot,
-) [][]float64 {
-	features := make([][]float64, len(shots))
+) []shotComplexity {
+	out := make([]shotComplexity, len(shots))
 
 	for i, s := range shots {
-		var logRate, ti, weight float64
+		var (
+			c      shotComplexity
+			weight float64
+		)
 
 		for _, sr := range report.Video.Shots {
 			first, last := sr.FirstFrame, sr.LastFrame+1
 			overlap := float64(min(last, s.Start+s.Frames) - max(first, s.Start))
 
 			if overlap > 0 {
-				logRate += overlap * math.Log(math.Max(float64(sr.Bitrate), 1))
-				ti += overlap * sr.TIMean
+				c.logRate += overlap * math.Log(math.Max(float64(sr.Bitrate), 1))
+				c.si += overlap * sr.SIMean
+				c.ti += overlap * sr.TIMean
 				weight += overlap
 			}
 		}
 
-		features[i] = []float64{1, logRate / math.Max(weight, 1), ti / math.Max(weight, 1)}
+		weight = math.Max(weight, 1)
+		out[i] = shotComplexity{si: c.si / weight, ti: c.ti / weight, logRate: c.logRate / weight}
+	}
+
+	return out
+}
+
+// tiFloor keeps the logarithm of the temporal information of a still shot
+// finite.
+const tiFloor = 0.5
+
+// shotFeatures are the regressors predicting the model of a shot the digest
+// misses: a constant and the logarithms of its mean spatial and temporal
+// information. In replays of the allocation on a title encoded whole, they
+// did as well as or better than the source's bitrate and the temporal
+// information the predictions used before, and do not depend on how the
+// mezzanine was encoded: a near-constant-bitrate source says nothing of
+// its shots (see docs/validation.md).
+func shotFeatures(
+	complexities []shotComplexity,
+) [][]float64 {
+	features := make([][]float64, len(complexities))
+
+	for i, c := range complexities {
+		features[i] = []float64{1, math.Log1p(math.Max(c.si, 0)), math.Log(math.Max(c.ti, 0) + tiFloor)}
 	}
 
 	return features
@@ -219,17 +253,17 @@ func (b *build) shotProbePlan(
 	return plan, probing
 }
 
-// describeShots records the complexity features of every shot.
+// describeShots records the complexity of every shot the reports show.
 func describeShots(
 	shots []Shot,
-	features [][]float64,
+	complexities []shotComplexity,
 ) {
-	for i := range shots {
-		if logRate := features[i][1]; logRate > 0 {
-			shots[i].SourceBitrate = int64(math.Round(math.Exp(logRate)))
+	for i, c := range complexities {
+		if c.logRate > 0 {
+			shots[i].SourceBitrate = int64(math.Round(math.Exp(c.logRate)))
 		}
 
-		shots[i].TI = features[i][2]
+		shots[i].TI = c.ti
 	}
 }
 

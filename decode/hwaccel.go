@@ -234,11 +234,20 @@ func (d *FFmpeg) SegmentHWAccel(
 
 // vtSessions is how many decodes may use VideoToolbox at once.
 func (d *FFmpeg) vtSessions() int {
-	if d.sessions == nil {
-		return runtime.NumCPU()
-	}
+	return cap(d.pool())
+}
 
-	return cap(d.sessions)
+// pool returns the VideoToolbox sessions, one per core unless
+// WithVideoToolboxSessions set them. It is made once, whoever asks first:
+// measurements size their segments on it while others already decode.
+func (d *FFmpeg) pool() chan struct{} {
+	d.once.Do(func() {
+		if d.sessions == nil {
+			d.sessions = make(chan struct{}, runtime.NumCPU())
+		}
+	})
+
+	return d.sessions
 }
 
 // acquire returns the mode a decode of req starts in, taking a
@@ -253,15 +262,11 @@ func (d *FFmpeg) acquire(
 		return mode, func() {}
 	}
 
-	d.once.Do(func() {
-		if d.sessions == nil {
-			d.sessions = make(chan struct{}, d.vtSessions())
-		}
-	})
+	sessions := d.pool()
 
 	select {
-	case d.sessions <- struct{}{}:
-		return mode, func() { <-d.sessions }
+	case sessions <- struct{}{}:
+		return mode, func() { <-sessions }
 	default:
 		return HWAccelNone, func() {}
 	}

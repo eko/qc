@@ -22,6 +22,8 @@ The release notes of each GitHub release are taken from its section here
   scenes that cost the most, not the ones that score the lowest (see
   docs/validation.md).
 
+- **`--digest-duration`**: the length of the digest, 40 s by default
+  whatever the title.
 - **Codecs compared at equal quality**: a run with several codecs reports
   what every newer codec needs against the oldest one at equal VMAF, on the
   verified rungs (`ladder.CompareRates`), and warns when a newer codec
@@ -31,6 +33,20 @@ The release notes of each GitHub release are taken from its section here
 
 ### Changed
 
+- **One analysis and one digest per run**: the ladders of the codecs of a
+  run share the frame analysis and the digest the first of them made
+  (`ladder.Engine.Prepare`, `ladder.Options.Prepared`), instead of making
+  them again for each codec. Every codec is measured on the same file by
+  construction.
+- **Per-shot rungs on long titles**: with `--per-shot`, the digest's
+  segments start on the GOPs of the title, so that each is one GOP of one
+  shot; the shots the digest misses are predicted from their spatial and
+  temporal information instead of the source's bitrate; the shot models are
+  parabolas in CRF bent as the title's curves, where VMAF quadratic in
+  ln(bitrate) promised the top rungs up to 6 VMAF too much; and a per-shot
+  version its verification shows no cheaper than its rung is dropped and
+  reported (`Rung.PerShotRejected`). On a 10-minute title per-shot rungs
+  now save 1.3% over the whole title where they lost about 1%.
 - **Balanced digest**: the segments of the digest a ladder is estimated on
   are no longer evenly spaced. One still sits in each part of the title,
   moved inside it until the frames of the digest have the title's spatial
@@ -47,6 +63,11 @@ The release notes of each GitHub release are taken from its section here
 
 ### Fixed
 
+- **Data races**: two measurements starting at once could race on the
+  VideoToolbox session pool (`decode`), and the `Progress` callback of a
+  measurement could be entered by two workers at once (`quality`); the
+  announcement of a ladder stage could overlap the progress of the source
+  analysis. Calls of a `Progress` callback never overlap now.
 - **Background jobs**: qc drew its dashboard whenever stderr was a
   terminal, so a background job (`qc run … &`, `brew test`) was stopped by
   the kernel (SIGTTOU) at its first terminal setting and never finished. The

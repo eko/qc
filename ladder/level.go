@@ -52,7 +52,7 @@ func (b *build) levelProbes(
 		return probes, nil
 	}
 
-	b.opts.report(Progress{Stage: StageLevel})
+	b.reportProgress(Progress{Stage: StageLevel})
 
 	sampled, exact, err := b.measureTwice(ctx, job)
 	if err != nil {

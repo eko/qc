@@ -122,6 +122,8 @@ type fakeLab struct {
 	compared []quality.Options
 	// analyses records the options of every analysis of the source.
 	analyses []analysis.Options
+	// sources counts the encodes read from each file.
+	sources map[string]int
 }
 
 func newFakeLab(
@@ -132,6 +134,7 @@ func newFakeLab(
 		model:   model,
 		source:  source,
 		seen:    map[string]int{},
+		sources: map[string]int{},
 		encodes: map[string]encode.Params{},
 		chunks:  map[string][]encode.Chunk{},
 		digest:  &analysis.Report{Info: &media.Info{Path: "digest"}},
@@ -276,7 +279,7 @@ func withExtras(
 func (l *fakeLab) Encode(
 	_ context.Context,
 	_ encode.Codec,
-	_, dst string,
+	src, dst string,
 	p encode.Params,
 ) error {
 	if err := l.check(opEncode, dst); err != nil {
@@ -286,6 +289,7 @@ func (l *fakeLab) Encode(
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	l.sources[src]++
 	l.encodes[dst] = p
 	l.params = append(l.params, p)
 

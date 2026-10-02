@@ -72,14 +72,23 @@ func (b *build) makeDigest(
 ) (Digest, error) {
 	// The frame analysis the build waited for (see StageAnalysis), or the
 	// one at hand, which also describes a uniform digest.
-	digest := planDigest(cmp.Or(b.analysis, b.opts.Analysis), duration, b.opts)
+	digest := planDigest(cmp.Or(b.analysis, b.opts.Analysis), duration, b.opts, b.digestGrid())
 
+	// An earlier build of the source extracted these segments already:
+	// every codec reads the same file.
+	if path, report, ok := b.prepared.sharedDigest(digest.Segments); ok {
+		b.useDigest(path, report)
+
+		return digest, nil
+	}
+
+	dir := b.prepared.digestDir(b.workDir)
 	depth := digestBitDepth(b.video)
 	lossless := rawDigestBytes(b.video, depth, digest.Duration) > maxRawDigestBytes
 
-	path := filepath.Join(b.workDir, "digest.nut")
+	path := filepath.Join(dir, "digest.nut")
 	if lossless {
-		path = filepath.Join(b.workDir, "digest.mkv")
+		path = filepath.Join(dir, "digest.mkv")
 	}
 
 	spec := encode.DigestSpec{
@@ -97,10 +106,20 @@ func (b *build) makeDigest(
 	}
 
 	report = withSignal(report, b.video)
-	b.digest, b.digestReport = path, report
-	b.reference, b.referenceReport = path, report
+	b.prepared.keepDigest(digest.Segments, path, report)
+	b.useDigest(path, report)
 
 	return digest, nil
+}
+
+// useDigest makes the digest at path, inspected as report, what the build
+// encodes and scores against.
+func (b *build) useDigest(
+	path string,
+	report *analysis.Report,
+) {
+	b.digest, b.digestReport = path, report
+	b.reference, b.referenceReport = path, report
 }
 
 // PlanDigest returns the digest Build extracts from a source, without
@@ -116,31 +135,103 @@ func PlanDigest(
 		return Digest{}, fmt.Errorf("ladder: %w", err)
 	}
 
-	_, duration, err := usableVideo(source)
+	video, duration, err := usableVideo(source)
 	if err != nil {
 		return Digest{}, err
 	}
 
-	return planDigest(source, duration, opts.withDigestDefaults()), nil
+	opts = opts.withDigestDefaults()
+
+	return planDigest(source, duration, opts, digestGrid(opts, video)), nil
+}
+
+// gopGrid is the grid of the GOPs of the encodes on the frames of the
+// title: a GOP every frames frames, at rate frames a second. The zero value
+// is no grid.
+type gopGrid struct {
+	frames int
+	rate   float64
+}
+
+// digestGrid returns the grid the segments of the digest start on: the
+// GOPs of the encodes when per-shot rungs are asked, none otherwise.
+//
+// A per-shot rung gives every shot, a run of whole GOPs of the title, the
+// model of the piece of it the digest holds. A segment starting anywhere
+// straddles shots and GOPs: its pieces start with a keyframe the title has
+// not there and stop short of a GOP, so they cost and score unlike the shot
+// they stand for. On the grid, a segment is a GOP of one shot, encoded as
+// the title encodes it. In replays of the allocation on a title encoded
+// whole, that alone turned a loss into a gain (see docs/validation.md).
+func digestGrid(
+	opts Options,
+	video media.VideoStream,
+) gopGrid {
+	if !opts.PerShot && !opts.PerShotResolution {
+		return gopGrid{}
+	}
+
+	rate := video.AvgFrameRate.Float()
+
+	return gopGrid{frames: gopFrames(opts.withGOPDefault().GOPDuration, rate), rate: rate}
+}
+
+// digestGrid is the grid of the digest of the build (see digestGrid).
+func (b *build) digestGrid() gopGrid {
+	return digestGrid(b.opts, b.video)
+}
+
+// snap moves evenly spaced segments onto the grid: each to the GOP nearest
+// to its start, a quarter of a frame early as placed segments are (see
+// balance.Segments). Segments the grid would make overlap, or push past
+// the title, are left where they are.
+func (g gopGrid) snap(
+	segments []media.Interval,
+	duration media.Duration,
+) []media.Interval {
+	if g.frames <= 1 || g.rate <= 0 {
+		return segments
+	}
+
+	out := make([]media.Interval, len(segments))
+	frame := media.Seconds(1 / g.rate)
+
+	for i, s := range segments {
+		gop := math.Round(s.Start.Seconds() * g.rate / float64(g.frames))
+		start := media.Seconds(gop*float64(g.frames)/g.rate) - frame/4
+
+		out[i] = media.Interval{Start: max(start, 0), End: max(start, 0) + s.Length()}
+
+		if out[i].End > duration || (i > 0 && out[i].Start < out[i-1].End) {
+			return segments
+		}
+	}
+
+	return out
 }
 
 // planDigest places the segments of the digest of a title of this duration:
 // balanced on the frame analysis source when opts ask for it and source has
 // the features, evenly spaced otherwise. A title used whole has no
-// sampling.
+// sampling. On a grid, the segments start where GOPs of the title do.
 func planDigest(
 	source *analysis.Report,
 	duration media.Duration,
 	opts Options,
+	grid gopGrid,
 ) Digest {
 	segments := digestSegments(duration, opts.SegmentDuration, opts.DigestDuration)
 	digest := Digest{Sampling: DigestUniform}
 
 	if duration <= opts.DigestDuration {
 		digest.Sampling = ""
+	} else {
+		segments = grid.snap(segments, duration)
 	}
 
 	if frames, ok := digestFrames(source); ok && digest.Sampling != "" {
+		frames.Stride = grid.frames
+
 		if placed := placeSegments(source, frames, duration, len(segments), opts); placed != nil {
 			segments, digest.Sampling = placed, opts.DigestSampling
 		}

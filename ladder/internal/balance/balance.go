@@ -27,6 +27,15 @@ type Frames struct {
 	PTS []media.Duration
 	// Features holds one series per feature, a value per frame.
 	Features [][]float64
+	// Stride restricts where segments start: on the frames whose index is
+	// a multiple of it (0 and 1: on any frame). With the GOP of the
+	// encodes, every segment starts where a GOP of the title does.
+	Stride int
+}
+
+// stride is the step between the frames a segment may start on.
+func (f Frames) stride() int {
+	return max(f.Stride, 1)
 }
 
 // usable reports whether every feature has a value for every frame.
@@ -137,7 +146,7 @@ func Segments(
 	out := make([]media.Interval, count)
 
 	for i, slot := range slots {
-		start := frames.startBefore(slot.first + picks[i])
+		start := frames.startBefore(slot.first + picks[i]*frames.stride())
 		out[i] = media.Interval{Start: start, End: start + segment}
 	}
 
@@ -145,7 +154,8 @@ func Segments(
 }
 
 // slot holds the candidate segments of one slot of the title: those whose
-// first frames are first, first+1… and which lie inside the slot.
+// first frames are first, first plus the stride… and which lie inside the
+// slot.
 type slot struct {
 	first int
 	// centre is the candidate closest to the centred segment.
@@ -176,7 +186,10 @@ func candidates(
 			s.first++
 		}
 
-		for j := s.first; j < len(frames.PTS) && frames.startBefore(j)+segment <= to; j++ {
+		stride := frames.stride()
+		s.first = (s.first + stride - 1) / stride * stride
+
+		for j := s.first; j < len(frames.PTS) && frames.startBefore(j)+segment <= to; j += stride {
 			start := frames.startBefore(j)
 			end := frames.frameAt(start + segment)
 			means := make([]float64, len(frames.Features))
@@ -186,7 +199,7 @@ func candidates(
 			}
 
 			if start <= centred {
-				s.centre = j - s.first
+				s.centre = (j - s.first) / stride
 			}
 
 			s.deviations = append(s.deviations, means)
@@ -397,7 +410,7 @@ func (f Frames) ranked(
 		scores []float64
 	)
 
-	for j := 0; j <= last && f.startBefore(j)+segment <= end; j++ {
+	for j := 0; j <= last && f.startBefore(j)+segment <= end; j += f.stride() {
 		start := f.startBefore(j)
 		to := f.frameAt(start + segment)
 		means := make([]float64, len(f.Features))

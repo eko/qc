@@ -408,6 +408,20 @@ func TestCodecFindings(
 	assert.Equal(t, 1, scopes["Codecs"], "the comparison is part of a run's findings")
 }
 
+func TestLadderFindingPerShotRejected(
+	t *testing.T,
+) {
+	l := sampleLadder(t, "h264")
+	l.Rungs[0].PerShotRejected = &ladder.PerShot{Gain: -0.18}
+
+	var texts []string
+	for _, f := range ladderFindings(l) {
+		texts = append(texts, f.Text)
+	}
+
+	assert.Contains(t, texts, "Rung 1 (1080p): no per-shot version, the one tried cost 18.0% more than the rung at equal VMAF on the digest")
+}
+
 func TestLadderFindingTopDigest(
 	t *testing.T,
 ) {

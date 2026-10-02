@@ -228,6 +228,7 @@ The costs behind these defaults, and how the primary VMAF is chosen, are in
 | `--no-verify` | off | skip the verification encodes |
 | `--commands` | off | print each rung's ffmpeg command |
 | `--parallel` | 2 | probe encodes run concurrently |
+| `--digest-duration` | 0 (40 s) | length of the digest, in seconds: the ladder is estimated on that much of the title, and costs in proportion to it |
 | `--digest` | balanced | segments of the digest the ladder is estimated on: `balanced` (one per part of the title, each moved until the digest has the title's SI and TI), `top` (the most complex scenes, one per shot: the ladder of the demanding scenes, with their bitrates, not the title's) or `uniform` (evenly spaced, no analysis); for `balanced` and `top` a standalone `qc ladder` analyses the source first — see [digest](ladder.md#1-digest) |
 | `--probing` | fixed | probe placement: `fixed` (3 CRFs per resolution) or `adaptive` (2 per resolution, then probes where the rungs and crossovers are least certain) — see [probing](ladder.md#adaptive-probing) |
 | `--per-shot` | off | add a per-shot version of every rung: one CRF per shot at equal rate-quality slope, same pooled VMAF — see [per-shot](ladder.md#8-per-shot-rungs). The reports then show the per-shot ladder (every shot's CRF, bitrate and VMAF per rung) |

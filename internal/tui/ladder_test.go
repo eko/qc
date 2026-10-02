@@ -482,6 +482,17 @@ func TestRenderCodecs(
 	require.Error(t, RenderCodecs(failingWriter{}, testCases[1].ladders))
 }
 
+func TestLadderLinePerShotRejected(
+	t *testing.T,
+) {
+	res := sampleLadder(t)
+	res.Constraints = res.Constraints.WithDefaults()
+	res.Rungs[0].PerShotRejected = &ladder.PerShot{Gain: -0.18}
+
+	assert.Contains(t, renderLadder(t, res, 200, "", false),
+		"rung 1 (1080p): no per-shot version, the one tried cost 18.0% more than the rung at equal VMAF on the digest")
+}
+
 func TestLadderLineTopDigest(
 	t *testing.T,
 ) {

@@ -122,6 +122,7 @@ func addLadderFlags(
 	flags.Bool("commands", false, "print the ffmpeg command of each rung")
 	flags.Int("parallel", 2, "probe encodes run concurrently")
 	flags.Int("encode-bit-depth", 8, "bit depth of the ladder encodes: 8 or 10 (Main10, best for HEVC/AV1)")
+	flags.Float64("digest-duration", 0, "length of the digest in seconds (0: 40 s); a ladder costs in proportion to it")
 	flags.String("digest", "balanced", "segments of the digest the ladder is estimated on: balanced (moved until the digest has the SI and TI of the title), top (the most complex scenes: a ladder for the demanding parts) or uniform (evenly spaced); balanced and top analyse the title first")
 	flags.String("probing", "fixed", "probe placement: fixed (3 CRFs per resolution) or adaptive (uncertainty-driven)")
 	flags.Bool("per-shot", false, "add a per-shot version of every rung: one CRF per shot at equal rate-quality slope")
@@ -291,6 +292,7 @@ func ladderOptions(
 		BitDepth:       l.EncodeBitDepth,
 		Probing:        ladder.Probing(l.Probing),
 		DigestSampling: ladder.DigestSampling(l.Digest),
+		DigestDuration: media.Seconds(l.DigestDuration),
 		PerShot:        l.PerShot,
 		// PerShotResolution implies PerShot in the ladder options.
 		PerShotResolution: l.PerShotResolution,
