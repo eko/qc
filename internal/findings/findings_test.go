@@ -198,11 +198,19 @@ func TestComparison(
 				v.Sample = &quality.SampleReport{Clamped: "raised to 4 clips"}
 				v.Frames[2].Score = 70
 				v.Banding = &quality.Banding{Threshold: 5, Segments: []quality.BandingSegment{{Interval: interval(1, 2)}}}
+				v.Drops = &quality.Drops{Margin: quality.DropMargin, Threshold: 78, Share: 0.08}
 			},
 			want: [][2]string{
 				{"info", string(Fallback)}, {"info", string(BudgetClamped)}, {"warn", string(WorstFrame)},
-				{"warn", string(Banding)}, {"info", string(SampledOnly)},
+				{"info", string(Drops)}, {"warn", string(Banding)}, {"info", string(SampledOnly)},
 			},
+		},
+		{
+			name: "few drops are not told",
+			mutate: func(v *quality.Result) {
+				v.Drops = &quality.Drops{Margin: quality.DropMargin, Threshold: 78, Share: 0.049}
+			},
+			want: [][2]string{{"info", string(SampledOnly)}},
 		},
 		{
 			name: "exact, no banding, budget kept",
@@ -354,6 +362,13 @@ func TestLadderValues(
 	assert.Equal(t, Finding{Level: Info, Code: Calibrated, Index: 1, Limit: ladder.CalibrationTolerance}, list[3])
 	assert.Equal(t, Finding{Level: Warn, Code: BandedRung, Index: 2, Value: 0.5, Limit: quality.BandingThreshold}, list[4])
 	assert.Equal(t, Finding{Level: Warn, Code: RankConflict, Index: 1, Other: 2}, list[5])
+
+	// Banding the source has on most of those frames is the source's.
+	r.Rungs[2].Measured.SourceBandedFrames = 4
+	assert.Equal(t, BandedRung, Ladder(r)[4].Code, "under half of the banded frames")
+
+	r.Rungs[2].Measured.SourceBandedFrames = 5
+	assert.Equal(t, Finding{Level: Warn, Code: BandedSource, Index: 2, Value: 0.5, Limit: quality.BandingThreshold}, Ladder(r)[4])
 }
 
 func TestLadderRenditions(

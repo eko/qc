@@ -17,6 +17,7 @@ import (
 	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/decode"
 	"github.com/eko/qc/frame"
+	"github.com/eko/qc/internal/stats"
 	"github.com/eko/qc/internal/testutil"
 	"github.com/eko/qc/media"
 	"github.com/eko/qc/probe"
@@ -167,7 +168,11 @@ func TestMeasure(
 				assert.LessOrEqual(t, res.HalfWidth, 20.0)
 				assert.InDelta(t, res.Mean, res.Low+res.HalfWidth, 1e-9)
 				assert.InDelta(t, exact.Mean, res.Mean, res.HalfWidth)
-				assert.Zero(t, res.HarmonicMean, "only computed in exact mode")
+				assert.InDelta(t, exact.HarmonicMean, res.HarmonicMean, 2*res.HalfWidth, "estimated from the same clips")
+				assert.LessOrEqual(t, res.HarmonicMean, res.Mean)
+				require.NotNil(t, res.Drops)
+				assert.LessOrEqual(t, res.Drops.Low, res.Drops.Share)
+				assert.LessOrEqual(t, res.Drops.Share, res.Drops.High)
 				assert.Greater(t, res.FramesDecoded, 2*res.FramesScored, "warm-up frames are decoded too")
 
 				for _, f := range res.Frames {
@@ -661,23 +666,45 @@ func TestSameVideoRate(
 	}
 }
 
-func TestHarmonicMean(
+func TestAddPooling(
 	t *testing.T,
 ) {
 	testCases := []struct {
-		name   string
-		scores []float64
-		want   float64
+		name         string
+		scores       []float64
+		wantHarmonic float64
+		wantDrops    float64
 	}{
-		{name: "constant", scores: []float64{80, 80}, want: 80},
-		{name: "zero stays finite", scores: []float64{0, 100}, want: 2/(1+1.0/101) - 1},
+		{name: "constant", scores: []float64{80, 80}, wantHarmonic: 80},
+		{name: "zero stays finite", scores: []float64{0, 100}, wantHarmonic: 2/(1+1.0/101) - 1, wantDrops: 0.5},
+		{name: "a drop the mean hides", scores: []float64{90, 90, 90, 90, 90, 90, 90, 90, 90, 40}, wantHarmonic: 10/(9/91.0+1/41.0) - 1, wantDrops: 0.1},
+		{name: "ten points under the mean is not a drop yet", scores: []float64{90, 70}, wantHarmonic: 2/(1/91.0+1/71.0) - 1},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.InDelta(t, testCase.want, harmonicMean(testCase.scores), 1e-9)
+			st := &stratum{last: len(testCase.scores)}
+			whole := clipResult{clip: clip{stratum: st, to: len(testCase.scores)}, scores: testCase.scores}
+			// A clip without a scored frame tells nothing.
+			empty := clipResult{clip: clip{stratum: st}}
+
+			res := &Result{Mode: ModeExact, Mean: stats.Mean(testCase.scores)}
+			(&run{}).addPooling(res, []*stratum{st}, []clipResult{whole, empty})
+
+			assert.InDelta(t, testCase.wantHarmonic, res.HarmonicMean, 1e-9)
+			require.NotNil(t, res.Drops)
+			assert.InDelta(t, testCase.wantDrops, res.Drops.Share, 1e-9)
+			assert.InDelta(t, res.Mean-DropMargin, res.Drops.Threshold, 1e-9)
+			assert.InDelta(t, res.Drops.Share, res.Drops.Low, 1e-9, "exact: no interval")
+			assert.InDelta(t, res.Drops.Share, res.Drops.High, 1e-9)
 		})
 	}
+
+	// Nothing scored: nothing to tell.
+	res := &Result{Mode: ModeExact}
+	(&run{}).addPooling(res, nil, nil)
+	assert.Zero(t, res.HarmonicMean)
+	assert.Zero(t, res.Drops.Share)
 }
 
 func TestWithPTS(

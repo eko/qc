@@ -56,7 +56,7 @@ func TestRenderComparison(
 				"ℹ min/p5 come from sampled frames only; use --exact for quality gates",
 				"⚡ inspect 120ms · vmaf 3.2s · 0 frames decoded",
 			},
-			wantNot: []string{"harmonic", "written to"},
+			wantNot: []string{"harmonic", "drops", "written to"},
 		},
 		{
 			name: "fixed budget",
@@ -375,4 +375,27 @@ func TestBandingFindings(
 			assert.Equal(t, testCase.want, got)
 		})
 	}
+}
+
+func TestRenderComparisonDrops(
+	t *testing.T,
+) {
+	// The harmonic mean and the drops are estimated in sampled mode too.
+	cmp := sampleComparison(quality.ModeSampled)
+	cmp.VMAF.HarmonicMean = 86.2
+	cmp.VMAF.Drops = &quality.Drops{Margin: quality.DropMargin, Threshold: 78.4, Share: 0.081, Low: 0.06, High: 0.1}
+
+	out := renderComparison(t, cmp, 120, "")
+	for _, want := range []string{
+		"rounds 2", "harmonic 86.20", "drops 8.1% under 78",
+		"ℹ 8% of the frames score more than 10 VMAF under the mean (below 78.4): the mean hides them, the harmonic mean is 86.2",
+	} {
+		assert.Contains(t, out, want)
+	}
+
+	// No drop: nothing to tell.
+	cmp.VMAF.Drops.Share = 0
+	out = renderComparison(t, cmp, 120, "")
+	assert.NotContains(t, out, "drops")
+	assert.NotContains(t, out, "the mean hides them")
 }

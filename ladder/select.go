@@ -11,8 +11,10 @@ type Constraints struct {
 	TopVMAF float64 `json:"topVmaf"`
 	// MinVMAF is the lowest acceptable rung quality. Default 30.
 	MinVMAF float64 `json:"minVmaf"`
-	// Step is the VMAF drop between rungs, about one just-noticeable
-	// difference. Default 6.
+	// Step is the VMAF drop between rungs: a clearly visible step. It is
+	// often called one just-noticeable difference, but measured ones
+	// average about 7 VMAF and vary with the content (standard deviation
+	// 3.3 on VideoSet). Default 6.
 	Step float64 `json:"step"`
 	// MinRatio and MaxRatio bound the bitrate ratio of adjacent rungs.
 	// Defaults 1.5 and 2.5.

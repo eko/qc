@@ -502,6 +502,7 @@ func measurementOf(
 
 	if v.Banding != nil {
 		m.BandedFrames, m.ScoredFrames = v.Banding.BandedFrames, v.FramesScored
+		m.SourceBandedFrames = v.Banding.SourceFrames
 	}
 
 	return m

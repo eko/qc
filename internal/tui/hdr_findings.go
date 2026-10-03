@@ -61,6 +61,9 @@ func hdrMeasurementText(
 		}
 
 		return fmt.Sprintf("HDR rungs: every encode carries the %s colour description", transferName(f.Text))
+	case findings.HDRLadderTarget:
+		return fmt.Sprintf("VMAF targets read on the %s signal, where VMAF ranks the encodes of a title but is not calibrated: the rungs are in the right order, "+
+			"but VMAF %.0f here is not the quality it is in SDR (--hdr-metric tonemap scores an SDR tone mapping instead)", transferName(f.Text), f.Value)
 	case findings.HDRBitDepthUpgraded:
 		return "HDR source: rungs encoded in 10 bits (8 bits was asked for)"
 	case findings.HDRPlayerSupport:

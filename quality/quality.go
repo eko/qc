@@ -384,6 +384,9 @@ type run struct {
 	decoded   int
 	// plans counts the decoding plans used, for reporting.
 	plans map[string]int
+	// sourceCAMBI is CAMBI on the reference at the banded frames, by frame
+	// index (see sourceBandingPass).
+	sourceCAMBI map[int]float64
 	// live reports progress per frame pair (exact mode: a single long clip)
 	// instead of per clip.
 	live bool
@@ -417,14 +420,18 @@ func (r *run) exact(
 		return nil, err
 	}
 
+	if err := r.sourceBandingPass(ctx, results, workers, threads); err != nil {
+		return nil, err
+	}
+
 	whole := mergeSegments(results)
 	scores := whole.scores
 	st.addClip(stats.Mean(scores), len(scores))
 	res := r.result([]*stratum{st}, []clipResult{whole}, ModeExact)
 	res.Mean = stats.Mean(scores)
 	res.Low, res.High = res.Mean, res.Mean
-	res.HarmonicMean = harmonicMean(scores)
 	res.Rounds = 1
+	r.addPooling(res, []*stratum{st}, []clipResult{whole})
 	r.addMetrics(res, []*stratum{st}, []clipResult{whole})
 
 	return res, nil
@@ -466,12 +473,17 @@ func (r *run) sampled(
 		return nil, err
 	}
 
+	if err := r.sourceBandingPass(ctx, out.results, workers, threads); err != nil {
+		return nil, err
+	}
+
 	res := r.result(strata, out.results, ModeSampled)
 	res.Mean = out.est.mean
 	res.HalfWidth = out.est.halfWidth
 	res.Low, res.High = out.est.mean-out.est.halfWidth, out.est.mean+out.est.halfWidth
 	res.Rounds = out.rounds
 	res.Sample = out.budget
+	r.addPooling(res, strata, out.results)
 	r.addMetrics(res, strata, out.results)
 
 	return res, nil

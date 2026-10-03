@@ -21,10 +21,18 @@ const (
 	// NoBanding: CAMBI stays under the threshold on every scored frame.
 	// Limit is the threshold.
 	NoBanding Code = "no-banding"
+	// Drops: a share of the frames (Value, quality.Drops.Share) scores more
+	// than quality.DropMargin under the mean, below Limit: the mean hides
+	// them.
+	Drops Code = "drops"
 	// SampledOnly: the extremes (min, 5th percentile) come from sampled
 	// frames only.
 	SampledOnly Code = "sampled-only"
 )
+
+// DropsShare is the share of frames well under the mean from which the
+// drops are reported: one frame in twenty.
+const DropsShare = 0.05
 
 // WorstFrameMargin is how far below the mean (VMAF) a scored frame must be
 // to be reported: an isolated drop that the mean hides.
@@ -53,6 +61,10 @@ func Comparison(
 			Level: Warn, Code: WorstFrame, Topic: TopicQuality,
 			Index: worst.Index, Value: worst.Score, Spans: []media.Interval{{Start: worst.PTS, End: worst.PTS}},
 		})
+	}
+
+	if d := v.Drops; d != nil && d.Share >= DropsShare {
+		out = append(out, Finding{Level: Info, Code: Drops, Topic: TopicQuality, Value: d.Share, Limit: d.Threshold})
 	}
 
 	if b := v.Banding; b != nil {

@@ -17,6 +17,7 @@ package libvmaf
 
 /*
 #cgo pkg-config: libvmaf
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <libvmaf/libvmaf.h>
@@ -73,14 +74,57 @@ static int qc_use_feature(VmafContext *vmaf, const char *name) {
 	return vmaf_use_feature(vmaf, name, NULL);
 }
 
+// qc_cambi_encoded adds the encode-side options of CAMBI to opts: the
+// resolution and bit depth the distorted video was encoded at, when known
+// (width above 0).
+static int qc_cambi_encoded(VmafFeatureDictionary **opts, unsigned w, unsigned h, unsigned bpc) {
+	if (w == 0) {
+		return 0;
+	}
+
+	char value[16];
+	snprintf(value, sizeof(value), "%u", w);
+	int err = vmaf_feature_dictionary_set(opts, "enc_width", value);
+	snprintf(value, sizeof(value), "%u", h);
+	err |= vmaf_feature_dictionary_set(opts, "enc_height", value);
+	snprintf(value, sizeof(value), "%u", bpc);
+	err |= vmaf_feature_dictionary_set(opts, "enc_bitdepth", value);
+
+	return err;
+}
+
+// qc_model_cambi sets the CAMBI feature of a model up like qc_use_cambi
+// does, so that both stay one extractor: what the distorted video was
+// encoded at, and with source set the reference measured too. It does
+// nothing for a model without CAMBI.
+static int qc_model_cambi(VmafModel *model, unsigned w, unsigned h, unsigned bpc, int source) {
+	VmafFeatureDictionary *opts = NULL;
+	int err = qc_cambi_encoded(&opts, w, h, bpc);
+	if (!err && source) {
+		err = vmaf_feature_dictionary_set(&opts, "full_ref", "true");
+	}
+	if (err || !opts) {
+		vmaf_feature_dictionary_free(&opts);
+		return err;
+	}
+
+	return vmaf_model_feature_overload(model, "cambi", opts);
+}
+
 // qc_use_cambi registers CAMBI with the options of the VMAF v1 models, so
 // that a v1 model and a CAMBI measurement share one extractor (libvmaf
-// deduplicates extractors with equal options).
-static int qc_use_cambi(VmafContext *vmaf) {
+// deduplicates extractors with equal options), with the encode-side
+// options the models were given, and with source the reference measured
+// too (cambi_source).
+static int qc_use_cambi(VmafContext *vmaf, unsigned w, unsigned h, unsigned bpc, int source) {
 	VmafFeatureDictionary *opts = NULL;
 	int err = vmaf_feature_dictionary_set(&opts, "cambi_high_res_speedup", "1080");
 	err |= vmaf_feature_dictionary_set(&opts, "cambi_max_val", "17");
 	err |= vmaf_feature_dictionary_set(&opts, "cambi_vis_lum_threshold", "0.06");
+	if (source) {
+		err |= vmaf_feature_dictionary_set(&opts, "full_ref", "true");
+	}
+	err |= qc_cambi_encoded(&opts, w, h, bpc);
 	if (err) {
 		vmaf_feature_dictionary_free(&opts);
 		return err;
@@ -111,6 +155,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -189,6 +234,52 @@ func (m *Model) Close() {
 // with the options of the VMAF v1 models.
 const featureCAMBIModel = "cambi_hrs_1080_cmxv_17_vlt_0.06"
 
+// featureCAMBISource is the name it gives CAMBI on the reference, whatever
+// the options: the extractor does not declare that output.
+const featureCAMBISource = "cambi_source"
+
+// cambiFeature is the name libvmaf's feature collector gives CAMBI with the
+// options of the VMAF v1 models and of the encode enc: the options follow
+// in the alphabetical order of their names (enc_bitdepth, enc_height,
+// enc_width).
+func cambiFeature(
+	enc vmaf.Encoded,
+) string {
+	if enc.Width == 0 {
+		return featureCAMBIModel
+	}
+
+	return fmt.Sprintf("%s_encbd_%d_ench_%d_encw_%d", featureCAMBIModel, enc.BitDepth, enc.Height, enc.Width)
+}
+
+// cambiMinSide is the size one side of the encode must reach for CAMBI to
+// take it (libvmaf's CAMBI_MIN_WIDTH_HEIGHT).
+const cambiMinSide = 216
+
+// encodedOtherwise returns enc when it tells CAMBI something the frames do
+// not: an encode of another resolution or bit depth than the width ×
+// height frames of depth bits. Otherwise, or for an encode smaller than
+// CAMBI accepts, it returns the zero value, and CAMBI is left with its
+// defaults.
+func encodedOtherwise(
+	enc vmaf.Encoded,
+	width, height, depth int,
+) vmaf.Encoded {
+	if enc.Width <= 0 || enc.Height <= 0 || enc.BitDepth <= 0 {
+		return vmaf.Encoded{}
+	}
+
+	if enc.Width == width && enc.Height == height && enc.BitDepth == depth {
+		return vmaf.Encoded{}
+	}
+
+	if enc.Width < cambiMinSide && enc.Height < cambiMinSide {
+		return vmaf.Encoded{}
+	}
+
+	return enc
+}
+
 // feature is an output of an extractor: its name in vmaf.Scores.Features and in
 // libvmaf's feature collector (which suffixes non-default options).
 type feature struct {
@@ -202,11 +293,12 @@ var extractorFeatures = map[vmaf.Extractor][]feature{
 		{vmaf.FeaturePSNRCb, vmaf.FeaturePSNRCb},
 		{vmaf.FeaturePSNRCr, vmaf.FeaturePSNRCr},
 	},
-	vmaf.ExtractorPSNRHVS:   {{vmaf.FeaturePSNRHVS, vmaf.FeaturePSNRHVS}},
-	vmaf.ExtractorSSIM:      {{vmaf.FeatureSSIM, vmaf.FeatureSSIM}},
-	vmaf.ExtractorMSSSIM:    {{vmaf.FeatureMSSSIM, vmaf.FeatureMSSSIM}},
-	vmaf.ExtractorCIEDE2000: {{vmaf.FeatureCIEDE2000, vmaf.FeatureCIEDE2000}},
-	vmaf.ExtractorCAMBI:     {{vmaf.FeatureCAMBI, featureCAMBIModel}},
+	vmaf.ExtractorPSNRHVS:     {{vmaf.FeaturePSNRHVS, vmaf.FeaturePSNRHVS}},
+	vmaf.ExtractorSSIM:        {{vmaf.FeatureSSIM, vmaf.FeatureSSIM}},
+	vmaf.ExtractorMSSSIM:      {{vmaf.FeatureMSSSIM, vmaf.FeatureMSSSIM}},
+	vmaf.ExtractorCIEDE2000:   {{vmaf.FeatureCIEDE2000, vmaf.FeatureCIEDE2000}},
+	vmaf.ExtractorCAMBI:       {{vmaf.FeatureCAMBI, featureCAMBIModel}},
+	vmaf.ExtractorCAMBISource: {{vmaf.FeatureCAMBI, featureCAMBIModel}, {vmaf.FeatureCAMBISource, featureCAMBISource}},
 }
 
 // Scorer computes per-frame VMAF, with one or more models, and extra libvmaf
@@ -218,7 +310,10 @@ type Scorer struct {
 	features      []feature
 	width, height int
 	bitDepth      int
-	pushed        int
+	// encoded is what CAMBI is told of the encode, the zero value when it
+	// is the frames themselves.
+	encoded vmaf.Encoded
+	pushed  int
 	// locked is set when New locked the goroutine to its OS thread (CUDA):
 	// Close unlocks it.
 	locked bool
@@ -238,6 +333,7 @@ func New(
 	}
 
 	s := &Scorer{models: models, width: cfg.Width, height: cfg.Height, bitDepth: max(cfg.BitDepth, 8)}
+	s.encoded = encodedOtherwise(cfg.Encoded, s.width, s.height, s.bitDepth)
 
 	if rc := C.qc_init(&s.ctx, C.uint(max(cfg.Threads, 0))); rc != 0 {
 		return nil, fmt.Errorf("libvmaf: init: %w", libvmafError(int(rc)))
@@ -250,6 +346,17 @@ func New(
 	}
 
 	for _, model := range models {
+		enc, source := s.encoded, C.int(0)
+		if slices.Contains(cfg.Extractors, vmaf.ExtractorCAMBISource) {
+			source = 1
+		}
+
+		if rc := C.qc_model_cambi(model.c, C.uint(enc.Width), C.uint(enc.Height), C.uint(enc.BitDepth), source); rc != 0 {
+			s.Close()
+
+			return nil, fmt.Errorf("libvmaf: set cambi up: %w", libvmafError(int(rc)))
+		}
+
 		if rc := C.vmaf_use_features_from_model(s.ctx, model.c); rc != 0 {
 			s.Close()
 
@@ -312,9 +419,18 @@ func (s *Scorer) use(
 
 	var rc C.int
 
-	if extractor == vmaf.ExtractorCAMBI {
-		rc = C.qc_use_cambi(s.ctx)
-	} else {
+	switch extractor {
+	case vmaf.ExtractorCAMBI, vmaf.ExtractorCAMBISource:
+		enc, source := s.encoded, C.int(0)
+		features = []feature{{vmaf.FeatureCAMBI, cambiFeature(enc)}}
+
+		if extractor == vmaf.ExtractorCAMBISource {
+			source = 1
+			features = append(features, feature{vmaf.FeatureCAMBISource, featureCAMBISource})
+		}
+
+		rc = C.qc_use_cambi(s.ctx, C.uint(enc.Width), C.uint(enc.Height), C.uint(enc.BitDepth), source)
+	default:
 		name := C.CString(string(extractor))
 		rc = C.qc_use_feature(s.ctx, name)
 		C.free(unsafe.Pointer(name))

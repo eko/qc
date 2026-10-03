@@ -43,7 +43,9 @@ if [ "$n" -le `+strconv.Itoa(testCase.freezes)+` ]; then exec sleep 30; fi
 for a; do out=$a; done
 echo encoded > "$out"`)
 
-			f := NewFFmpeg(bin, WithStallTimeout(300*time.Millisecond))
+			// Long enough for the fake ffmpeg to start on a busy machine: a
+			// run killed before it wrote its line was not counted.
+			f := NewFFmpeg(bin, WithStallTimeout(time.Second))
 			codec, err := Lookup("h264")
 			require.NoError(t, err)
 

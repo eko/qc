@@ -113,7 +113,7 @@ func addLadderFlags(
 	flags.String("rungs", "auto", "ladder shape: auto, a rung count (6) or the rung resolutions, top first (1080,720,720,540,360)")
 	flags.Float64("top-vmaf", 95, "quality of the top rung (the highest VMAF targeted)")
 	flags.Float64("min-vmaf", 30, "lowest acceptable rung quality")
-	flags.Float64("step", 6, "VMAF step between rungs (~1 JND)")
+	flags.Float64("step", 6, "VMAF step between rungs (6 is a clearly visible step: measured just-noticeable differences average about 7 and vary with the content)")
 	flags.Int("max-rungs", 8, "maximum number of rungs of the automatic shape")
 	flags.Int64("min-bitrate", 145_000, "lowest rung bitrate (bits/s)")
 	flags.Int64("max-bitrate", 0, "highest rung bitrate (bits/s, 0 = no cap)")

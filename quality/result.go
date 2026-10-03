@@ -20,8 +20,13 @@ type Result struct {
 	High       float64        `json:"high"`
 	HalfWidth  float64        `json:"halfWidth"`
 	Confidence float64        `json:"confidence"`
-	// HarmonicMean is only computed in exact mode.
+	// HarmonicMean is the harmonic mean of the frame scores (libvmaf's
+	// convention), which low frames pull down more than they do the mean.
+	// In sampled mode it is estimated like the mean, from the same clips.
 	HarmonicMean float64 `json:"harmonicMean,omitempty"`
+	// Drops tells how much of the video scores well under its mean: what
+	// the mean hides.
+	Drops *Drops `json:"drops,omitempty"`
 	// Fallback explains why an exact measurement replaced sampling.
 	Fallback string `json:"fallback,omitempty"`
 	// Sample describes the fixed budget of a sampled measurement, nil when
@@ -195,15 +200,100 @@ func (r *run) result(
 	return res
 }
 
-// harmonicMean follows libvmaf's convention: scores are shifted by 1 so that
-// zero scores stay finite.
-func harmonicMean(
-	scores []float64,
-) float64 {
-	var sum float64
-	for _, s := range scores {
-		sum += 1 / (s + 1)
+// DropMargin is how far under the mean (VMAF) a frame must score to count
+// as a drop: more than a quality step of a ladder, clearly visible.
+const DropMargin = 10.0
+
+// Drops is the share of the frames scoring more than Margin under the mean
+// of the video. In sampled mode it is estimated like the mean, with its
+// interval (Low and High equal Share in exact mode).
+type Drops struct {
+	Margin float64 `json:"margin"`
+	// Threshold is the score under which a frame is a drop.
+	Threshold float64 `json:"threshold"`
+	Share     float64 `json:"share"`
+	Low       float64 `json:"low"`
+	High      float64 `json:"high"`
+}
+
+// pooledScores estimates the mean of value over the VMAF scores of every
+// frame: over the scored frames in exact mode, with the estimator of VMAF
+// on the same strata and clips otherwise.
+func pooledScores(
+	strata []*stratum,
+	results []clipResult,
+	exact bool,
+	estimateOf estimator,
+	confidence float64,
+	value func(score float64) float64,
+) estimate {
+	copies := make(map[*stratum]*stratum, len(strata))
+	list := make([]*stratum, len(strata))
+
+	for i, s := range strata {
+		list[i] = &stratum{first: s.first, last: s.last, slots: s.slots}
+		copies[s] = list[i]
 	}
 
-	return float64(len(scores))/sum - 1
+	var sum float64
+
+	n := 0
+
+	for _, cr := range results {
+		if len(cr.scores) == 0 {
+			continue
+		}
+
+		var clip float64
+		for _, s := range cr.scores {
+			clip += value(s)
+		}
+
+		sum += clip
+		n += len(cr.scores)
+
+		copies[cr.clip.stratum].addClip(clip/float64(len(cr.scores)), len(cr.scores))
+	}
+
+	if exact {
+		return estimate{mean: sum / float64(max(n, 1))}
+	}
+
+	return estimateOf(list, confidence)
+}
+
+// addPooling adds what else than the mean sums the frame scores up: the
+// harmonic mean and the share of drops.
+func (r *run) addPooling(
+	res *Result,
+	strata []*stratum,
+	results []clipResult,
+) {
+	exact := res.Mode == ModeExact || allSampled(strata)
+	estimateOf := estimatorFor(r.opts.Sample)
+
+	pool := func(value func(float64) float64) estimate {
+		return pooledScores(strata, results, exact, estimateOf, r.opts.Confidence, value)
+	}
+
+	// libvmaf's convention: scores are shifted by 1 so that zero scores
+	// stay finite.
+	if inverse := pool(func(s float64) float64 { return 1 / (s + 1) }); inverse.mean > 0 {
+		res.HarmonicMean = 1/inverse.mean - 1
+	}
+
+	threshold := res.Mean - DropMargin
+	share := pool(func(s float64) float64 {
+		if s < threshold {
+			return 1
+		}
+
+		return 0
+	})
+
+	res.Drops = &Drops{
+		Margin: DropMargin, Threshold: threshold, Share: share.mean,
+		Low:  max(0, share.mean-share.halfWidth),
+		High: min(1, share.mean+share.halfWidth),
+	}
 }

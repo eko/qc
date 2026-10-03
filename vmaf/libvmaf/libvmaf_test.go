@@ -499,3 +499,60 @@ func TestCollectMissingFeature(
 	require.ErrorIs(t, err, syscall.EINVAL)
 	assert.Contains(t, err.Error(), "not_extracted")
 }
+
+func TestScorerEncoded(
+	t *testing.T,
+) {
+	tv := loadDevice(t, vmaf.DeviceTV)
+
+	const w, h = 512, 512
+
+	testCases := []struct {
+		name    string
+		encoded vmaf.Encoded
+		want    vmaf.Encoded
+	}{
+		{name: "not told", want: vmaf.Encoded{}},
+		{name: "the frames themselves", encoded: vmaf.Encoded{Width: w, Height: h, BitDepth: 10}, want: vmaf.Encoded{}},
+		{name: "incomplete", encoded: vmaf.Encoded{Width: 256, Height: 256}, want: vmaf.Encoded{}},
+		{name: "smaller than cambi takes", encoded: vmaf.Encoded{Width: 200, Height: 112, BitDepth: 8}, want: vmaf.Encoded{}},
+		{name: "a smaller 8-bit encode", encoded: vmaf.Encoded{Width: 256, Height: 256, BitDepth: 8}, want: vmaf.Encoded{Width: 256, Height: 256, BitDepth: 8}},
+		{name: "an 8-bit encode of the same size", encoded: vmaf.Encoded{Width: w, Height: h, BitDepth: 8}, want: vmaf.Encoded{Width: w, Height: h, BitDepth: 8}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			pool := frame.NewPool(w, h, frame.PoolOptions{Chroma: true, HighBitDepth: true})
+
+			// The model's CAMBI and the CAMBI measurement are told the
+			// same encode, and stay one extractor read back by one name.
+			scorer, err := New([]*Model{tv}, vmaf.ScorerConfig{
+				Extractors: []vmaf.Extractor{vmaf.ExtractorCAMBISource},
+				Width:      w, Height: h, BitDepth: 10, Threads: 2,
+				Encoded: testCase.encoded,
+			})
+			require.NoError(t, err)
+			defer scorer.Close()
+
+			assert.Equal(t, testCase.want, scorer.encoded)
+
+			for range 2 {
+				ref, dist := pool.Get(), pool.Get()
+				texture(ref, false)
+				texture(dist, true)
+				require.NoError(t, scorer.Push(ref, dist))
+				ref.Release()
+				dist.Release()
+			}
+
+			out, err := scorer.Collect()
+			require.NoError(t, err)
+			assert.Len(t, out.VMAF[0], 2)
+			assert.Len(t, out.Features[vmaf.FeatureCAMBI], 2)
+			assert.Len(t, out.Features[vmaf.FeatureCAMBISource], 2, "the banding of the reference, on the same frames")
+		})
+	}
+
+	assert.Equal(t, featureCAMBIModel, cambiFeature(vmaf.Encoded{}))
+	assert.Equal(t, featureCAMBIModel+"_encbd_8_ench_720_encw_1280", cambiFeature(vmaf.Encoded{Width: 1280, Height: 720, BitDepth: 8}))
+}

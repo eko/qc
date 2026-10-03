@@ -137,6 +137,7 @@ func (r *run) scoreJob(
 		BitDepth:   r.bitDepth,
 		Threads:    threads,
 		Backend:    r.backend.Backend,
+		Encoded:    r.encoded(),
 	})
 	if err != nil {
 		drainPairs(job.pairs)
@@ -280,4 +281,14 @@ func (r *run) clipValues(
 	meter.values(values)
 
 	return values
+}
+
+// encoded describes the distorted video as it was encoded, which CAMBI
+// reads banding at (see vmaf.ScorerConfig.Encoded): frames are scored once
+// scaled to the evaluation resolution, where the banding of a smaller
+// encode is not what it was.
+func (r *run) encoded() vmaf.Encoded {
+	v := r.dist.Video
+
+	return vmaf.Encoded{Width: v.Width, Height: v.Height, BitDepth: max(v.BitDepth, 8)}
 }

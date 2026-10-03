@@ -125,6 +125,22 @@ CI      = Ȳ ± t_{0.975, df} · √Var(Ȳ)
 - The Student quantile is exact for df ≤ 2 and uses a Cornish-Fisher expansion
   above (error < 1e-3). The normal quantile uses Acklam's algorithm.
 
+### What the interval is, and is not
+
+The interval is the **sampling error**: how far the mean of the scored
+clips may be from the mean of every frame, which `--exact` would give. It
+says nothing of how far VMAF itself is from what viewers see: libvmaf's
+bootstrap models put that *model* uncertainty at a standard deviation of
+about 1.7 VMAF on Netflix's test set
+([confidence interval](https://github.com/Netflix/vmaf/blob/master/resource/doc/conf_interval.md)),
+and it is the same for a sampled and an exact measurement. Two consequences:
+
+- a precision much tighter than ±0.5 buys little: the measurement is then
+  far more precise than the metric is accurate;
+- two encodes of **one** title are compared on the sampling interval alone
+  (they share the model's error, and the clips, see common random numbers
+  in the ladder engine); a score read as an absolute quality carries both.
+
 ### Two-stage design (Stein)
 
 Stopping as soon as the interval *looks* narrow enough biases the result:
@@ -160,6 +176,26 @@ flowchart TD
 
 Frame percentiles (min, p5) in sampled mode only cover the scored frames and
 can miss isolated bad frames. Use `--exact` for quality gates.
+
+### What the mean hides
+
+The arithmetic mean is the headline: it is the pooling that follows opinion
+scores best (Netflix; SROCC 0.918 against 0.900–0.908 for the 5th and 10th
+percentiles on the NFLX set, [Batsi & Kondi 2020](https://www.cs.uoi.gr/~lkon/papers/EI_20b.pdf)).
+It hides drops, so two more numbers come with it, in both modes:
+
+- the **harmonic mean** (libvmaf's convention, scores shifted by 1), which
+  low frames pull down more. In sampled mode it is estimated like the mean:
+  the stratified estimator applied to 1/(score + 1) on the same clips;
+- **drops**: the share of the frames scoring more than 10 VMAF under the
+  mean, with its interval in sampled mode. From 5% of the frames it is a
+  finding.
+
+Replayed 1 000 times on five exact measurements (x264 and SVT-AV1), the
+interval of the harmonic mean covers the truth 93–95% of the time and that
+of the drops 90–94%: a share of rare frames is the hardest thing to
+estimate from a sample, so read it as an indication, not as a gate
+([validation](validation.md#harmonic-mean-and-drops-in-sampled-mode)).
 
 ### Fixed budgets (`--sample`)
 
@@ -556,6 +592,25 @@ considers banding visible above 5:
   the scored clips: use `--exact` to find every banded frame.
 - CAMBI needs 10-bit frames to see banding in 10-bit sources: frames are
   scored at 10 bits when either video has more than 8 (section 1).
+- **CAMBI is told what the encode was**: its resolution and bit depth
+  (`cambi.enc_width`, `enc_height`, `enc_bitdepth`, as Netflix
+  [recommends](https://github.com/Netflix/vmaf/blob/master/resource/doc/models_v1.md#specifying-encode-side-parameters)
+  for v1), for the CAMBI of the model and the CAMBI metric alike. Frames
+  are scored once upscaled to the evaluation resolution, where the banding
+  of a smaller encode is not what it was: without these, CAMBI read 1.85
+  on a 540p rendition for 1.08 with them, and the VMAF v1 of that rendition
+  66.44 for 67.01 ([validation](validation.md#cambi-told-the-encode)). An
+  encode at the evaluation resolution and depth is unchanged.
+- **Banding of the reference**: when frames are banded, a second pass
+  measures CAMBI on the *reference* at those frames alone
+  (`cambi_source` in the frame metrics, `banding.sourceFrames`). A banded
+  frame whose reference is banded too did not get its banding from the
+  encode. The findings say how many are; a ladder rung whose banded frames
+  are mostly the source's is reported as such, since neither bitrate nor a
+  10-bit encode removes that banding. Measuring the reference on every
+  frame costs CAMBI once more everywhere (+10% on a sampled measurement,
+  +24% on an exact one); most encodes have no banded frame, and the pass
+  then costs nothing.
 
 ### PSNR, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000
 

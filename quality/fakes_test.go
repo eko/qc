@@ -2,6 +2,7 @@ package quality
 
 import (
 	"context"
+	"slices"
 	"sync/atomic"
 
 	"github.com/eko/qc/decode"
@@ -15,8 +16,9 @@ const modelOffset = 1000
 
 // fakeFeatures are the outputs the fake scorer reads back per extractor.
 var fakeFeatures = map[vmaf.Extractor][]string{
-	vmaf.ExtractorCAMBI: {vmaf.FeatureCAMBI},
-	vmaf.ExtractorPSNR:  {vmaf.FeaturePSNRY, vmaf.FeaturePSNRCb, vmaf.FeaturePSNRCr},
+	vmaf.ExtractorCAMBI:       {vmaf.FeatureCAMBI},
+	vmaf.ExtractorCAMBISource: {vmaf.FeatureCAMBI, vmaf.FeatureCAMBISource},
+	vmaf.ExtractorPSNR:        {vmaf.FeaturePSNRY, vmaf.FeaturePSNRCb, vmaf.FeaturePSNRCr},
 }
 
 // fakeEngine is a VMAF engine scoring every pair with the index of its
@@ -29,10 +31,15 @@ type fakeEngine struct {
 	scorerErr  error
 	pushErr    error
 	collectErr error
+	// sourceErr refuses the scorers of the pass measuring the banding of
+	// the reference.
+	sourceErr error
 	// open counts the model sets and scorers not closed yet.
 	open atomic.Int64
 	// requested records the backend asked for.
 	requested vmaf.Backend
+	// encoded records what the last scorer was told of the encode.
+	encoded atomic.Value
 }
 
 func (e *fakeEngine) ResolveBackend(
@@ -68,7 +75,12 @@ func (m *fakeModels) NewScorer(
 		return nil, m.engine.scorerErr
 	}
 
+	if m.engine.sourceErr != nil && slices.Contains(cfg.Extractors, vmaf.ExtractorCAMBISource) {
+		return nil, m.engine.sourceErr
+	}
+
 	m.engine.open.Add(1)
+	m.engine.encoded.Store(cfg.Encoded)
 
 	return &fakeScorer{engine: m.engine, models: m.count, extractors: cfg.Extractors}, nil
 }

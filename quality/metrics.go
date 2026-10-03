@@ -64,18 +64,22 @@ func AV2CTCMetrics() []string {
 
 // Series names: the keys of MetricResult.Name and FrameScore.Metrics.
 const (
-	SeriesXPSNRY    = "xpsnr_y"
-	SeriesXPSNRU    = "xpsnr_u"
-	SeriesXPSNRV    = "xpsnr_v"
-	SeriesCAMBI     = "cambi"
-	SeriesPSNRY     = "psnr_y"
-	SeriesPSNRCb    = "psnr_cb"
-	SeriesPSNRCr    = "psnr_cr"
-	SeriesPSNRYUV   = "psnr_yuv"
-	SeriesPSNRHVS   = "psnr_hvs"
-	SeriesSSIM      = "ssim"
-	SeriesMSSSIM    = "ms_ssim"
-	SeriesCIEDE2000 = "ciede2000"
+	SeriesXPSNRY = "xpsnr_y"
+	SeriesXPSNRU = "xpsnr_u"
+	SeriesXPSNRV = "xpsnr_v"
+	SeriesCAMBI  = "cambi"
+	// SeriesCAMBISource is CAMBI on the reference frame, measured on the
+	// banded frames only (FrameScore.Metrics): the banding the encode
+	// inherited.
+	SeriesCAMBISource = "cambi_source"
+	SeriesPSNRY       = "psnr_y"
+	SeriesPSNRCb      = "psnr_cb"
+	SeriesPSNRCr      = "psnr_cr"
+	SeriesPSNRYUV     = "psnr_yuv"
+	SeriesPSNRHVS     = "psnr_hvs"
+	SeriesSSIM        = "ssim"
+	SeriesMSSSIM      = "ms_ssim"
+	SeriesCIEDE2000   = "ciede2000"
 	// seriesDevice prefixes the per-frame VMAF of a device ("vmaf_phone").
 	seriesDevice = "vmaf_"
 )
@@ -274,14 +278,15 @@ func featureValues(
 	values map[string][]float64,
 ) {
 	names := map[string]string{
-		vmaf.FeatureCAMBI:     SeriesCAMBI,
-		vmaf.FeaturePSNRY:     SeriesPSNRY,
-		vmaf.FeaturePSNRCb:    SeriesPSNRCb,
-		vmaf.FeaturePSNRCr:    SeriesPSNRCr,
-		vmaf.FeaturePSNRHVS:   SeriesPSNRHVS,
-		vmaf.FeatureSSIM:      SeriesSSIM,
-		vmaf.FeatureMSSSIM:    SeriesMSSSIM,
-		vmaf.FeatureCIEDE2000: SeriesCIEDE2000,
+		vmaf.FeatureCAMBI:       SeriesCAMBI,
+		vmaf.FeatureCAMBISource: SeriesCAMBISource,
+		vmaf.FeaturePSNRY:       SeriesPSNRY,
+		vmaf.FeaturePSNRCb:      SeriesPSNRCb,
+		vmaf.FeaturePSNRCr:      SeriesPSNRCr,
+		vmaf.FeaturePSNRHVS:     SeriesPSNRHVS,
+		vmaf.FeatureSSIM:        SeriesSSIM,
+		vmaf.FeatureMSSSIM:      SeriesMSSSIM,
+		vmaf.FeatureCIEDE2000:   SeriesCIEDE2000,
 	}
 
 	for feature, frames := range features {
@@ -334,9 +339,23 @@ type DeviceResult struct {
 // Banding reports where CAMBI exceeds BandingThreshold among the scored
 // frames. In sampled mode, unscored frames are not known to be clean.
 type Banding struct {
-	Threshold    float64          `json:"threshold"`
-	BandedFrames int              `json:"bandedFrames"`
+	Threshold    float64 `json:"threshold"`
+	BandedFrames int     `json:"bandedFrames"`
+	// SourceFrames counts the banded frames whose reference frame is
+	// banded too (SeriesCAMBISource above the threshold): banding the
+	// encode inherited rather than made.
+	SourceFrames int              `json:"sourceFrames,omitempty"`
 	Segments     []BandingSegment `json:"segments,omitempty"`
+}
+
+// Inherited is the share of the banded frames whose reference is banded
+// too, 0 without banded frames.
+func (b *Banding) Inherited() float64 {
+	if b == nil || b.BandedFrames == 0 {
+		return 0
+	}
+
+	return float64(b.SourceFrames) / float64(b.BandedFrames)
 }
 
 // BandingSegment is a run of banded scored frames.
@@ -432,6 +451,10 @@ func bandingOf(
 
 		b.BandedFrames++
 
+		if f.Metrics[SeriesCAMBISource] > BandingThreshold {
+			b.SourceFrames++
+		}
+
 		if seg == nil || f.PTS-last > bandingJoin {
 			b.Segments = append(b.Segments, BandingSegment{Interval: media.Interval{Start: f.PTS}})
 			seg = &b.Segments[len(b.Segments)-1]
@@ -511,6 +534,7 @@ var seriesInfo = map[string]SeriesInfo{
 	SeriesXPSNRU:       {Label: "XPSNR U", Unit: "dB", Decimals: 2},
 	SeriesXPSNRV:       {Label: "XPSNR V", Unit: "dB", Decimals: 2},
 	SeriesCAMBI:        {Label: "CAMBI (banding)", LowerIsBetter: true, Decimals: 2},
+	SeriesCAMBISource:  {Label: "CAMBI of the reference", LowerIsBetter: true, Decimals: 2},
 	SeriesPSNRY:        {Label: "PSNR Y", Unit: "dB", Decimals: 2},
 	SeriesPSNRCb:       {Label: "PSNR Cb", Unit: "dB", Decimals: 2},
 	SeriesPSNRCr:       {Label: "PSNR Cr", Unit: "dB", Decimals: 2},

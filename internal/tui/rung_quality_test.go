@@ -89,3 +89,25 @@ func TestRungQualityTableSkipsUnverified(
 	assert.Contains(t, table, "1280×720")
 	assert.NotContains(t, table, "640×360")
 }
+
+func TestBandingInheritedFromTheSource(
+	t *testing.T,
+) {
+	// A rung whose banded frames are mostly banded in the source too: the
+	// advice is no longer a 10-bit encode.
+	res := measuredLadder(t)
+	res.Rungs[1].Measured.BandedFrames, res.Rungs[1].Measured.ScoredFrames = 10, 100
+	res.Rungs[1].Measured.SourceBandedFrames = 8
+
+	out := renderLadder(t, res, 200, "", false)
+	assert.Contains(t, out, "rung 2 (720p): visible banding on 10% of the scored frames (CAMBI > 5), already in the source on 80% of them: "+
+		"neither bitrate nor a 10-bit encode removes it, deband the source")
+	assert.NotContains(t, out, "a 10-bit encode fixes it")
+
+	// A comparison tells how many banded frames the reference has too.
+	banded := &quality.Banding{BandedFrames: 3, Segments: []quality.BandingSegment{{Frames: 3, Peak: 6}}}
+	assert.Empty(t, inheritedBanding(banded))
+
+	banded.SourceFrames = 2
+	assert.Equal(t, " (2 of them banded in the reference too)", inheritedBanding(banded))
+}

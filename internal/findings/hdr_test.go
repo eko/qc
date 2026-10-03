@@ -171,18 +171,24 @@ func TestHDRLadderFindings(
 		{
 			name: "hevc hdr10 upgraded to 10 bits", codec: encode.Codec{Name: "hevc"},
 			hdr:   &ladder.HDRLadder{Signal: signal, BitDepthUpgraded: true},
-			want:  [][2]string{{"ok", string(HDRLadderSignal)}, {"info", string(HDRBitDepthUpgraded)}},
+			want:  [][2]string{{"ok", string(HDRLadderSignal)}, {"info", string(HDRLadderTarget)}, {"info", string(HDRBitDepthUpgraded)}},
 			value: 1,
 		},
 		{
 			name: "h264 hlg", codec: encode.Codec{Name: "h264"},
 			hdr:  &ladder.HDRLadder{Signal: encode.Signal{Color: media.Color{Transfer: media.TransferHLG}}},
-			want: [][2]string{{"ok", string(HDRLadderSignal)}, {"warn", string(HDRPlayerSupport)}},
+			want: [][2]string{{"ok", string(HDRLadderSignal)}, {"info", string(HDRLadderTarget)}, {"warn", string(HDRPlayerSupport)}},
 		},
 		{
 			name: "nvenc hdr10", codec: encode.Codec{Name: "hevc", Hardware: encode.HardwareNVENC},
 			hdr:   &ladder.HDRLadder{Signal: signal},
-			want:  [][2]string{{"ok", string(HDRLadderSignal)}, {"info", string(HDRNVENCMetadata)}},
+			want:  [][2]string{{"ok", string(HDRLadderSignal)}, {"info", string(HDRLadderTarget)}, {"info", string(HDRNVENCMetadata)}},
+			value: 1,
+		},
+		{
+			name: "scored on an SDR tone mapping: the targets mean what they do in SDR", codec: encode.Codec{Name: "hevc"},
+			hdr:   &ladder.HDRLadder{Signal: signal, Metric: quality.HDRMetricToneMap},
+			want:  [][2]string{{"ok", string(HDRLadderSignal)}},
 			value: 1,
 		},
 	}

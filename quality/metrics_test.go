@@ -304,6 +304,16 @@ func cambiFrames(
 	return frames
 }
 
+func TestBandingInherited(
+	t *testing.T,
+) {
+	var none *Banding
+
+	assert.Zero(t, none.Inherited())
+	assert.Zero(t, (&Banding{}).Inherited())
+	assert.InDelta(t, 0.25, (&Banding{BandedFrames: 8, SourceFrames: 2}).Inherited(), 1e-9)
+}
+
 func TestBandingOf(
 	t *testing.T,
 ) {
@@ -314,9 +324,30 @@ func TestBandingOf(
 		name       string
 		frames     []FrameScore
 		wantFrames int
+		// wantSource counts the banded frames banded in the reference too.
+		wantSource int
 		want       []BandingSegment
 	}{
 		{name: "clean", frames: cambiFrames(0, 1, 2, 5, nan), want: nil},
+		{
+			name: "banding the reference has too",
+			frames: func() []FrameScore {
+				frames := cambiFrames(0, 6, 8, 2, 7)
+				// The reference: banded under a banded frame, under a clean
+				// one (not counted), and clean under a banded one.
+				for i, source := range []float64{6.5, 1, 9, 5} {
+					frames[i].Metrics[SeriesCAMBISource] = source
+				}
+
+				return frames
+			}(),
+			wantFrames: 3,
+			wantSource: 1,
+			want: []BandingSegment{
+				{Interval: media.Interval{Start: 0, End: media.Seconds(0.04) + frame}, Frames: 2, Mean: 7, Peak: 8},
+				{Interval: media.Interval{Start: media.Seconds(0.12), End: media.Seconds(0.12) + frame}, Frames: 1, Mean: 7, Peak: 7},
+			},
+		},
 		{
 			name:       "a clean frame splits segments",
 			frames:     cambiFrames(0, 6, 8, 2, 7),
@@ -343,6 +374,11 @@ func TestBandingOf(
 
 			assert.InDelta(t, BandingThreshold, b.Threshold, 0)
 			assert.Equal(t, testCase.wantFrames, b.BandedFrames)
+			assert.Equal(t, testCase.wantSource, b.SourceFrames)
+
+			if testCase.wantFrames > 0 {
+				assert.InDelta(t, float64(testCase.wantSource)/float64(testCase.wantFrames), b.Inherited(), 1e-9)
+			}
 			require.Len(t, b.Segments, len(testCase.want))
 
 			for i, want := range testCase.want {
@@ -658,8 +694,9 @@ func TestMeasureDevices(
 
 			assert.Equal(t, []string{vmaf.DevicePhone, vmaf.DeviceTV, vmaf.Device4K}, []string{phone.Device, tv.Device, uhd.Device})
 			assert.Equal(t, res.Model, tv.Model, "the automatic model is the TV one")
-			assert.Equal(t, res.Mean, tv.Mean)
-			assert.Equal(t, res.Low, tv.Low)
+			// The same frame scores, pooled in another order.
+			assert.InDelta(t, res.Mean, tv.Mean, 1e-9)
+			assert.InDelta(t, res.Low, tv.Low, 1e-9)
 			assert.Equal(t, "vmaf_v1.0.16_5d0h", phone.Model.Name)
 			assert.NotEqual(t, tv.Mean, phone.Mean, "each model is scored on its own")
 			assert.Equal(t, 3840, uhd.Model.Width)
@@ -776,6 +813,41 @@ func TestNameListsAreClones(
 
 			got[0] = "changed"
 			assert.Equal(t, testCase.first, testCase.list()[0])
+		})
+	}
+}
+
+func TestBandedClips(
+	t *testing.T,
+) {
+	st := &stratum{}
+	clipOf := func(from int, cambi ...float64) clipResult {
+		return clipResult{clip: clip{stratum: st, from: from, to: from + len(cambi)}, values: map[string][]float64{SeriesCAMBI: cambi}}
+	}
+
+	testCases := []struct {
+		name    string
+		results []clipResult
+		want    [][2]int
+	}{
+		{name: "nothing measured", results: []clipResult{{clip: clip{stratum: st, to: 4}}}},
+		{name: "clean", results: []clipResult{clipOf(0, 1, 5, 2)}},
+		{
+			name:    "runs of banded frames, within each clip",
+			results: []clipResult{clipOf(10, 6, 7, 1, 9), clipOf(40, 2, 8, 8, 8), clipOf(44, 6)},
+			want:    [][2]int{{10, 12}, {13, 14}, {41, 44}, {44, 45}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got [][2]int
+			for _, c := range bandedClips(testCase.results) {
+				assert.Same(t, st, c.stratum)
+				got = append(got, [2]int{c.from, c.to})
+			}
+
+			assert.Equal(t, testCase.want, got)
 		})
 	}
 }

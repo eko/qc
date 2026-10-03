@@ -143,6 +143,7 @@ func TestHDRFindingText(
 		{name: "dimmer", f: findings.Finding{Code: findings.ContentDimmer, Text: "maxfall", Value: 973, Limit: 4000}, want: "Signalled MaxFALL well above"},
 		{name: "match", f: findings.Finding{Code: findings.LightLevelsMatch}, want: "match the content"},
 		{name: "vmaf", f: findings.Finding{Code: findings.HDRVMAF, Text: "the note"}, want: "the note"},
+		{name: "ladder target", f: findings.Finding{Code: findings.HDRLadderTarget, Text: media.TransferPQ, Value: 95}, want: "VMAF 95 here is not the quality it is in SDR"},
 		{name: "ladder hdr10", f: findings.Finding{Code: findings.HDRLadderSignal, Text: media.TransferPQ, Value: 1}, want: "HDR10 metadata"},
 		{name: "ladder hlg", f: findings.Finding{Code: findings.HDRLadderSignal, Text: media.TransferHLG}, want: "HLG colour"},
 		{name: "ladder other", f: findings.Finding{Code: findings.HDRLadderSignal, Text: "x"}, want: "x colour"},

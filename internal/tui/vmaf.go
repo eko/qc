@@ -102,8 +102,14 @@ func scoreSection(
 		stats = append(stats, stat("budget", v.Sample.Summary()), stat("strata", strconv.Itoa(len(v.Strata))))
 	case sampled:
 		stats = append(stats, stat("rounds", strconv.Itoa(v.Rounds)), stat("strata", strconv.Itoa(len(v.Strata))))
-	default:
+	}
+
+	if v.HarmonicMean > 0 {
 		stats = append(stats, stat("harmonic", fmt.Sprintf("%.2f", v.HarmonicMean)))
+	}
+
+	if d := v.Drops; d != nil && d.Share > 0 {
+		stats = append(stats, stat("drops", fmt.Sprintf("%.1f%% under %.0f", d.Share*100, d.Threshold)))
 	}
 
 	dist := stat("frames", fmt.Sprintf("min %.1f · p5 %.1f · median %.1f · max %.1f",

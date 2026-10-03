@@ -9,6 +9,40 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Added
+
+- **Banding inherited from the source**: when an encode has banded frames,
+  CAMBI is measured on the reference at those frames (`cambi_source`,
+  `banding.sourceFrames`), in a second pass over them alone. Comparisons
+  say how many banded frames the reference has too, and a ladder rung whose
+  banding is mostly the source's is reported as such (`banded-source`)
+  instead of being advised a 10-bit encode.
+- **Harmonic mean and drops in sampled mode**: the harmonic mean is now
+  estimated from the sampled clips, and every measurement reports the share
+  of frames scoring more than 10 VMAF under the mean (`drops`), a finding
+  from 5% of the frames.
+- A note on ladders of HDR sources built on the PQ or HLG signal: their
+  VMAF targets rank the encodes but are not calibrated (`hdr-ladder-target`).
+
+### Changed
+
+- **CAMBI is told the encode's resolution and bit depth**
+  (`cambi.enc_width`, `enc_height`, `enc_bitdepth`), as Netflix recommends
+  for VMAF v1 (`vmaf.ScorerConfig.Encoded`). Renditions below the evaluation
+  resolution read less banding (CAMBI about halved at 360p and 540p) and
+  0.2 to 0.9 VMAF more; renditions at the evaluation resolution are
+  unchanged. Scores of lower rungs are therefore not comparable with those
+  of 1.1.0.
+- The 6 VMAF step between rungs is no longer described as "one
+  just-noticeable difference": measured ones average about 7 and vary with
+  the content. The default is unchanged.
+
+### Documentation
+
+- What the confidence interval is (sampling error) and is not (the
+  uncertainty of VMAF itself); the sampler's coverage on SVT-AV1 encodes;
+  the error of reading the codec comparison between rungs.
+
 ## [1.1.0] - 2026-10-02
 
 ### Added

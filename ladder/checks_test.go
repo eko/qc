@@ -109,7 +109,7 @@ func TestMeasurementOf(
 				Mean: 90, HalfWidth: 0.8,
 				Metrics:      []quality.MetricResult{{Name: quality.SeriesXPSNRY, Estimate: quality.Estimate{Mean: 38.5}}},
 				Devices:      []quality.DeviceResult{{Device: vmaf.DevicePhone, Estimate: quality.Estimate{Mean: 95}}},
-				Banding:      &quality.Banding{BandedFrames: 7},
+				Banding:      &quality.Banding{BandedFrames: 7, SourceFrames: 4},
 				FramesScored: 140,
 			},
 			want: Measurement{
@@ -118,6 +118,8 @@ func TestMeasurementOf(
 				Devices:      map[string]float64{vmaf.DevicePhone: 95},
 				BandedFrames: 7,
 				ScoredFrames: 140,
+
+				SourceBandedFrames: 4,
 			},
 		},
 	}
@@ -147,4 +149,12 @@ func TestBandedShare(
 			assert.InDelta(t, testCase.want, testCase.m.BandedShare(), 1e-12)
 		})
 	}
+}
+
+func TestInheritedBanding(
+	t *testing.T,
+) {
+	assert.Zero(t, Measurement{}.InheritedBanding(), "no banded frame")
+	assert.Zero(t, Measurement{BandedFrames: 8}.InheritedBanding(), "the source is clean")
+	assert.InDelta(t, 0.75, Measurement{BandedFrames: 8, SourceBandedFrames: 6}.InheritedBanding(), 1e-12)
 }

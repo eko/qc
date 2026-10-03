@@ -35,7 +35,7 @@ reliability you ask for allows.
   per viewing device (phone, TV, 4K).
 - **Per-title ladders, verified**: probe encodes of a digest balanced on the
   title's spatial and temporal information, rate-quality curves per resolution, their upper envelope, rungs one
-  just-noticeable difference apart, then a real encode of every rung. It lands
+  clearly visible quality step apart, then a real encode of every rung. It lands
   on the exhaustive optimum (−0.04 VMAF, −0.7% bitrate on average) in a
   fraction of the time. Impose the shape (`--rungs 1080,720,540`), probe
   adaptively where the rungs are uncertain, add per-shot rungs, or let AV1

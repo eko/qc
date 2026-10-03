@@ -178,6 +178,9 @@ func comparisonLine(
 		return findingLine(f.Level, "budget %s: %s", v.Sample.String(), f.Text)
 	case findings.WorstFrame:
 		return findingLine(f.Level, "worst scored frame at %s: VMAF %.1f", Clock(f.Spans[0].Start, false), f.Value)
+	case findings.Drops:
+		return findingLine(f.Level, "%.0f%% of the frames score more than %.0f VMAF under the mean (below %.1f): the mean hides them, the harmonic mean is %.1f",
+			f.Value*100, v.Drops.Margin, f.Limit, v.HarmonicMean)
 	case findings.Banding:
 		return bandingLine(f, v.Banding)
 	case findings.NoBanding:
@@ -207,7 +210,19 @@ func bandingLine(
 		parts = append(parts, fmt.Sprintf("%d more", more))
 	}
 
-	return findingLine(f.Level, "visible banding (CAMBI > %.0f) on %d scored frames: %s", f.Limit, b.BandedFrames, strings.Join(parts, ", "))
+	return findingLine(f.Level, "visible banding (CAMBI > %.0f) on %d scored frames%s: %s", f.Limit, b.BandedFrames, inheritedBanding(b), strings.Join(parts, ", "))
+}
+
+// inheritedBanding tells how many of the banded frames are banded in the
+// reference too, "" when none is.
+func inheritedBanding(
+	b *quality.Banding,
+) string {
+	if b.SourceFrames == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf(" (%d of them banded in the reference too)", b.SourceFrames)
 }
 
 // ladderFindings words the findings of a ladder. The terminal groups the
@@ -258,7 +273,7 @@ func ladderRank(
 		return 1
 	case findings.GrainMismatch:
 		return 2
-	case findings.BandedRung:
+	case findings.BandedRung, findings.BandedSource:
 		return 3
 	case findings.RankConflict:
 		return 4
@@ -293,6 +308,21 @@ func programLine(
 	}
 
 	return "", false
+}
+
+// bandedRungLine words the banding of a rung: the encode's, or the one it
+// inherited from the source.
+func bandedRungLine(
+	f findings.Finding,
+	r ladder.Rung,
+) string {
+	if f.Code == findings.BandedSource {
+		return findingLine(f.Level, "rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f), already in the source on %.0f%% of them: neither bitrate nor a 10-bit encode removes it, deband the source",
+			f.Index+1, r.Height, f.Value*100, f.Limit, r.Measured.InheritedBanding()*100)
+	}
+
+	return findingLine(f.Level, "rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
+		f.Index+1, r.Height, f.Value*100, f.Limit)
 }
 
 // ladderLine words a finding of a ladder.
@@ -341,9 +371,8 @@ func ladderLine(
 	case findings.PerShotRejected:
 		return findingLine(f.Level, "rung %d (%dp): no per-shot version, the one tried cost %.1f%% more than the rung at equal VMAF on the digest",
 			f.Index+1, r.Height, f.Value*100)
-	case findings.BandedRung:
-		return findingLine(f.Level, "rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
-			f.Index+1, r.Height, f.Value*100, f.Limit)
+	case findings.BandedRung, findings.BandedSource:
+		return bandedRungLine(f, r)
 	case findings.RankConflict:
 		lo := res.Rungs[f.Other]
 		return findingLine(f.Level, "rungs %d (%dp) and %d (%dp): VMAF ranks %dp higher (%.1f vs %.1f) but XPSNR ranks it lower (%.2f vs %.2f dB)",

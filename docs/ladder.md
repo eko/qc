@@ -353,7 +353,7 @@ Defaults (all configurable, see [CLI](cli.md)):
 | Constraint | Default | Rationale |
 |---|---|---|
 | Top VMAF | 95 | Above ~93–95 viewers see no difference while bitrate keeps growing |
-| Step | 6 VMAF | About one just-noticeable difference |
+| Step | 6 VMAF | A clearly visible step. Often quoted as "one JND", which has no primary source: on VideoSet the just-noticeable step averages 6.9 VMAF with a standard deviation of 3.3, and its authors conclude there is "no simple rule of thumb" ([Amirpour et al., QoMEX 2022](https://athena.itec.aau.at/wp-content/uploads/sites/12/2022/07/QoMEX_22__VMAF_JND_Poster.pdf)); differences of 2 or less are generally invisible |
 | Bitrate ratio between rungs | 1.5–2.5 | Keeps ABR switches meaningful without holes |
 | Minimum VMAF | 30 | Below this a rung is not worth serving |
 | Minimum bitrate | 145 kb/s | Apple's lowest rung |
@@ -441,7 +441,10 @@ report adds a *Rung quality* table and two checks:
 - **Banding-limited rungs**: a rung with visible banding (CAMBI above 5) on
   at least 5% of its scored frames; isolated frames (a dark fade, a sky) do
   not count. More bitrate at the same bit depth fixes banding poorly; a 10-bit
-  encode (`--encode-bit-depth 10`) fixes it better.
+  encode (`--encode-bit-depth 10`) fixes it better. Unless the banding is
+  the **source's**: when at least half of the banded frames are banded in
+  the source too (CAMBI on the digest at those frames), the finding says so,
+  and that only debanding the source removes it.
 - **VMAF and XPSNR disagreeing**: VMAF scores a rung at least 2 points above
   another while XPSNR scores it at least 0.5 dB below, beyond the sampling
   noise of either. It usually points at a resolution trade-off VMAF rewards
@@ -460,7 +463,11 @@ the bitrate interpolated in VMAF between two rungs). The report gives the
 gap at the highest quality both reach and on average, e.g. "av1 needs 33%
 less bitrate than h264 at VMAF 92.9 (44% less on average from VMAF 61)".
 Top rungs are not compared as they stand: each is within 0.5 VMAF of the
-target, so two of them can be 0.6 VMAF, or 5% of bitrate, apart.
+target, so two of them can be 0.6 VMAF, or 5% of bitrate, apart. Reading
+between rungs has an error of its own, measured against dense grids: under
+1 point on the average gap, up to 2.6 at the top quality, which the 3%
+tolerance below covers; a cubic interpolation does no better
+([validation](validation.md#reading-between-the-rungs)).
 
 A newer codec costing over 3% more is a **warning**. It is not a
 measurement error, and it has causes worth knowing: a digest of scenes the

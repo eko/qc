@@ -307,6 +307,15 @@ tonemap` is there for ladders tuned on what SDR screens show (at the cost
 of every probe's tone mapping). Neither is an HDR perceptual model: that
 is the main limit of HDR ladders here.
 
+The ladder says so itself: built on the HDR signal, it carries a note that
+its VMAF targets are read where VMAF ranks but is not calibrated. On the
+LIVE-HDR database (310 HEVC 4K PQ videos), VMAF on the PQ signal orders
+the videos well (SROCC 0.81–0.86 depending on the ambient light) but is far
+from the opinion scores in absolute terms: an RMSE of 17.7, where the best
+HDR models reach about 9.4 (Ebenezer et al., arXiv:2312.08524). PU21-encoded
+PSNR and SSIM do worse than VMAF on PQ there (SROCC 0.58–0.64): they would
+be a step back, not a fix.
+
 ## 6. Reports
 
 - Terminal: an `[HDR10]` (`[HLG]`…) badge on the analysis header, a *Light
@@ -342,6 +351,10 @@ comparisons and ladders give identical reports in the same time.
 - **No HDR perceptual model.** VMAF on PQ ranks; tone-mapped VMAF answers an
   SDR question. HDR-VMAF-like models (HDRMAX features, Netflix's internal
   HDR VMAF) are not public or not packaged.
+- **CAMBI on PQ** uses its default BT.1886 visibility thresholds (libvmaf
+  has a `cambi_eotf=pq` option): banding of HDR encodes is read as if the
+  signal were SDR. Not changed here for want of HDR content to validate
+  the effect on.
 - **MaxCLL on 4:2:0** is inherently ambiguous: the strict maximum depends on
   chroma upsampling. qc reports both and checks the robust one; a
   4:4:4 master should be measured for the value to signal.

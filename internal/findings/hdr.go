@@ -202,6 +202,11 @@ const (
 	// description (Text is the transfer), and its HDR10 metadata when Value
 	// is 1.
 	HDRLadderSignal Code = "hdr-ladder-signal"
+	// HDRLadderTarget: the rungs of an HDR source were placed on VMAF
+	// scored on its PQ or HLG signal (Text is the transfer), which ranks
+	// encodes but is not calibrated there: the quality targets of the
+	// ladder (Value is the top one) do not mean what they do in SDR.
+	HDRLadderTarget Code = "hdr-ladder-target"
 	// HDRBitDepthUpgraded: 8-bit encodes were asked for an HDR source; the
 	// ladder encodes 10-bit.
 	HDRBitDepthUpgraded Code = "hdr-bit-depth-upgraded"
@@ -244,6 +249,17 @@ func hdrLadderFindings(
 	}
 
 	out := []Finding{signal}
+
+	// On the HDR signal VMAF orders the encodes of a title well (SROCC
+	// 0.81-0.86 on LIVE-HDR) but is far from the opinion scores in absolute
+	// terms (RMSE 17.7 where the best HDR models reach 9.4): a top rung
+	// "at 95" is the right rung to compare, not a promise of that quality.
+	if h.Metric != quality.HDRMetricToneMap {
+		out = append(out, Finding{
+			Level: Info, Code: HDRLadderTarget, Topic: TopicQuality,
+			Text: h.Signal.Color.Transfer, Value: r.Constraints.WithDefaults().TopVMAF,
+		})
+	}
 
 	if h.BitDepthUpgraded {
 		out = append(out, Finding{Level: Info, Code: HDRBitDepthUpgraded})

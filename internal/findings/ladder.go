@@ -38,6 +38,11 @@ const (
 	// BandedRung: the rung shows visible banding on a share of its scored
 	// frames (Value) with CAMBI above Limit.
 	BandedRung Code = "banded-rung"
+	// BandedSource: like BandedRung, on frames mostly banded in the source
+	// already (InheritedBandingShare of them or more, see
+	// ladder.Measurement.InheritedBanding): the encode did not make that
+	// banding, and neither bitrate nor bit depth removes it.
+	BandedSource Code = "banded-source"
 	// RankConflict: VMAF ranks rung Index above rung Other, XPSNR below
 	// (ladder.RankConflicts).
 	RankConflict Code = "rank-conflict"
@@ -90,6 +95,10 @@ const (
 	bandwidthTolerance = 0.10
 )
 
+// InheritedBandingShare is the share of the banded frames of a rung banded
+// in the source too from which its banding is said to be the source's.
+const InheritedBandingShare = 0.5
+
 // ProgramTolerance is how far (VMAF) the quality of a video on the top
 // rung may stray from the program's before the shared ladder is said to
 // serve it badly: a third of a rung step, and well beyond what the few
@@ -98,7 +107,7 @@ const ProgramTolerance = 2.0
 
 // ProgramSpreadLimit is the VMAF span between the videos of a program on a
 // rung beyond which the rung is said to serve them unevenly: a quality
-// step of the default ladder, about one just-noticeable difference.
+// step of the default ladder, a clearly visible one.
 const ProgramSpreadLimit = 6.0
 
 const (
@@ -143,8 +152,13 @@ func Ladder(
 	}
 
 	for _, i := range ladder.BandedRungs(r.Rungs) {
+		code := BandedRung
+		if r.Rungs[i].Measured.InheritedBanding() >= InheritedBandingShare {
+			code = BandedSource
+		}
+
 		out = append(out, Finding{
-			Level: Warn, Code: BandedRung, Index: i,
+			Level: Warn, Code: code, Index: i,
 			Value: r.Rungs[i].Measured.BandedShare(), Limit: quality.BandingThreshold,
 		})
 	}

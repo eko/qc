@@ -243,6 +243,9 @@ func comparisonFinding(
 		return []finding{worded(f, nil, "%s", f.Text)}
 	case findings.WorstFrame:
 		return []finding{worded(f, []span{spanOf(f.Spans[0])}, "Worst scored frame %d: VMAF %.1f", f.Index, f.Value)}
+	case findings.Drops:
+		return []finding{worded(f, nil, "%.0f%% of the frames score more than %.0f VMAF under the mean (below %.1f): the mean hides them, the harmonic mean is %.1f",
+			f.Value*100, v.Drops.Margin, f.Limit, v.HarmonicMean)}
 	case findings.Banding:
 		return bandingFindings(f, v.Banding)
 	case findings.NoBanding:
@@ -272,6 +275,11 @@ func bandingFindings(
 
 	if more := len(b.Segments) - maxSegmentFindings; more > 0 {
 		out = append(out, worded(f, nil, "%d more banded segments in the Banding section", more))
+	}
+
+	if b.SourceFrames > 0 {
+		out = append(out, worded(f, nil, "%d of the %s banded in the reference too: that banding is the source's, not the encode's",
+			b.SourceFrames, plural(b.BandedFrames, "banded frame")))
 	}
 
 	return out
@@ -315,6 +323,21 @@ func programFinding(
 	}
 
 	return finding{}, false
+}
+
+// bandedRungFinding words the banding of a rung: the encode's, or the one
+// it inherited from the source.
+func bandedRungFinding(
+	f findings.Finding,
+	r ladder.Rung,
+) finding {
+	if f.Code == findings.BandedSource {
+		return worded(f, nil, "Rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f), already in the source on %.0f%% of them. Neither bitrate nor a 10-bit encode removes it: deband the source",
+			f.Index+1, r.Height, f.Value*100, f.Limit, r.Measured.InheritedBanding()*100)
+	}
+
+	return worded(f, nil, "Rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
+		f.Index+1, r.Height, f.Value*100, f.Limit)
 }
 
 // ladderFinding words a finding of a ladder.
@@ -367,9 +390,8 @@ func ladderFinding(
 	case findings.PerShotRejected:
 		return worded(f, nil, "Rung %d (%dp): no per-shot version, the one tried cost %.1f%% more than the rung at equal VMAF on the digest",
 			f.Index+1, r.Height, f.Value*100), true
-	case findings.BandedRung:
-		return worded(f, nil, "Rung %d (%dp): visible banding on %.0f%% of the scored frames (CAMBI > %.0f): a 10-bit encode fixes it better than more bitrate",
-			f.Index+1, r.Height, f.Value*100, f.Limit), true
+	case findings.BandedRung, findings.BandedSource:
+		return bandedRungFinding(f, r), true
 	case findings.RankConflict:
 		lo := res.Rungs[f.Other]
 		return worded(f, nil, "Rungs %d (%dp) and %d (%dp): VMAF ranks %dp higher (%.1f vs %.1f) but XPSNR ranks it lower (%.2f vs %.2f dB)",

@@ -39,6 +39,10 @@ const (
 	// ExtractorCAMBI measures banding (FeatureCAMBI) with the options of
 	// the VMAF v1 models: free when a v1 model is scored.
 	ExtractorCAMBI Extractor = "cambi"
+	// ExtractorCAMBISource is ExtractorCAMBI measuring the reference too,
+	// on the same frames (FeatureCAMBISource): it tells the banding of the
+	// encode from the banding it inherited, and costs CAMBI once more.
+	ExtractorCAMBISource Extractor = "cambi_source"
 )
 
 // Feature outputs read back per frame, by name in Scores.Features.
@@ -51,6 +55,8 @@ const (
 	FeatureMSSSIM    = "float_ms_ssim"
 	FeatureCIEDE2000 = "ciede2000"
 	FeatureCAMBI     = "cambi"
+	// FeatureCAMBISource is CAMBI on the reference frames.
+	FeatureCAMBISource = "cambi_source"
 )
 
 // ScorerConfig describes what a Scorer measures next to its models.
@@ -63,10 +69,23 @@ type ScorerConfig struct {
 	BitDepth int
 	// Threads is the engine's worker count.
 	Threads int
+	// Encoded is the distorted video as it was encoded, before it was
+	// scaled to Width × Height and converted to BitDepth: CAMBI reads
+	// banding at that resolution and bit depth, for the models using it
+	// (VMAF v1) and for ExtractorCAMBI. The zero value tells nothing, and
+	// CAMBI then takes the frames as the encode.
+	Encoded Encoded
 	// Backend is where the model features are extracted: BackendCPU (the
 	// zero value) or BackendCUDA. Resolve BackendAuto with ResolveBackend
 	// first. Extractors always run on the CPU.
 	Backend Backend
+}
+
+// Encoded describes a video as it was encoded.
+type Encoded struct {
+	Width, Height int
+	// BitDepth is the bit depth of the encode (8, 10...).
+	BitDepth int
 }
 
 // Scores are the per-frame results of a Scorer.

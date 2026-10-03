@@ -6,8 +6,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/internal/findings"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/pipeline"
+	"github.com/eko/qc/quality"
 )
 
 // sampleProgram is the sample ladder built for three videos: the top rung
@@ -135,4 +137,38 @@ func TestRenderRunProgram(
 	assert.Nil(t, program(one))
 	assert.Nil(t, program(&pipeline.Report{Analysis: sampleReport()}))
 	assert.Contains(t, renderHTML(t, one), "Full run")
+}
+
+func TestBandingInheritedFromTheSource(
+	t *testing.T,
+) {
+	l := sampleLadder(t, "h264")
+	l.Rungs[0].Measured.BandedFrames, l.Rungs[0].Measured.ScoredFrames = 30, 100
+	assert.Contains(t, wordings(l), "Rung 1 (1080p): visible banding on 30% of the scored frames (CAMBI > 5): a 10-bit encode fixes it better than more bitrate")
+
+	l.Rungs[0].Measured.SourceBandedFrames = 24
+	assert.Contains(t, wordings(l), "Rung 1 (1080p): visible banding on 30% of the scored frames (CAMBI > 5), already in the source on 80% of them. "+
+		"Neither bitrate nor a 10-bit encode removes it: deband the source")
+
+	// A comparison says how many of its banded frames the reference has.
+	banding := &quality.Banding{BandedFrames: 12, SourceFrames: 9, Segments: []quality.BandingSegment{{Frames: 12, Peak: 7}}}
+	f := findings.Finding{Level: findings.Warn, Code: findings.Banding}
+
+	list := bandingFindings(f, banding)
+	require.Len(t, list, 2)
+	assert.Equal(t, "9 of the 12 banded frames banded in the reference too: that banding is the source's, not the encode's", list[1].Text)
+
+	banding.SourceFrames = 0
+	assert.Len(t, bandingFindings(f, banding), 1)
+}
+
+func TestComparisonFindingDrops(
+	t *testing.T,
+) {
+	v := &quality.Result{Mean: 88.4, HarmonicMean: 86.2, Drops: &quality.Drops{Margin: quality.DropMargin, Threshold: 78.4, Share: 0.081}}
+	f := findings.Finding{Level: findings.Info, Code: findings.Drops, Value: 0.081, Limit: 78.4}
+
+	list := comparisonFinding(f, v)
+	require.Len(t, list, 1)
+	assert.Equal(t, "8% of the frames score more than 10 VMAF under the mean (below 78.4): the mean hides them, the harmonic mean is 86.2", list[0].Text)
 }

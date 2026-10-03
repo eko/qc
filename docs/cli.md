@@ -200,7 +200,7 @@ Loudness and defects of the audio tracks, decoded while the frames are
 | Flag | Default | Meaning |
 |---|---|---|
 | `--exact` | off | score every frame |
-| `--precision` | 0.5 | target half-width of the 95% CI |
+| `--precision` | 0.5 | target half-width of the 95% CI: the sampling error against scoring every frame, not the uncertainty of VMAF itself ([details](vmaf.md#what-the-interval-is-and-is-not)) |
 | `--max-share` | 0.4 | above this share of frames, score every frame instead |
 | `--sample` | none | fixed budget instead of a precision, scored in one round: a share of the frames (`5%`) or clips per scene (`2/scene`, also `2-per-scene`); reports the interval reached; excludes `--exact` and `--precision` — see [fixed budgets](vmaf.md#fixed-budgets---sample) |
 | `--model` | auto | `auto`, a model name, a `.json` path or a built-in version |

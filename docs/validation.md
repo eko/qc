@@ -64,6 +64,63 @@ Current results (1 000 replays each):
 A synthetic test (`TestSimulateCoverage`) runs the same check in CI on
 shot-structured scores.
 
+**AV1 encodes.** Subsampling VMAF every other frame is biased by up to
++3.6 points on encoders with a frame pyramid (rav1e, SVT-AV1), whose frames
+alternate in quality ([libvmaf issue 1214](https://github.com/Netflix/vmaf/issues/1214)).
+Clips of four consecutive frames drawn at random hold every position of the
+pyramid, but the replays above were all of x264 encodes. Same replays on
+SVT-AV1 renditions (preset 8, 720p CRF 38, GOP 50):
+
+| Content | Mode | Frames scored | RMSE | Coverage |
+|---|---|---|---|---|
+| Cartoon 10:36, AV1 | ±0.25 | 14.9% | 0.11 | 95.0% |
+| Cartoon 10:36, AV1 | ±0.5 | 5.3% | 0.20 | 94.5% |
+| Cartoon 10:36, AV1 | 2% / 5% | 2.0% / 5.0% | 0.33 / 0.19 | 95.3% / 96.0% |
+| Cartoon 10:36, AV1 | 1/scene / 2/scene | 8.3% / 16.7% | 0.12 / 0.08 | 98.0% / 95.7% |
+| Drama 1 min, AV1 | ±0.5 | 25% | 0.21 | 94.8% |
+| Drama 1 min, AV1 | 2% / 5% | 2.1% / 5.1% | 0.96 / 0.64 | 94.5% / 90.8% |
+| Drama 1 min, AV1 | 1/scene / 2/scene | 8.3% / 16.7% | 0.41 / 0.28 | 97.0% / 94.9% |
+
+The precision loop keeps its coverage on AV1; the one weak figure is the 5%
+budget on the one-minute title (90.8%), the short-title case share budgets
+are already known to cover least.
+
+### Harmonic mean and drops in sampled mode
+
+The harmonic mean and the share of drops (frames more than 10 VMAF under
+the mean) are estimated from the sampled clips with the estimator of the
+mean. Replayed 1 000 times at ±0.5 on exact measurements:
+
+| Encode | Harmonic mean (mean) | Coverage | Drops | Coverage |
+|---|---|---|---|---|
+| Cartoon 720p x264 | 87.70 (87.86) | 93.8% | 1.3% | 90.5% |
+| Cartoon 360p x264 | 57.58 (58.48) | 93.8% | 8.1% | 93.6% |
+| Drama 540p x264 | 66.09 (66.44) | 92.9% | 3.3% | 91.7% |
+| Cartoon 720p SVT-AV1 | 91.36 (91.52) | 94.9% | 1.6% | 90.4% |
+| Drama 720p SVT-AV1 | 86.78 (86.89) | 92.9% | 0.7% | 94.5% |
+
+The harmonic mean is estimated about as well as the mean. The interval of
+the drops is too narrow one time in ten when drops are rare: it is shown,
+but a share of rare frames is not a quality gate.
+
+### CAMBI told the encode
+
+VMAF v1 includes CAMBI, computed on frames upscaled to the evaluation
+resolution. Told the resolution and bit depth of the encode
+(`cambi.enc_width`, `enc_height`, `enc_bitdepth`), CAMBI reads banding
+where it was made. Exact measurements, before and after:
+
+| Encode | CAMBI | VMAF v1 |
+|---|---|---|
+| Drama 1080p x264 (the evaluation resolution) | 1.395 → 1.395 | 93.888 → 93.888 |
+| Cartoon 720p x264 | 1.97 → 1.73 | 87.86 → 88.03 |
+| Drama 540p x264 | 1.85 → 1.08 | 66.44 → 67.01 |
+| Cartoon 360p x264 | 2.43 → 1.12 | 58.48 → 59.42 |
+
+The lower the rung, the more upscaling had inflated its banding: CAMBI
+about halves at 360p and 540p, and VMAF gains 0.2 to 0.9 point. Rungs at
+the display resolution do not move.
+
 ### Other metrics and devices
 
 The other metrics and the device VMAFs are estimated from the clips the
@@ -543,6 +600,29 @@ quality or on average ("av1 needs 7% more bitrate than h264 at VMAF 92.8…"),
 as a note otherwise ("av1 needs 33% less bitrate than h264 at VMAF 92.9…").
 A ladder built on a top digest carries a note that its bitrates are those
 scenes', and the summary cards show the top rungs as verified.
+
+### Reading between the rungs
+
+The comparison of two codecs reads each ladder between its rungs: the
+logarithm of the bitrate, interpolated linearly in VMAF. BD-rate work
+warns that this is where VMAF comparisons go wrong (interpolation errors up
+to 5 points with VMAF, against 0.5 with PSNR:
+[arXiv:2304.12852](https://arxiv.org/abs/2304.12852)). Checked on the dense
+grids of the drama (5 resolutions × 9 CRFs, H.264 and AV1, envelopes of 32
+and 29 points): seven rungs 6 VMAF apart are taken on each envelope, and
+the gap read between them is compared with the gap read on the envelopes.
+
+| Top rungs (H.264, AV1) | Truth: top, mean | Linear (current) | Monotone cubic (PCHIP) |
+|---|---|---|---|
+| 95, 95 | −29.0%, −38.6% | −29.0%, −38.7% | −29.0%, −38.7% |
+| 95, 94 | −33.0%, −38.8% | −33.6%, −38.8% | −31.8%, −38.6% |
+| 94.3, 95 | −32.1%, −38.7% | −29.5%, −39.1% | −31.4%, −39.1% |
+| 93, 95 | −30.5%, −39.0% | −29.2%, −39.9% | −33.4%, −39.9% |
+
+The average gap is read within 0.9 point, the gap at the top quality
+within 2.6, and the cubic interpolation BD-rate tools use is no better
+(sometimes closer, sometimes further). The linear reading stays, and the
+3% tolerance of the "costlier codec" warning covers its error.
 
 ### The most complex scenes (`--digest top`)
 

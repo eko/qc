@@ -86,6 +86,25 @@ func TestMeasureFakeEngine(
 				}
 
 				assert.Equal(t, 2, res.Plans[planSweep], "the 4K device needs a second pass")
+
+				// The fake CAMBI of a frame is its index: frames above the
+				// threshold are banded, and their reference measured too
+				// in a pass over those frames alone.
+				require.NotNil(t, res.Banding)
+				banded := short - 1 - int(BandingThreshold)
+				assert.Equal(t, banded, res.Banding.BandedFrames)
+				assert.Equal(t, banded, res.Banding.SourceFrames)
+
+				for _, f := range res.Frames {
+					source, measured := f.Metrics[SeriesCAMBISource]
+					assert.Equal(t, float64(f.Index) > BandingThreshold, measured, "frame %d", f.Index)
+
+					if measured {
+						assert.InDelta(t, float64(f.Index), source, 1e-9)
+					}
+				}
+
+				assert.Greater(t, res.FramesDecoded, 4*short, "the banded frames are decoded once more")
 			},
 		},
 		{
@@ -111,6 +130,7 @@ func TestMeasureFakeEngine(
 
 			assert.Equal(t, testCase.wantMode, res.Mode)
 			assert.Equal(t, opts.Backend, engine.requested)
+			assert.Equal(t, vmaf.Encoded{Width: 64, Height: 64, BitDepth: 8}, engine.encoded.Load(), "the encode CAMBI reads banding at")
 			assert.Zero(t, engine.open.Load(), "model sets and scorers are closed")
 			require.NotEmpty(t, res.Frames)
 
@@ -153,6 +173,14 @@ func TestMeasureFakeEngineErrors(
 		{name: "models fail to load", engine: &fakeEngine{loadErr: errEngine}},
 		{name: "scorer refused", engine: &fakeEngine{scorerErr: errEngine}},
 		{name: "pair refused", engine: &fakeEngine{pushErr: errEngine}},
+		{
+			name: "banding of the reference refused, exact", engine: &fakeEngine{sourceErr: errEngine},
+			opts: Options{Exact: true, Metrics: []string{MetricCAMBI}},
+		},
+		{
+			name: "banding of the reference refused, sampled", engine: &fakeEngine{sourceErr: errEngine},
+			opts: Options{Precision: 1000, InitialClips: 8, Metrics: []string{MetricCAMBI}},
+		},
 		{name: "collect fails", engine: &fakeEngine{collectErr: errEngine}},
 		{name: "collect fails, exact", engine: &fakeEngine{collectErr: errEngine}, opts: Options{Exact: true}},
 	}

@@ -199,6 +199,80 @@ func (r *run) hdrMetricsPass(
 	return r.mergePass(ctx, sub, results, workers, threads)
 }
 
+// sourceBandingPass measures CAMBI on the reference at the banded frames of
+// results, in a second pass over those frames alone: it tells the banding
+// the encode made from the banding it inherited (Banding.SourceFrames).
+// Measuring the reference on every frame would cost CAMBI once more
+// everywhere (10% of a sampled measurement, 24% of an exact one); most
+// encodes have no banded frame, and this pass then costs nothing.
+func (r *run) sourceBandingPass(
+	ctx context.Context,
+	results []clipResult,
+	workers, threads int,
+) error {
+	clips := bandedClips(results)
+	if len(clips) == 0 {
+		return nil
+	}
+
+	sub := &run{
+		meter: r.meter, ref: r.ref, dist: r.dist, spec: r.spec, models: []vmaf.ModelSpec{r.spec}, opts: r.opts,
+		n: r.n, bitDepth: r.bitDepth, backend: r.backend, plans: map[string]int{},
+		extractors: []vmaf.Extractor{vmaf.ExtractorCAMBISource}, decoders: r.decoders,
+	}
+	sub.opts.Progress = nil
+
+	scored, err := sub.score(ctx, clips, workers, threads, 0)
+	if err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.sourceCAMBI = map[int]float64{}
+
+	for _, cr := range scored {
+		for i, source := range cr.values[SeriesCAMBISource] {
+			r.sourceCAMBI[cr.clip.from+i] = source
+		}
+	}
+
+	// Its frames are decoded again; its plan is not one of the measurement.
+	r.decoded += sub.decoded
+
+	return nil
+}
+
+// bandedClips returns the runs of consecutive frames of results where CAMBI
+// shows visible banding, as clips to score again.
+func bandedClips(
+	results []clipResult,
+) []clip {
+	var clips []clip
+
+	for _, cr := range results {
+		open := false
+
+		for i, cambi := range cr.values[SeriesCAMBI] {
+			if cambi <= BandingThreshold {
+				open = false
+
+				continue
+			}
+
+			if frame := cr.clip.from + i; open {
+				clips[len(clips)-1].to = frame + 1
+			} else {
+				clips = append(clips, clip{stratum: cr.clip.stratum, from: frame, to: frame + 1})
+				open = true
+			}
+		}
+	}
+
+	return clips
+}
+
 // addMetrics estimates every metric and device series from the clips of
 // results, like VMAF, and lists the banded segments.
 func (r *run) addMetrics(
@@ -268,6 +342,10 @@ func (r *run) frameMetrics(
 
 	for _, d := range r.devices {
 		out[d.series] = cr.values[d.series][i]
+	}
+
+	if source, ok := r.sourceCAMBI[cr.clip.from+i]; ok {
+		out[SeriesCAMBISource] = source
 	}
 
 	return out

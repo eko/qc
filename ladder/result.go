@@ -140,6 +140,10 @@ type Measurement struct {
 	// ScoredFrames.
 	BandedFrames int `json:"bandedFrames,omitempty"`
 	ScoredFrames int `json:"scoredFrames,omitempty"`
+	// SourceBandedFrames counts the banded frames whose source frame is
+	// banded too: banding the rung inherited, which no encoding setting
+	// removes.
+	SourceBandedFrames int `json:"sourceBandedFrames,omitempty"`
 }
 
 // TitleMeasurement is the part of a measurement of an encode of the digest
@@ -170,6 +174,16 @@ func (m Measurement) BandedShare() float64 {
 	}
 
 	return float64(m.BandedFrames) / float64(m.ScoredFrames)
+}
+
+// InheritedBanding is the share of the banded frames whose source frame is
+// banded too.
+func (m Measurement) InheritedBanding() float64 {
+	if m.BandedFrames == 0 {
+		return 0
+	}
+
+	return float64(m.SourceBandedFrames) / float64(m.BandedFrames)
 }
 
 // ShotInterval is the time range of a shot of the title, at the frame rate
