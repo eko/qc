@@ -42,6 +42,9 @@ reliability you ask for allows.
   synthesise film grain; verified rungs are checked for banding and for
   VMAF/XPSNR disagreements. Several videos get one ladder for all of them
   (per-program encoding), every rung read video by video.
+- **Samples**: `qc sample` copies the most complex, representative or
+  easiest scenes of several videos into one file, without re-encoding
+  ([samples](docs/sample.md)).
 - **HDR aware**: HDR10/HLG checked, MaxCLL/MaxFALL measured, wPSNR and ΔE ITP
   next to VMAF, 10-bit ladders carrying the HDR10 metadata ([HDR](docs/hdr.md)).
 - **See what was measured**: `--overlay annotated.mp4` burns the analysis
@@ -102,6 +105,7 @@ qc ladder source.mov -c av1 --encode-bit-depth 10         # per-title Main10 AV1
 qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93   # impose the rungs, bitrates computed
 qc ladder source.mov -c av1 --encode-ladder renditions/    # + the renditions, checked on the whole title
 qc ladder ep1.mov ep2.mov ep3.mov -c h264,av1             # one ladder per codec for a programme, read video by video
+qc sample ep1.mov ep2.mov ep3.mov --to sample.mkv --scenes top   # a minute of their most complex scenes, copied
 ```
 
 Every command accepts `-o report.json`, `--html report.html` and `-f json`.
@@ -215,6 +219,17 @@ renditions, err := engine.Encode(ctx, "source.mov", res, ladder.RenditionOptions
 for _, rd := range renditions {
 	vmafPredicted, bitratePredicted := res.Prediction(rd)
 	fmt.Println(rd.Path, rd.Bitrate, bitratePredicted, rd.Checked.VMAFLabel(), vmafPredicted)
+}
+
+// A sample: a minute of the most complex scenes of several videos, copied
+// into one file without re-encoding, the most complex first.
+sampler := sample.NewEngine(analyzer, ffmpeg)
+smp, err := sampler.Extract(ctx, []string{"ep1.mov", "ep2.mov"}, "sample.mkv", sample.Options{
+	Duration: media.Seconds(60),
+	Scenes:   sample.ScenesTop, // or ScenesMixed (with TopShare), ScenesAverage, ScenesEasy
+})
+for _, scene := range smp.Order {
+	fmt.Println(smp.Sources[scene.Source].Path, scene.Start, scene.End, scene.Score())
 }
 ```
 

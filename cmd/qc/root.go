@@ -7,7 +7,7 @@ import (
 func newRootCommand(
 	env environment,
 ) *cobra.Command {
-	runCmd, ladderCmd := newRunCommand(env), newLadderCommand(env)
+	commands := wizardCommands{run: newRunCommand(env), ladder: newLadderCommand(env), sample: newSampleCommand(env)}
 
 	root := &cobra.Command{
 		Use:   "qc",
@@ -20,7 +20,8 @@ func newRootCommand(
 		Example: "  qc run mezzanine.mov --codecs h264,av1 --html report.html\n" +
 			"  qc analyze video.mp4 --fast\n" +
 			"  qc vmaf reference.mov encode.mp4\n" +
-			"  qc ladder mezzanine.mov -c av1",
+			"  qc ladder mezzanine.mov -c av1\n" +
+			"  qc sample episode-01.mov episode-02.mov --to sample.mkv --duration 60",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -29,7 +30,7 @@ func newRootCommand(
 				return cmd.Help()
 			}
 
-			return runWizard(cmd, runCmd, ladderCmd, env)
+			return runWizard(cmd, commands, env)
 		},
 	}
 
@@ -40,10 +41,11 @@ func newRootCommand(
 	flags.String(configFlag, "", "configuration file (YAML, TOML or JSON) keyed by flag name")
 
 	root.AddCommand(
-		runCmd,
+		commands.run,
 		newAnalyzeCommand(env),
 		newVMAFCommand(env),
-		ladderCmd,
+		commands.ladder,
+		commands.sample,
 		newVersionCommand(),
 	)
 

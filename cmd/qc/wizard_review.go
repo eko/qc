@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"runtime"
 	"slices"
@@ -32,7 +33,7 @@ func (a *wizardAnswers) reviewSections(
 ) []reviewSection {
 	sections := []reviewSection{
 		{section: sectionSource, rows: a.sourceRows(ctx)},
-		{section: sectionAnalysis, rows: []reviewRow{{key: "Compute", value: a.actionsLabel()}}},
+		{section: sectionAnalysis, rows: a.analysisRows()},
 		{section: sectionQuality, rows: a.qualityRows(ctx)},
 		{section: sectionLadder, rows: a.ladderRows()},
 		{section: sectionOutputs, rows: a.outputRows()},
@@ -47,6 +48,33 @@ func (a *wizardAnswers) reviewSections(
 	}
 
 	return sections
+}
+
+// sampleSceneLabels name the scenes of a sample.
+var sampleSceneLabels = map[string]string{
+	"mixed":   "most complex and representative scenes",
+	"top":     "most complex scenes",
+	"average": "representative scenes",
+	"easy":    "easiest scenes",
+}
+
+// analysisRows review what is computed, and the sample when one is
+// extracted.
+func (a *wizardAnswers) analysisRows() []reviewRow {
+	rows := []reviewRow{{key: "Compute", value: a.actionsLabel()}}
+	if !a.isSample() {
+		return rows
+	}
+
+	scenes := sampleSceneLabels[cmp.Or(a.SampleScenes, defaultSampleScenes)]
+	if a.sampleMixed() {
+		scenes += " (" + percentAnswer(a.SampleTopShare) + "% complex)"
+	}
+
+	return append(rows,
+		reviewRow{key: "Sample", value: strings.TrimSpace(a.SampleDuration) + " s, " + scenes},
+		reviewRow{key: "File", value: strings.TrimSpace(a.SampleTo) + ", video copied without re-encoding"},
+	)
 }
 
 // sourceRows review the video, or the videos of one ladder.
@@ -90,6 +118,14 @@ var actionLabels = map[string]string{
 
 // actionsLabel lists the chosen actions, in the order of the form.
 func (a *wizardAnswers) actionsLabel() string {
+	if a.isSample() {
+		if a.isProgram() {
+			return fmt.Sprintf("A sample of the %d videos", len(a.Program)+1)
+		}
+
+		return "A sample of the video"
+	}
+
 	if a.isProgram() {
 		return fmt.Sprintf("One ladder per codec for the %d videos", len(a.Program)+1)
 	}
@@ -301,6 +337,9 @@ func (a *wizardAnswers) rungsLabel() string {
 // and the hardware.
 func (a *wizardAnswers) outputRows() []reviewRow {
 	rows := []reviewRow{{key: "Report", value: "terminal" + optionalFile(", HTML ", a.HTML)}}
+	if a.isSample() {
+		rows[0].value = "terminal"
+	}
 
 	if !a.overlayHidden() {
 		annotated := "none"

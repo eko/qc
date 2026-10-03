@@ -14,6 +14,7 @@ is not exact comes with its uncertainty.
 | [HDR](hdr.md) | HDR10/PQ/HLG detection and signalling checks, MaxCLL/MaxFALL, wPSNR and ΔE ITP, VMAF on HDR, HDR ladders |
 | [Audio](audio.md) | Loudness per ITU-R BS.1770-5 / EBU R 128 / ATSC A/85 (integrated, range, true peak), silence, clipping, phase and channel defects, decoded alongside the video |
 | [Ladder engine](ladder.md) | Digest, probe encodes, rate-quality curves, envelope, rung selection, VBV, verification and calibration |
+| [Samples](sample.md) | `qc sample`: scenes of several videos (most complex, representative, mixed, easiest) copied into one file without re-encoding |
 | [Validation](validation.md) | How speed-ups are proven: replay simulation, exhaustive ladder optimum, measured results |
 | [CLI](cli.md) | Commands, flags, live dashboard, wizard, JSON and HTML reports |
 | [NVIDIA GPUs](gpu.md) | NVDEC decoding, NVENC ladders, CUDA VMAF: what runs where, the CUDA image, the validation kit |

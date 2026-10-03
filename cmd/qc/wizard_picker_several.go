@@ -14,8 +14,8 @@ import (
 	"github.com/eko/qc/ladder"
 )
 
-// Several lets the picker take several videos, for one ladder for all of
-// them: space selects the highlighted one, enter moves on with those
+// Several lets the picker take several videos, for one ladder or one sample
+// for all of them: space selects the highlighted one, enter moves on with those
 // selected. The first stays the value of the picker, more receives the
 // others.
 func (f *videoPicker) Several(
@@ -125,7 +125,7 @@ func (f *videoPicker) selectionView() string {
 	dot := " " + s.g.dot + " "
 
 	if len(f.marked) == 0 {
-		return s.faint.Render("space selects several videos: one ladder for all of them")
+		return s.faint.Render("space selects several videos: one ladder, or one sample, for all of them")
 	}
 
 	if len(f.marked) == 1 {
@@ -133,7 +133,7 @@ func (f *videoPicker) selectionView() string {
 	}
 
 	return s.success.Render(fmt.Sprintf("%s %d videos selected", s.g.check, len(f.marked))) +
-		s.faint.Render(dot+"one ladder for all of them"+dot+"enter continues")
+		s.faint.Render(dot+"one ladder or sample for all of them"+dot+"enter continues")
 }
 
 // askMore asks for the other videos of the ladder, one path a line, until
@@ -145,7 +145,7 @@ func (f *videoPicker) askMore(
 	picked := []string{*f.value}
 
 	for {
-		_, _ = fmt.Fprint(w, "Another video for the same ladder (path, empty to continue): ")
+		_, _ = fmt.Fprint(w, "Another video, for one ladder or sample of them all (path, empty to continue): ")
 		if !scanner.Scan() {
 			_, _ = fmt.Fprintln(w)
 

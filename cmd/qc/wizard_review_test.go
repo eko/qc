@@ -246,12 +246,12 @@ func TestRunAccessible(
 		{
 			name: "several videos: one ladder, nothing else asked",
 			lines: []string{
-				"source.mp4", "ref.mov", "episode.mp4", "",
+				"source.mp4", "ref.mov", "episode.mp4", "", "",
 				"0", "0", "3", "0", "", "", "", "", "1",
 			},
 			wantProgram: []string{"episode.mp4"},
 			wantShown: []string{
-				"Another video for the same ladder", "not 1920×1080 like source.mp4",
+				"Another video, for one ladder or sample of them all", "not 1920×1080 like source.mp4",
 				"Compute    One ladder per codec for the 2 videos", "Video 2    episode.mp4", "Codecs     H.264, AV1",
 				"Command: qc ladder source.mp4 episode.mp4 -c h264,av1",
 			},

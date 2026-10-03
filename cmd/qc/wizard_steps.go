@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/charmbracelet/huh"
@@ -55,6 +56,9 @@ func (a *wizardAnswers) formSteps(
 	return []wizardStep{
 		{section: sectionSource, fields: a.sourceFields(ctx)},
 		{section: sectionAnalysis, fields: a.actionsFields(), hidden: a.isProgram},
+		{section: sectionAnalysis, fields: a.programActionFields(), hidden: a.programHidden},
+		{section: sectionAnalysis, fields: a.sampleFields(), hidden: a.sampleHidden},
+		{section: sectionAnalysis, fields: a.sampleShareFields(), hidden: a.sampleShareHidden},
 		{section: sectionQuality, fields: a.referenceFields(ctx), hidden: a.vmafHidden},
 		{section: sectionQuality, fields: a.precisionFields(), hidden: a.vmafModeHidden(vmafPrecision)},
 		{section: sectionQuality, fields: a.shareFields(), hidden: a.vmafModeHidden(vmafShare)},
@@ -62,7 +66,7 @@ func (a *wizardAnswers) formSteps(
 		{section: sectionQuality, fields: a.metricsFields(), hidden: a.metricsHidden},
 		a.hdrStep(ctx.detectHDR),
 		{section: sectionLadder, fields: a.codecsFields(), hidden: a.codecsHidden},
-		{section: sectionLadder, fields: a.programFields(), hidden: a.programHidden},
+		{section: sectionLadder, fields: a.programFields(), hidden: a.programLadderHidden},
 		{section: sectionLadder, fields: a.shapeFields(), hidden: a.advancedHidden},
 		{section: sectionLadder, fields: a.rungCountFields(), hidden: a.shapeHidden(shapeCount)},
 		{section: sectionLadder, fields: a.resolutionsFields(), hidden: a.shapeHidden(shapeResolutions)},
@@ -70,7 +74,7 @@ func (a *wizardAnswers) formSteps(
 		{section: sectionLadder, fields: a.encodingFields(false), hidden: a.encodingHidden(true)},
 		{section: sectionLadder, fields: a.filmGrainFields(), hidden: a.filmGrainHidden},
 		{section: sectionOutputs, fields: a.gpuFields(), hidden: func() bool { return !ctx.offerGPU }},
-		{section: sectionOutputs, fields: a.htmlFields()},
+		{section: sectionOutputs, fields: a.htmlFields(), hidden: a.isSample},
 		{section: sectionOutputs, fields: a.overlayFields(), hidden: a.overlayHidden},
 		{section: sectionOutputs, fields: a.overlayPathFields(), hidden: a.overlayPathHidden},
 		{section: sectionOutputs, fields: a.renditionsFields(), hidden: a.renditionsHidden},
@@ -161,16 +165,33 @@ func (w wizardForm) current() section {
 	return w.sections[w.form.GetFocusedField()]
 }
 
-// wants reports whether action was picked. Several videos get a ladder and
-// nothing else.
+// wants reports whether action was picked. Several videos get one thing:
+// a ladder, or a sample.
 func (a *wizardAnswers) wants(
 	action string,
 ) bool {
 	if a.isProgram() {
-		return action == actionLadder
+		return action == cmp.Or(a.ProgramAction, actionLadder)
 	}
 
 	return slices.Contains(a.Actions, action)
+}
+
+// sampleHidden hides the settings of a sample unless one is extracted.
+func (a *wizardAnswers) sampleHidden() bool {
+	return !a.isSample()
+}
+
+// sampleShareHidden hides the share of complex scenes unless the sample
+// mixes them with representative ones.
+func (a *wizardAnswers) sampleShareHidden() bool {
+	return !a.isSample() || !a.sampleMixed()
+}
+
+// programLadderHidden hides the codecs of the ladders of several videos
+// unless they get a ladder.
+func (a *wizardAnswers) programLadderHidden() bool {
+	return !a.isProgram() || a.ladderHidden()
 }
 
 // codecsHidden hides the codecs of the ladders of one video.
@@ -178,7 +199,7 @@ func (a *wizardAnswers) codecsHidden() bool {
 	return a.ladderHidden() || a.isProgram()
 }
 
-// programHidden hides the codecs of the ladders of several videos.
+// programHidden hides what is asked of several videos only.
 func (a *wizardAnswers) programHidden() bool {
 	return !a.isProgram()
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -30,10 +32,88 @@ func (a *wizardAnswers) actionsFields() []huh.Field {
 				huh.NewOption("Technical analysis · bitrate, GOP, SI/TI, shots, black/freeze, crop", actionAnalysis),
 				huh.NewOption("VMAF against a reference", actionVMAF),
 				huh.NewOption("Per-title streaming ladder", actionLadder),
+				huh.NewOption("Extract a sample · scenes of the video copied into a new file (alone)", actionSample),
 			).
-			Validate(requireOne("pick at least one")).
+			Validate(validateActions).
 			Value(&a.Actions),
 	}
+}
+
+// validateActions wants at least one action, and a sample alone: it is
+// another command, which computes nothing else.
+func validateActions(
+	actions []string,
+) error {
+	if len(actions) == 0 {
+		return errors.New("pick at least one")
+	}
+
+	if slices.Contains(actions, actionSample) && len(actions) > 1 {
+		return errors.New("a sample is extracted alone: untick the rest, or the sample")
+	}
+
+	return nil
+}
+
+// programActionFields ask what to do with several videos.
+func (a *wizardAnswers) programActionFields() []huh.Field {
+	return []huh.Field{
+		huh.NewSelect[string]().
+			Title("What should I do with these videos?").
+			Options(
+				huh.NewOption("One streaming ladder for all of them", actionLadder),
+				huh.NewOption("Extract a sample · scenes of each video copied into one file", actionSample),
+			).
+			Value(&a.ProgramAction),
+	}
+}
+
+// sampleFields ask for the length of the sample, its scenes and its file.
+func (a *wizardAnswers) sampleFields() []huh.Field {
+	return []huh.Field{
+		huh.NewInput().
+			Title("Length of the sample (seconds)").
+			Description("Shared equally between the videos. Scenes are whole GOPs, copied as they are: about that long.").
+			Validate(validateRange(1, 86_400, false)).
+			Value(&a.SampleDuration),
+		huh.NewSelect[string]().
+			Title("Scenes").
+			Options(
+				huh.NewOption("Most complex and representative · a share of each", "mixed"),
+				huh.NewOption("Most complex · what costs an encoder most", "top"),
+				huh.NewOption("Representative · the SI and TI of each video", "average"),
+				huh.NewOption("Easiest · the lowest SI × TI", "easy"),
+			).
+			Value(&a.SampleScenes),
+		huh.NewInput().
+			Title("Sample file").
+			Description("Its extension picks the container; .mkv takes any codec. Video only.").
+			Placeholder(defaultSampleFile).
+			Validate(requireName).
+			Value(&a.SampleTo),
+	}
+}
+
+// sampleShareFields ask for the share of complex scenes of a mixed sample.
+func (a *wizardAnswers) sampleShareFields() []huh.Field {
+	return []huh.Field{
+		huh.NewInput().
+			Title("Share of the most complex scenes (%)").
+			Description("The rest of the sample is representative scenes.").
+			Validate(validateTopShare).
+			Value(&a.SampleTopShare),
+	}
+}
+
+// validateTopShare accepts a percentage strictly between 0 and 100.
+func validateTopShare(
+	s string,
+) error {
+	if v, err := strconv.ParseFloat(percentAnswer(s), 64); err != nil || v <= 0 || v >= percentMax {
+		return errors.New("enter a percentage between 0 and 100, both excluded")
+	}
+
+	return nil
 }
 
 // referenceFields ask for the reference, browsed from the folder of the

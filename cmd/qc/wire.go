@@ -19,6 +19,7 @@ import (
 	"github.com/eko/qc/pipeline"
 	"github.com/eko/qc/probe"
 	"github.com/eko/qc/quality"
+	"github.com/eko/qc/sample"
 	"github.com/eko/qc/vmaf/libvmaf"
 )
 
@@ -33,10 +34,11 @@ import (
 //	gpuSettings ─┼─ newDecoder       → decode.Source ─────────┼─ analysis.New → *Analyzer, ladder.Inspector, pipeline.Analyzer
 //	             │   libvmaf.NewEngine → quality.Engine       │
 //	             │   quality.NewMeter  → analysis.Meter ──────┘
-//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab, ladder.RenditionEncoder, overlay.Burner
+//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab, ladder.RenditionEncoder, overlay.Burner, sample.Cutter
 //	                newLadderEngine → pipeline.LadderBuilder, pipeline.LadderEncoder
 //	                overlay.NewRenderer → pipeline.Overlayer
 //	                newRunner → *pipeline.Runner
+//	                sample.NewEngine → *sample.Engine
 //
 // ctx bounds the preflights, which run while the application is built: a
 // missing GPU or libass then fails before anything starts.
@@ -55,13 +57,15 @@ func module(
 			fx.Annotate(libvmaf.NewEngine, fx.As(new(quality.Engine))),
 			fx.Annotate(quality.NewMeter, fx.As(new(analysis.Meter))),
 			fx.Annotate(analysis.New,
-				fx.As(fx.Self()), fx.As(new(ladder.Inspector)), fx.As(new(pipeline.Analyzer))),
+				fx.As(fx.Self()), fx.As(new(ladder.Inspector)), fx.As(new(pipeline.Analyzer)), fx.As(new(sample.Inspector))),
 			fx.Annotate(newEncoder,
 				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.GrainLab)),
-				fx.As(new(ladder.RenditionEncoder)), fx.As(new(overlay.Burner)), fx.As(new(burnChecker))),
+				fx.As(new(ladder.RenditionEncoder)), fx.As(new(overlay.Burner)), fx.As(new(burnChecker)),
+				fx.As(new(sample.Cutter))),
 			fx.Annotate(newLadderEngine, fx.As(new(pipeline.LadderBuilder)), fx.As(new(pipeline.LadderEncoder))),
 			fx.Annotate(overlay.NewRenderer, fx.As(new(pipeline.Overlayer))),
 			newRunner,
+			sample.NewEngine,
 		),
 		fx.Invoke(checkGPU, checkOverlay, registerProfile),
 	)
@@ -71,6 +75,7 @@ func module(
 type services struct {
 	analyzer *analysis.Analyzer
 	runner   *pipeline.Runner
+	sampler  *sample.Engine
 }
 
 // newApp builds the application of one command run: its services, checked
@@ -86,7 +91,7 @@ func newApp(
 	return fx.New(
 		fx.WithLogger(newEventLogger),
 		module(ctx, config),
-		fx.Populate(&svc.analyzer, &svc.runner),
+		fx.Populate(&svc.analyzer, &svc.runner, &svc.sampler),
 	)
 }
 

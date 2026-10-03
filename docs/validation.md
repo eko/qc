@@ -712,6 +712,39 @@ at VMAF 85.16 and 510 kb/s where the whole cartoon gives **87.86 and
 812 kb/s** (−2.7 VMAF, −37%), and its top rung 1.9 VMAF and 16% under, at
 least. Balanced on its own, each video is read as in the first table.
 
+## Samples
+
+`qc sample` claims the frames of a sample are the sources' own. Checked
+from outside qc: every scene of the report is decoded from its source with
+ffmpeg, and the frame hashes compared, in order, with those of the decoded
+sample. Three H.264 titles (1 min, 10:36 and 59 min), a minute asked:
+
+| Scenes | Container | Sample | Frames | Identical to the sources |
+|---|---|---|---|---|
+| top | MP4 | 59.5 s, 17 scenes | 1 486 | yes |
+| average | MP4 | 60.4 s, 17 scenes | 1 511 | yes |
+| easy | MP4 | 62.3 s, 18 scenes | 1 557 | yes |
+| mixed (two titles, 40 s) | Matroska | 41.4 s, 13 scenes | 1 036 | yes |
+
+The comparison found one defect while the command was written: a scene
+ending with its source, whose last frame is shown late (a file cut after a
+P frame), was given its frame count as a duration, and the next scene
+overlapped it by a frame. Scenes now last what their timestamps say, and
+the read-back refuses two frames at one timestamp.
+
+What the scenes are, per title (SI, TI of the frames taken, the title's in
+brackets):
+
+| Scenes | Drama (33.9, 13.4) | Cartoon (30.4, 12.0) | Reality show (52.1, 13.2) |
+|---|---|---|---|
+| top | 46.4, 16.5 | 33.5, 24.9 | 102.4, 34.0 |
+| average | 34.3, 13.1 | 30.6, 12.1 | 52.4, 13.4 |
+| easy | 25.9, 9.8 | 26.7, 3.9 | 29.9, 2.2 |
+
+Representative scenes have the SI and TI of their title within 0.4, in 20
+seconds of each. Not checked: sources with open GOPs (the read-back is
+meant to catch them, on a frame count), and other codecs than H.264.
+
 ## Per-shot rungs (`ladderval -per-shot`, `-shot-optimum`)
 
 ```sh

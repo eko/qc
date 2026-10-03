@@ -254,6 +254,7 @@ func TestRunWizard(
 ) {
 	source := testutil.Generate(t, testutil.Clip{Name: "source.mp4"})
 	episode := testutil.Generate(t, testutil.Clip{Name: "episode.mp4"})
+	sampleFile := filepath.Join(t.TempDir(), "sample.mkv")
 	html := filepath.Join(t.TempDir(), "wizard.html")
 
 	testCases := []struct {
@@ -285,6 +286,16 @@ func TestRunWizard(
 			wantStderr: "$ qc ladder " + source + " " + episode + " -c h264 --rungs 180p --no-verify --html " + html,
 			wantStdout: "program     2 videos",
 			wantFile:   html,
+		},
+		{
+			name: "a sample runs qc sample",
+			answers: wizardAnswers{
+				Source: source, Program: []string{episode}, ProgramAction: actionSample,
+				SampleDuration: "2", SampleScenes: "easy", SampleTo: sampleFile,
+			},
+			wantStderr: "$ qc sample " + source + " " + episode + " --to " + sampleFile + " --duration 2 --scenes easy",
+			wantStdout: "sample read back",
+			wantFile:   sampleFile,
 		},
 		{
 			name: "file named like a flag",

@@ -15,6 +15,7 @@ import (
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/pipeline"
 	"github.com/eko/qc/quality"
+	"github.com/eko/qc/sample"
 	"github.com/eko/qc/vmaf"
 )
 
@@ -243,6 +244,44 @@ func TestCommands(
 			args:       []string{"vmaf", source, missing},
 			wantCode:   1,
 			wantStderr: "qc: Inspect: ",
+		},
+		{
+			name: "sample of two videos as json",
+			args: []string{"sample", source, encoded, "--to", filepath.Join(dir, "sample.mkv"), "--duration", "2", "--piece", "1", "--scenes", "top", "-f", "json"},
+			check: func(t *testing.T, stdout string) {
+				var res sample.Result
+				require.NoError(t, json.Unmarshal([]byte(stdout), &res))
+				require.Len(t, res.Sources, 2)
+				assert.Equal(t, sample.ScenesTop, res.Scenes)
+				assert.InDelta(t, 2, res.Duration.Seconds(), 1e-6, "a second of each")
+				assert.Equal(t, 50, res.Frames)
+				assert.Equal(t, sample.Check{Frames: 50, Decoded: true}, res.Check)
+			},
+			wantFiles: []string{filepath.Join(dir, "sample.mkv")},
+		},
+		{
+			name:       "sample as text, with its report",
+			args:       []string{"sample", source, "--to", filepath.Join(dir, "whole.mp4"), "--duration", "10", "-o", filepath.Join(dir, "sample.json")},
+			wantStdout: []string{"◆ qc  ·  sample", "taken whole", "sample read back: 50 frames", "sample.json"},
+			wantFiles:  []string{filepath.Join(dir, "whole.mp4"), filepath.Join(dir, "sample.json")},
+		},
+		{
+			name:       "sample without a file to write",
+			args:       []string{"sample", source},
+			wantCode:   1,
+			wantStderr: ErrNoSampleFile.Error(),
+		},
+		{
+			name:       "sample of unknown scenes",
+			args:       []string{"sample", source, "--to", filepath.Join(dir, "x.mkv"), "--scenes", "hardest"},
+			wantCode:   1,
+			wantStderr: `unknown scenes "hardest"`,
+		},
+		{
+			name:       "sample of videos of several formats",
+			args:       []string{"sample", source, larger, "--to", filepath.Join(dir, "x.mkv")},
+			wantCode:   1,
+			wantStderr: sample.ErrFormat.Error(),
 		},
 		{
 			name:       "ladder of a missing file",

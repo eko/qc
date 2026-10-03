@@ -17,11 +17,13 @@ import (
 	"github.com/eko/qc/quality"
 )
 
-// runWizard asks what to compute, prints the equivalent command (qc run, or
-// qc ladder for the ladders of several videos) and runs it with runCmd or
-// ladderCmd, so that the wizard behaves exactly like the command it shows.
+// runWizard asks what to compute, prints the equivalent command (qc run, qc
+// ladder for the ladders of several videos, or qc sample) and runs it with
+// that command, so that the wizard behaves exactly like the command it
+// shows.
 func runWizard(
-	cmd, runCmd, ladderCmd *cobra.Command,
+	cmd *cobra.Command,
+	commands wizardCommands,
 	env environment,
 ) error {
 	stderr := cmd.ErrOrStderr()
@@ -57,9 +59,13 @@ func runWizard(
 	command := answers.command()
 	fmt.Fprintln(stderr, handoff(command, newWizardStyle(os.Getenv, lipgloss.ColorProfile())))
 
-	target := runCmd
-	if answers.isProgram() {
-		target = ladderCmd
+	target := commands.run
+
+	switch {
+	case answers.isSample():
+		target = commands.sample
+	case answers.isProgram():
+		target = commands.ladder
 	}
 
 	if err := target.ParseFlags(command[2:]); err != nil {
@@ -68,11 +74,19 @@ func runWizard(
 
 	target.SetContext(cmd.Context())
 
-	if answers.isProgram() {
+	switch {
+	case answers.isSample():
+		return runSample(target, env, target.Flags().Args())
+	case answers.isProgram():
 		return runLadder(target, env, target.Flags().Args())
 	}
 
 	return runEverything(target, env, target.Flags().Arg(0))
+}
+
+// wizardCommands are the commands the wizard runs: the one it shows.
+type wizardCommands struct {
+	run, ladder, sample *cobra.Command
 }
 
 // handoff introduces the dashboard: the command the wizard runs, to run it
@@ -299,20 +313,26 @@ func askReviewAction(
 // newWizardAnswers are the answers before the form: the defaults it shows.
 func newWizardAnswers() *wizardAnswers {
 	return &wizardAnswers{
-		Actions:   []string{actionAnalysis, actionLadder},
-		Codecs:    []string{"h264"},
-		VMAFMode:  vmafPrecision,
-		Precision: defaultPrecision,
-		Share:     defaultShare,
-		PerScene:  defaultPerScene,
-		Metrics:   slices.Clone(defaultMetrics),
-		Shape:     shapeAuto,
-		TopVMAF:   defaultTopVMAF,
-		MinVMAF:   defaultMinVMAF,
-		BitDepth:  defaultBitDepth,
-		Probing:   defaultProbing,
-		Digest:    defaultDigest,
-		FilmGrain: defaultFilmGrain,
-		HDRMetric: string(quality.HDRMetricPQ),
+		Actions: []string{actionAnalysis, actionLadder},
+		Codecs:  []string{"h264"},
+
+		ProgramAction:  actionLadder,
+		SampleDuration: defaultSampleDuration,
+		SampleScenes:   defaultSampleScenes,
+		SampleTopShare: defaultSampleTopShare,
+		SampleTo:       defaultSampleFile,
+		VMAFMode:       vmafPrecision,
+		Precision:      defaultPrecision,
+		Share:          defaultShare,
+		PerScene:       defaultPerScene,
+		Metrics:        slices.Clone(defaultMetrics),
+		Shape:          shapeAuto,
+		TopVMAF:        defaultTopVMAF,
+		MinVMAF:        defaultMinVMAF,
+		BitDepth:       defaultBitDepth,
+		Probing:        defaultProbing,
+		Digest:         defaultDigest,
+		FilmGrain:      defaultFilmGrain,
+		HDRMetric:      string(quality.HDRMetricPQ),
 	}
 }

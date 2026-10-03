@@ -50,6 +50,16 @@ type Config struct {
 	Run      RunConfig      `mapstructure:",squash"`
 	GPU      GPUConfig      `mapstructure:",squash"`
 	Overlay  OverlayConfig  `mapstructure:",squash"`
+	Sample   SampleConfig   `mapstructure:",squash"`
+}
+
+// SampleConfig holds the flags of the sample command.
+type SampleConfig struct {
+	To       string  `mapstructure:"to"`
+	Duration float64 `mapstructure:"duration"`
+	Scenes   string  `mapstructure:"scenes"`
+	TopShare float64 `mapstructure:"top-share"`
+	Piece    float64 `mapstructure:"piece"`
 }
 
 // ToolsConfig locates the external tools and sets the log level: the

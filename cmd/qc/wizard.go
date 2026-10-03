@@ -20,6 +20,9 @@ const (
 	actionAnalysis = "analysis"
 	actionVMAF     = "vmaf"
 	actionLadder   = "ladder"
+	// actionSample extracts a sample of the videos: it is done alone, by
+	// qc sample.
+	actionSample = "sample"
 )
 
 // VMAF modes offered by the wizard.
@@ -49,6 +52,12 @@ const (
 	defaultProbing   = "fixed"
 	defaultDigest    = "balanced"
 	defaultFilmGrain = "off"
+	// Defaults of a sample: its length in seconds, its scenes, and the
+	// share of complex scenes of a mixed one, in percent.
+	defaultSampleDuration = "60"
+	defaultSampleScenes   = "mixed"
+	defaultSampleTopShare = "50"
+	defaultSampleFile     = "sample.mkv"
 )
 
 // wizardAnswers are the choices made in the wizard. Numeric answers are kept
@@ -58,17 +67,26 @@ type wizardAnswers struct {
 	// Program are the other videos picked with the source: one ladder per
 	// codec is built for all of them, and nothing else is computed (see
 	// isProgram).
-	Program   []string
-	Reference string
-	Actions   []string
-	Codecs    []string
-	VMAFMode  string
-	Precision string
-	Share     string // percent of the frames, fixed-budget mode
-	PerScene  string // clips per scene, fixed-budget mode
-	Metrics   []string
-	Devices   []string
-	HTML      string
+	Program []string
+	// ProgramAction is what is done with several videos: actionLadder or
+	// actionSample.
+	ProgramAction string
+	// A sample (see isSample): its length in seconds, its scenes, the
+	// share of complex scenes of a mixed one in percent, and its file.
+	SampleDuration string
+	SampleScenes   string
+	SampleTopShare string
+	SampleTo       string
+	Reference      string
+	Actions        []string
+	Codecs         []string
+	VMAFMode       string
+	Precision      string
+	Share          string // percent of the frames, fixed-budget mode
+	PerScene       string // clips per scene, fixed-budget mode
+	Metrics        []string
+	Devices        []string
+	HTML           string
 	// Overlay asks for an annotated copy of the source, written to
 	// OverlayPath; both are asked only when the source is analysed or
 	// compared (see overlayHidden).
@@ -102,7 +120,7 @@ type wizardAnswers struct {
 }
 
 // isProgram reports whether several videos were picked: they get one ladder
-// for all of them, which is all qc computes on several videos.
+// for all of them, or a sample (see ProgramAction).
 func (a *wizardAnswers) isProgram() bool {
 	return len(a.Program) > 0
 }
@@ -113,9 +131,55 @@ func (a *wizardAnswers) perShot() bool {
 	return a.PerShot && !a.isProgram()
 }
 
-// command is the qc invocation equivalent to a: qc run, or qc ladder for
-// the ladders of several videos.
+// isSample reports whether a sample of the videos is extracted: nothing
+// else is then computed.
+func (a *wizardAnswers) isSample() bool {
+	return a.wants(actionSample)
+}
+
+// sampleArgs are the arguments of the qc sample invocation extracting the
+// sample of a.
+func (a wizardAnswers) sampleArgs() []string {
+	args := []string{notFlag(a.Source)}
+	for _, path := range a.Program {
+		args = append(args, notFlag(path))
+	}
+
+	args = append(args, "--to", notFlag(strings.TrimSpace(a.SampleTo)))
+
+	if changed(a.SampleDuration, defaultSampleDuration) {
+		args = append(args, "--duration", strings.TrimSpace(a.SampleDuration))
+	}
+
+	if changed(a.SampleScenes, defaultSampleScenes) {
+		args = append(args, "--scenes", a.SampleScenes)
+	}
+
+	if a.sampleMixed() && changed(percentAnswer(a.SampleTopShare), defaultSampleTopShare) {
+		share, _ := strconv.ParseFloat(percentAnswer(a.SampleTopShare), 64)
+		args = append(args, "--top-share", strconv.FormatFloat(share/percentMax, 'g', -1, 64))
+	}
+
+	if a.GPU {
+		args = append(args, "--gpu")
+	}
+
+	return args
+}
+
+// sampleMixed reports whether the sample mixes complex and representative
+// scenes: the only one with a share to choose.
+func (a *wizardAnswers) sampleMixed() bool {
+	return a.SampleScenes == "" || a.SampleScenes == defaultSampleScenes
+}
+
+// command is the qc invocation equivalent to a: qc run, qc ladder for the
+// ladders of several videos, or qc sample.
 func (a wizardAnswers) command() []string {
+	if a.isSample() {
+		return append([]string{"qc", "sample"}, a.sampleArgs()...)
+	}
+
 	if a.isProgram() {
 		return append([]string{"qc", "ladder"}, a.programArgs()...)
 	}

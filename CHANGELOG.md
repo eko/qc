@@ -11,6 +11,18 @@ The release notes of each GitHub release are taken from its section here
 
 ### Added
 
+- **`qc sample`**: extracts a sample of one or several videos into one
+  file, each video giving the same length of scenes chosen on its spatial
+  and temporal information: the most complex (`--scenes top`), a mix of
+  complex and representative ones (`mixed`, the default, `--top-share`),
+  representative ones (`average`) or the easiest (`easy`); `--duration`
+  sets its length. The sample plays the most complex scene first (the
+  easiest first for `easy`). The scenes are whole GOPs copied from the sources
+  without re-encoding, so the frames are the sources' own; the sample is
+  then read back (frame count, timestamps, a decode of every frame).
+  Library: package `sample`, `encode.FFmpeg.Copy` and `Decodes`. The wizard
+  offers it for one video or several.
+
 - **Banding inherited from the source**: when an encode has banded frames,
   CAMBI is measured on the reference at those frames (`cambi_source`,
   `banding.sourceFrames`), in a second pass over them alone. Comparisons

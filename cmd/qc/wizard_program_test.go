@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,7 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/media"
 	"github.com/eko/qc/pipeline"
+	"github.com/eko/qc/sample"
 )
 
 // severalPicker is a picker of the program folder that takes several
@@ -54,7 +58,7 @@ func TestVideoPickerSeveral(
 	f, value, more := severalPicker(t)
 	dir := f.dir
 
-	assert.Contains(t, ansi.Strip(f.View()), "space selects several videos")
+	assert.Contains(t, ansi.Strip(f.View()), "space selects several videos: one ladder, or one sample, for all of them")
 
 	// Space selects the highlighted video once probed, and again takes it
 	// out.
@@ -98,7 +102,7 @@ func TestVideoPickerSeveral(
 	assert.Contains(t, screen, "✓ episode.mp4")
 	assert.Contains(t, screen, "✓ source.mp4")
 	assert.NotContains(t, screen, "✓ ref.mov")
-	assert.Contains(t, screen, "2 videos selected · one ladder for all of them · enter continues")
+	assert.Contains(t, screen, "2 videos selected · one ladder or sample for all of them · enter continues")
 
 	f.moveTo("ref.mov")
 	assert.IsType(t, huh.NextField(), f.handleKey(keyEnter)())
@@ -198,7 +202,7 @@ func TestVideoPickerSeveralAccessible(
 	assert.Equal(t, "source.mp4", *value)
 	assert.Equal(t, []string{"episode.mp4"}, *more)
 
-	for _, want := range []string{"Another video for the same ladder", "no such file", "not 1920×1080 like source.mp4"} {
+	for _, want := range []string{"Another video, for one ladder or sample of them all", "no such file", "not 1920×1080 like source.mp4"} {
 		assert.Contains(t, out.String(), want)
 	}
 
@@ -349,9 +353,13 @@ func TestWizardModelProgram(
 	send(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	send(m, runCmd(m.Init())...)
 
-	// Two videos selected: the wizard goes straight to the ladder.
+	// Two videos selected: a ladder for both, or a sample of them.
 	send(m, runes("source"), runes(" "), keyEsc, runes("episode"), runes(" "), keyEnter)
 	require.Equal(t, []string{"episode.mp4"}, m.answers.Program, view(m))
+	require.Equal(t, sectionAnalysis, m.current(), view(m))
+	assert.Contains(t, view(m), "What should I do with these videos?")
+
+	send(m, keyEnter)
 	require.Equal(t, sectionQuality, m.current(), view(m))
 	assert.Contains(t, view(m), "Metrics next to VMAF")
 
@@ -367,7 +375,7 @@ func TestWizardModelProgram(
 		assert.Contains(t, screen, want)
 	}
 
-	assert.NotContains(t, m.editable(), sectionAnalysis, "nothing to choose for several videos")
+	assert.Contains(t, m.editable(), sectionAnalysis)
 }
 
 func TestWizardProgramLadderPageFits(
@@ -380,7 +388,7 @@ func TestWizardProgramLadderPageFits(
 	m := newWizardModel(newWizardAnswers(), testWizardContext(t, false))
 	send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	send(m, runCmd(m.Init())...)
-	send(m, runes("source"), runes(" "), keyEsc, runes("episode"), runes(" "), keyEnter, keyEnter, keyEnter)
+	send(m, runes("source"), runes(" "), keyEsc, runes("episode"), runes(" "), keyEnter, keyEnter, keyEnter, keyEnter)
 	require.Equal(t, sectionLadder, m.current(), view(m))
 
 	for range 3 {
@@ -415,4 +423,208 @@ func TestSubject(
 ) {
 	assert.Equal(t, "episode-01.mov", subject(pipeline.Options{Source: "/titles/episode-01.mov"}))
 	assert.Equal(t, "episode-01.mov + 2 more", subject(pipeline.Options{Source: "/titles/episode-01.mov", Program: []string{"b.mov", "c.mov"}}))
+}
+
+func TestSampleOptions(
+	t *testing.T,
+) {
+	opts := sampleOptions(SampleConfig{Duration: 90, Scenes: " Top ", TopShare: 0.3, Piece: 4})
+	assert.Equal(t, sample.Options{Duration: media.Seconds(90), Scenes: sample.ScenesTop, TopShare: 0.3, Piece: media.Seconds(4)}, opts)
+}
+
+func TestWizardSampleCommand(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name    string
+		answers wizardAnswers
+		want    []string
+	}{
+		{
+			name: "defaults, one video",
+			answers: wizardAnswers{
+				Source: "film.mp4", Actions: []string{actionSample}, Codecs: []string{"h264"},
+				SampleDuration: "60", SampleScenes: "mixed", SampleTopShare: "50", SampleTo: " sample.mkv ",
+				// What a run would write is not asked of a sample.
+				HTML: "report.html", Renditions: true, RenditionsDir: "out",
+			},
+			want: []string{"qc", "sample", "film.mp4", "--to", "sample.mkv"},
+		},
+		{
+			name: "several videos, the most complex scenes",
+			answers: wizardAnswers{
+				Source: "ep1.mov", Program: []string{"-ep2.mov"}, ProgramAction: actionSample,
+				SampleDuration: " 90 ", SampleScenes: "top", SampleTopShare: "30", SampleTo: "-hard.mp4", GPU: true,
+			},
+			want: []string{"qc", "sample", "ep1.mov", "./-ep2.mov", "--to", "./-hard.mp4", "--duration", "90", "--scenes", "top", "--gpu"},
+		},
+		{
+			name: "a mixed sample with a third of complex scenes",
+			answers: wizardAnswers{
+				Source: "ep1.mov", Program: []string{"ep2.mov"}, ProgramAction: actionSample,
+				SampleDuration: "60", SampleScenes: "mixed", SampleTopShare: "30 %", SampleTo: "mix.mkv",
+			},
+			want: []string{"qc", "sample", "ep1.mov", "ep2.mov", "--to", "mix.mkv", "--top-share", "0.3"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.True(t, testCase.answers.isSample())
+			assert.Equal(t, testCase.want, testCase.answers.command())
+
+			// The flags are those of qc sample.
+			cmd := newSampleCommand(testEnv)
+			require.NoError(t, cmd.ParseFlags(testCase.want[2:]))
+			assert.Len(t, cmd.Flags().Args(), 1+len(testCase.answers.Program))
+		})
+	}
+}
+
+func TestWizardSampleSteps(
+	t *testing.T,
+) {
+	one := wizardAnswers{Source: "film.mp4", Actions: []string{actionSample}, SampleScenes: "top"}
+	several := wizardAnswers{Source: "ep1.mov", Program: []string{"ep2.mov"}, ProgramAction: actionSample, SampleScenes: "mixed"}
+	ladder := wizardAnswers{Source: "ep1.mov", Program: []string{"ep2.mov"}}
+
+	for _, a := range []*wizardAnswers{&one, &several} {
+		assert.True(t, a.isSample())
+		assert.False(t, a.sampleHidden())
+		assert.True(t, a.ladderHidden(), "a sample is extracted alone")
+		assert.True(t, a.metricsHidden())
+		assert.True(t, a.codecsHidden())
+		assert.True(t, a.programLadderHidden())
+		assert.True(t, a.overlayHidden())
+		assert.True(t, a.renditionsHidden())
+	}
+
+	assert.True(t, one.sampleShareHidden(), "a share of a mixed sample only")
+	assert.False(t, several.sampleShareHidden())
+	assert.True(t, one.programHidden())
+	assert.False(t, several.programHidden())
+
+	// Several videos get a ladder unless told otherwise.
+	assert.False(t, ladder.isSample())
+	assert.True(t, ladder.wants(actionLadder))
+	assert.True(t, ladder.sampleHidden())
+	assert.True(t, ladder.sampleShareHidden())
+	assert.False(t, ladder.programLadderHidden())
+	assert.True(t, ladder.sampleMixed(), "the default scenes")
+
+	// A sample is extracted alone.
+	require.NoError(t, validateActions([]string{actionSample}))
+	require.NoError(t, validateActions([]string{actionAnalysis, actionLadder}))
+	require.ErrorContains(t, validateActions(nil), "pick at least one")
+	require.ErrorContains(t, validateActions([]string{actionAnalysis, actionSample}), "a sample is extracted alone")
+
+	for input, valid := range map[string]bool{"50": true, "30 %": true, "0": false, "100": false, "half": false, "": false} {
+		assert.Equal(t, valid, validateTopShare(input) == nil, input)
+	}
+}
+
+func TestWizardSampleReview(
+	t *testing.T,
+) {
+	programDir(t)
+
+	ctx := testWizardContext(t, false)
+
+	a := newWizardAnswers()
+	a.Source, a.Program, a.ProgramAction = "source.mp4", []string{"episode.mp4"}, actionSample
+	a.SampleDuration, a.SampleTopShare, a.SampleTo, a.HTML = "90", "30", "mix.mkv", "report.html"
+
+	values := reviewValues(a.reviewSections(ctx))
+	assert.Equal(t, []string{
+		"Compute: A sample of the 2 videos",
+		"Sample: 90 s, most complex and representative scenes (30% complex)",
+		"File: mix.mkv, video copied without re-encoding",
+	}, values[sectionAnalysis])
+	assert.Equal(t, []string{"skipped: no ladder requested"}, values[sectionLadder])
+	assert.Equal(t, "Report: terminal", values[sectionOutputs][0], "a sample has no HTML report")
+	assert.Contains(t, plainReview(a, ctx), "Command: qc sample source.mp4 episode.mp4 --to mix.mkv --duration 90 --top-share 0.3")
+
+	// One video, other scenes: no share to tell.
+	a.Program, a.Actions, a.SampleScenes = nil, []string{actionSample}, "easy"
+	values = reviewValues(a.reviewSections(ctx))
+	assert.Equal(t, "Compute: A sample of the video", values[sectionAnalysis][0])
+	assert.Equal(t, "Sample: 90 s, easiest scenes", values[sectionAnalysis][1])
+}
+
+func TestWizardModelSample(
+	t *testing.T,
+) {
+	programDir(t)
+
+	m := newWizardModel(newWizardAnswers(), testWizardContext(t, false))
+	send(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	send(m, runCmd(m.Init())...)
+
+	// Two videos, then a sample of them rather than a ladder.
+	send(m, runes("source"), runes(" "), keyEsc, runes("episode"), runes(" "), keyEnter)
+	send(m, keyDown, keyEnter)
+	require.Equal(t, actionSample, m.answers.ProgramAction, view(m))
+	require.Equal(t, sectionAnalysis, m.current(), view(m))
+
+	screen := view(m)
+	for _, want := range []string{"Length of the sample (seconds)", "Scenes", "Sample file"} {
+		assert.Contains(t, screen, want)
+	}
+
+	// Length, scenes, file, then the share of complex scenes: the review.
+	for range 4 {
+		send(m, keyEnter)
+	}
+
+	require.Equal(t, phaseReview, m.phase, view(m))
+
+	screen = view(m)
+	for _, want := range []string{"A sample of the 2 videos", "60 s, most complex and representative scenes (50% complex)", "qc sample source.mp4 episode.mp4 --to sample.mkv"} {
+		assert.Contains(t, screen, want)
+	}
+}
+
+// stageLog records the dashboard updates of an extraction.
+type stageLog struct {
+	events []string
+}
+
+func (l *stageLog) Start(
+	i int,
+) {
+	l.events = append(l.events, "start "+strconv.Itoa(i))
+}
+
+func (l *stageLog) Done(
+	i int,
+	_ string,
+) {
+	l.events = append(l.events, "done "+strconv.Itoa(i))
+}
+
+func (l *stageLog) Progress(
+	i, done, total int,
+	_ string,
+) {
+	l.events = append(l.events, fmt.Sprintf("progress %d %d/%d", i, done, total))
+}
+
+func TestSampleProgress(
+	t *testing.T,
+) {
+	log := &stageLog{}
+
+	progress := sampleProgress(log)
+	progress(sample.Progress{Stage: sample.StageInspect, Done: 0, Total: 2})
+	progress(sample.Progress{Stage: sample.StageInspect, Done: 1, Total: 2})
+	// The analysis is skipped when every video is taken whole: the stages
+	// before the one reported are closed in order.
+	progress(sample.Progress{Stage: sample.StageExtract, Done: 1, Total: 3})
+	progress(sample.Progress{Stage: sample.StageVerify})
+
+	assert.Equal(t, []string{
+		"start 0", "progress 0 0/2", "progress 0 1/2",
+		"done 0", "start 1", "done 1", "start 2", "progress 2 1/3",
+		"done 2", "start 3",
+	}, log.events)
 }

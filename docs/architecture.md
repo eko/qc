@@ -38,6 +38,10 @@ flowchart TB
     pipeline --> analysis
     ladder --> analysis
     ladder --> encode
+    cmd --> sample["sample<br/>scenes copied into one file"]
+    sample --> analysis
+    sample --> encode
+    sample --> ladder
     ladder --> shotalloc["ladder/internal/shotalloc<br/>per-shot math"]
     ladder --> linalg["internal/linalg"]
     shotalloc --> linalg
@@ -98,6 +102,7 @@ so the service packages build without a C toolchain (`make nocgo`).
 | `overlay` | The debug overlay of annotated videos: an ASS script written from a report and a comparison (`Write`, pure, frame-accurate timing, coalesced events), burnt into a copy by `Renderer` through its `Burner` port, in concurrent segments with a hardware encoder ([overlay.md](overlay.md)) |
 | `ladder` | Per-title ladder engine: validation, then digest, grain, probe, selection, verification and per-shot stages |
 | `ladder/internal/shotalloc` | Pure per-shot math: shot rate-quality models, their prediction from shot features, equal-slope allocation |
+| `sample` | Extracts a sample of one or several videos: scenes (whole GOPs) chosen on their SI and TI (most complex, representative, mixed, easiest), copied without re-encoding through its `Cutter` port (`encode.FFmpeg.Copy`), then read back |
 | `pipeline` | Chains every stage of a run and reports progress through hooks |
 | `nvidia` | GPU preflight: what an ffmpeg binary and the machine can do on an NVIDIA GPU (NVDEC, NVENC, device), checked before any work (`Check`) |
 | `internal/ffexec` | Runs ffmpeg and ffprobe: streamed stdout (and a second output for two-output decodes) through Unix sockets with large buffers, bounded stderr tail, cancellation |

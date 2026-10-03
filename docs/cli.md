@@ -6,6 +6,7 @@ qc run <source>         everything: analysis, VMAF (with -r), ladders
 qc analyze <file>       technical analysis
 qc vmaf <ref> <dist>    VMAF of dist against ref
 qc ladder <source>...   per-title ladder (-c h264,av1 for several codecs); several sources: one ladder for all
+qc sample <source>...   a sample of the videos: their most complex, representative or easiest scenes, copied
 qc version [--check]    versions of qc, Go and libvmaf; --check: the environment
 ```
 
@@ -73,7 +74,12 @@ and more, a summary of the answers given so far sits beside the form.
    the wizard asks only about that ladder (its codecs, no per-shot rungs).
    A video whose format differs from the first one selected is refused;
 2. **Analysis**: what to compute: technical analysis, VMAF against a
-   reference, streaming ladder;
+   reference, streaming ladder, or a **sample** of the video (alone: it is
+   another command). With several videos: one ladder for all of them, or a
+   sample of them. A sample then asks its length, its scenes (most complex
+   and representative, most complex, representative, easiest), its file,
+   and for a mix the share of complex scenes
+   ([samples](sample.md));
 3. **Quality**, for VMAF: the reference (browsed from the folder of the
    source), then the **VMAF mode**: a target precision (± VMAF, adaptive,
    the default), a fixed budget as a share of the frames (5% by default) or
@@ -101,7 +107,7 @@ and more, a summary of the answers given so far sits beside the form.
 6. **Review**: every answer, section by section, with the metadata of the
    videos and the hardware the run uses (the NVIDIA GPU with `--gpu`, Apple
    VideoToolbox on macOS, the CPU elsewhere), and the exact equivalent `qc run`
-   command, or `qc ladder a b c` for several videos (wrapped with `\`
+   command, `qc ladder a b c` for several videos or `qc sample` (wrapped with `\`
    continuations, so it can be copied as it is).
    **Run** (`enter` or `r`), **Edit a section** (`e`, or its number `1`–`5`:
    the section is asked again, with the pages the change calls for, such as
@@ -161,6 +167,19 @@ file can serve every command: each reads the keys of its own flags and
 ignores the others. An unknown key (a typo) or an invalid value is an
 error naming the file and the key, before any work. A precision set in the
 file counts as given, like `--precision`, and conflicts with `--sample`.
+
+### `sample`
+
+`qc sample <source>... --to <file>` — see [samples](sample.md).
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--to file` | required | the sample written; its extension picks the container (`.mkv` takes any codec) |
+| `--duration` | 60 | length of the sample in seconds, shared equally between the videos; scenes are whole GOPs, so about that long |
+| `--scenes` | mixed | `top` (most complex), `mixed` (complex and representative), `average` (representative of each video) or `easy` |
+| `--top-share` | 0.5 | share of a mixed sample given to the most complex scenes, between 0 and 1 |
+| `--piece` | 2 | least length of a scene in seconds: GOPs are joined until they reach it |
+| `-o`, `-f json` | | the report: every scene taken, with its SI and TI, and the check of the file |
 
 ### `run`
 

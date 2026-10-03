@@ -18,7 +18,7 @@ func TestWizardFormSteps(
 
 	for _, offerGPU := range []bool{false, true} {
 		steps := answers.formSteps(testWizardContext(t, offerGPU))
-		require.Len(t, steps, 22)
+		require.Len(t, steps, 25)
 
 		var sections []section
 
@@ -29,7 +29,7 @@ func TestWizardFormSteps(
 
 		assert.IsNonDecreasing(t, sections, "the sections follow each other")
 		assert.Equal(t, sectionOutputs, steps[len(steps)-1].section)
-		assert.Equal(t, offerGPU, !steps[16].isHidden(), "the GPU is asked only when usable")
+		assert.Equal(t, offerGPU, !steps[19].isHidden(), "the GPU is asked only when usable")
 	}
 
 	assert.Equal(t, []string{actionAnalysis, actionLadder}, answers.Actions, "the defaults the form shows")
