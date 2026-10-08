@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 const (
@@ -25,8 +26,14 @@ const (
 	maxLineSize       = 1024 * 1024
 )
 
-// ErrNotFound is returned when the requested binary is not in PATH.
-var ErrNotFound = errors.New("ffexec: binary not found")
+var (
+	// ErrNotFound is returned when the requested binary is not in PATH.
+	ErrNotFound = errors.New("ffexec: binary not found")
+	// ErrKilled is returned when the process was killed by something else
+	// than this package: on Linux, most often the kernel's out-of-memory
+	// killer, which leaves nothing on stderr.
+	ErrKilled = errors.New("killed from outside, most likely out of memory (give the container more memory, or lower --parallel and --workers)")
+)
 
 // Output runs bin with args and returns its whole stdout.
 func Output(
@@ -178,11 +185,27 @@ func run(
 		return fmt.Errorf("ffexec: %s: %w", bin, parent.Err())
 	case consumeErr != nil:
 		return consumeErr
+	case killed(waitErr):
+		return fmt.Errorf("ffexec: %s: %w", bin, ErrKilled)
 	case waitErr != nil:
 		return fmt.Errorf("ffexec: %s: %w: %s", bin, waitErr, strings.TrimSpace(stderr.String()))
 	}
 
 	return nil
+}
+
+// killed reports whether err is the exit of a process ended by SIGKILL.
+func killed(
+	err error,
+) bool {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		return false
+	}
+
+	status, ok := exit.Sys().(syscall.WaitStatus)
+
+	return ok && status.Signaled() && status.Signal() == syscall.SIGKILL
 }
 
 // pipes connects stdout and extra more outputs to cmd. It returns their

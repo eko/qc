@@ -14,6 +14,7 @@ import (
 	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/decode"
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/internal/limits"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/pipeline"
@@ -47,7 +48,7 @@ func module(
 	config Config,
 ) fx.Option {
 	return fx.Options(
-		fx.Supply(config.Tools, config.Output, config.Overlay, gpuSettingsOf(config)),
+		fx.Supply(config.Tools, config.Output, config.Overlay, gpuSettingsOf(config), resourceLimits(config.Tools)),
 		fx.Provide(
 			func() context.Context { return ctx },
 			newLogger,
@@ -55,7 +56,7 @@ func module(
 			fx.Annotate(newPacketReader, fx.As(new(bitstream.PacketReader))),
 			fx.Annotate(newDecoder, fx.As(new(decode.Source))),
 			fx.Annotate(libvmaf.NewEngine, fx.As(new(quality.Engine))),
-			fx.Annotate(quality.NewMeter, fx.As(new(analysis.Meter))),
+			fx.Annotate(newMeter, fx.As(new(analysis.Meter))),
 			fx.Annotate(analysis.New,
 				fx.As(fx.Self()), fx.As(new(ladder.Inspector)), fx.As(new(pipeline.Analyzer)), fx.As(new(sample.Inspector))),
 			fx.Annotate(newEncoder,
@@ -67,7 +68,7 @@ func module(
 			newRunner,
 			sample.NewEngine,
 		),
-		fx.Invoke(checkGPU, checkOverlay, registerProfile),
+		fx.Invoke(applyLimits, checkGPU, checkOverlay, registerProfile),
 	)
 }
 
@@ -133,9 +134,10 @@ func newPacketReader(
 func newDecoder(
 	tools ToolsConfig,
 	gpu gpuSettings,
+	l limits.Limits,
 	logger *slog.Logger,
 ) *decode.FFmpeg {
-	return decode.NewFFmpeg(tools.FFmpeg, 0, decode.WithHWAccel(gpu.hwaccel), decode.WithLogger(logger))
+	return decode.NewFFmpeg(tools.FFmpeg, toolThreads(l), decode.WithHWAccel(gpu.hwaccel), decode.WithLogger(logger))
 }
 
 // newEncoder is the ffmpeg adapter of every encoding port of the ladder
@@ -143,9 +145,10 @@ func newDecoder(
 // burns; it logs a hardware encoder falling back to x264.
 func newEncoder(
 	tools ToolsConfig,
+	l limits.Limits,
 	logger *slog.Logger,
 ) *encode.FFmpeg {
-	return encode.NewFFmpeg(tools.FFmpeg, encode.WithLogger(logger))
+	return encode.NewFFmpeg(tools.FFmpeg, encode.WithLogger(logger), encode.WithThreads(toolThreads(l)))
 }
 
 // newLadderEngine gives the ladder engine a grain lab, so that AV1 film

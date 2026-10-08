@@ -133,6 +133,11 @@ LABEL org.opencontainers.image.title="qc" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}"
 
+# glibc gives every thread its own malloc arena: with libvmaf's thread pools
+# their fragmentation cost a ladder build about 1.5 GB at 1080p, for no
+# measurable speed.
+ENV MALLOC_ARENA_MAX=2
+
 # libass draws the --overlay in DejaVu Sans Mono (overlay.DefaultFont).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

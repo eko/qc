@@ -734,22 +734,39 @@ func TestWithPTS(
 func TestParallelism(
 	t *testing.T,
 ) {
+	const thread = 1920 * 1080 * threadBytesPerPixel
+
+	cpus := runtime.GOMAXPROCS(0)
+
 	testCases := []struct {
 		name        string
 		workers     int
+		memory      int64
 		wantWorkers int
+		wantThreads int
 	}{
-		{name: "auto", wantWorkers: max(1, runtime.NumCPU()/2)},
-		{name: "set", workers: 3, wantWorkers: 3},
+		{name: "auto", wantWorkers: max(1, cpus/2), wantThreads: max(1, cpus/max(1, cpus/2))},
+		{name: "set", workers: 1, wantWorkers: 1, wantThreads: cpus},
+		{
+			name: "memory lowers the workers, not their threads", workers: cpus, memory: 2*thread + thread/2,
+			wantWorkers: min(cpus, 2), wantThreads: 1,
+		},
+		{name: "memory for one thread", workers: 1, memory: thread, wantWorkers: 1, wantThreads: 1},
+		{name: "memory for none still scores", workers: 1, memory: thread / 2, wantWorkers: 1, wantThreads: 1},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			r := &run{opts: Options{Workers: testCase.workers}}
+			r := &run{
+				meter:    NewMeter(nil, nil, WithMemory(testCase.memory)),
+				spec:     vmaf.ModelSpec{Width: 1920, Height: 1080},
+				bitDepth: 8,
+				opts:     Options{Workers: testCase.workers},
+			}
 			workers, threads := r.parallelism()
 
 			assert.Equal(t, testCase.wantWorkers, workers)
-			assert.Equal(t, max(1, runtime.NumCPU()/workers), threads)
+			assert.Equal(t, testCase.wantThreads, threads)
 		})
 	}
 }

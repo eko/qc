@@ -166,9 +166,10 @@ func fakeRun(
 	}
 
 	return &run{
-		n:    n,
-		ref:  Input{Bitstream: &bitstream.Report{PTS: pts, Keyframes: keys(refGOP)}},
-		dist: Input{Bitstream: &bitstream.Report{PTS: pts, Keyframes: keys(distGOP)}},
+		meter: &Meter{},
+		n:     n,
+		ref:   Input{Bitstream: &bitstream.Report{PTS: pts, Keyframes: keys(refGOP)}},
+		dist:  Input{Bitstream: &bitstream.Report{PTS: pts, Keyframes: keys(distGOP)}},
 	}
 }
 

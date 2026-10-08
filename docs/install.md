@@ -96,6 +96,26 @@ On macOS, Docker runs in a virtual machine: scores match a native build
 (VMAF means within 1e-6 of a native macOS build on the same input, identical
 ladders) but a native install is faster on long titles, and the VM only sees the CPUs and memory given to Docker Desktop.
 
+### Resource limits
+
+qc follows the limits of its container: `docker run --cpus 4` sizes its
+workers, libvmaf threads and ffmpeg threads on 4 CPUs, and `docker run
+--memory 4g` lowers how many clips are scored and probes encoded at once
+until the run fits. `--cpus` and `--memory` set the same limits by hand, in
+or out of a container. The results do not change, only the time.
+
+Measured in this image on an H.264 ladder of a 1080p title (12 CPUs): about
+4.2 GB at its peak without a limit — some 165 MB per libvmaf thread (a
+ladder runs two measurements at a time, each on every CPU), 620 MB per
+probe encoded at once, 0.8 GB otherwise. The same ladder peaked at 3.5 GB
+under `--memory 4g`, 1.7 GB under `3g` and 1.3 GB under `2g`, with the same
+rungs. Memory grows with the resolution (count four times as much for
+2160p) and the ladder's work directory (`/tmp` of the container) held 3 GB.
+
+A process the kernel kills for lack of memory cannot say so: `docker run`
+then ends with exit code 137 and no message. Give the container more
+memory, or lower `--cpus` or `--parallel`.
+
 ### What is inside
 
 | Component | Version | Source |
@@ -261,6 +281,9 @@ Docker image, Homebrew's ffmpeg, or point qc at another build with
 **`--overlay: ffmpeg has no subtitles filter`** (`- libass` in `qc version
 --check`): your ffmpeg was built without libass. Use the Docker image,
 Homebrew's ffmpeg, or a build configured with `--enable-libass`.
+
+**Docker: qc stops without a message, exit code 137**: the container ran out
+of memory. See [resource limits](#resource-limits).
 
 **Docker: `permission denied` writing a report**: on Linux the image user
 cannot write into your directory. Add `--user "$(id -u):$(id -g)"`.

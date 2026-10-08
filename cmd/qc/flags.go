@@ -289,6 +289,7 @@ func ladderOptions(
 		Devices:        config.Quality.Devices,
 		HDRMetric:      config.Quality.hdrMetric(),
 		Parallel:       l.Parallel,
+		Memory:         resourceLimits(config.Tools).Memory,
 		BitDepth:       l.EncodeBitDepth,
 		Probing:        ladder.Probing(l.Probing),
 		DigestSampling: ladder.DigestSampling(l.Digest),

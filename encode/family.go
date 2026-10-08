@@ -2,6 +2,7 @@ package encode
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -133,7 +134,7 @@ func (x265) supports(
 // svtAV1 is libsvtav1, the only family synthesising film grain.
 type svtAV1 struct{ cpuFamily }
 
-// privateArgs gather film grain synthesis and HDR10 metadata in one
+// privateArgs gather film grain synthesis, HDR10 metadata and the thread cap in one
 // -svtav1-params: ffmpeg keeps only the last of repeated options.
 func (svtAV1) privateArgs(
 	p Params,
@@ -141,6 +142,12 @@ func (svtAV1) privateArgs(
 	params := p.Signal.svtParams()
 	if p.FilmGrain > 0 {
 		params = append(grainParams(p.FilmGrain), params...)
+	}
+
+	if p.Threads > 0 {
+		// SVT-AV1 ignores ffmpeg's -threads: lp is its own cap, and its
+		// memory follows it.
+		params = append(params, "lp="+strconv.Itoa(p.Threads))
 	}
 
 	if len(params) == 0 {

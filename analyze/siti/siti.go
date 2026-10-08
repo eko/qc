@@ -61,7 +61,7 @@ func New(
 	workers int,
 ) *Analyzer {
 	if workers <= 0 {
-		workers = runtime.NumCPU()
+		workers = runtime.GOMAXPROCS(0)
 	}
 
 	return &Analyzer{workers: workers}

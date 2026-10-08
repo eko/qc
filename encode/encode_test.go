@@ -94,6 +94,25 @@ func TestArgs(
 			notWant: []string{"-sc_threshold", "-x265-params"},
 		},
 		{
+			name:    "x264 thread cap",
+			codec:   "h264",
+			params:  Params{Width: 640, Height: 360, CRF: 30, Threads: 4},
+			want:    []string{"-threads", "4"},
+			notWant: []string{"-svtav1-params"},
+		},
+		{
+			name:   "SVT-AV1 thread cap goes through its own parameter",
+			codec:  "av1",
+			params: Params{Width: 640, Height: 360, CRF: 30, Threads: 4},
+			want:   []string{"-threads", "4", "-svtav1-params", "lp=4"},
+		},
+		{
+			name:    "no thread cap by default",
+			codec:   "av1",
+			params:  Params{Width: 640, Height: 360, CRF: 30},
+			notWant: []string{"-threads", "-svtav1-params"},
+		},
+		{
 			name:   "10-bit and preset override",
 			codec:  "av1",
 			params: Params{Width: 640, Height: 360, CRF: 40, Preset: "6", BitDepth: 10},

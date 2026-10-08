@@ -202,7 +202,7 @@ func (f *FFmpeg) encodeParts(
 				report = func(n int) { total.update(i, n) }
 			}
 
-			args := append(progressArgs(progress != nil), codec.chunkArgs(src, parts[i], chunk, p)...)
+			args := append(progressArgs(progress != nil), codec.chunkArgs(src, parts[i], chunk, f.capped(p))...)
 			if err := f.encodeWatched(gctx, args, parts[i], report); err != nil {
 				return fmt.Errorf("encode %s chunk %d with %s: %w", src.Path, i+1, codec.Encoder, err)
 			}

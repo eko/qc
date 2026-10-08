@@ -313,7 +313,7 @@ func (a *Analyzer) runSegments(
 
 	threads := opts.DecoderThreads
 	if threads <= 0 {
-		threads = max(minDecoderThreads, runtime.NumCPU()/decoders)
+		threads = max(minDecoderThreads, runtime.GOMAXPROCS(0)/decoders)
 	}
 
 	reqs := segmentRequests(req, bounds, bs, threads)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/eko/qc/audio/loudness"
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/internal/limits"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/quality"
 )
@@ -68,6 +69,9 @@ type ToolsConfig struct {
 	FFprobe  string `mapstructure:"ffprobe"`
 	FFmpeg   string `mapstructure:"ffmpeg"`
 	LogLevel string `mapstructure:"log-level"`
+	// CPUs and Memory bound the resources of the run (see resourceLimits).
+	CPUs   int    `mapstructure:"cpus"`
+	Memory string `mapstructure:"memory"`
 }
 
 // OutputConfig is where and how reports are written (addOutputFlags), and
@@ -194,11 +198,24 @@ func (c Config) validate() error {
 	return nil
 }
 
-// validate checks the log level.
-func (c ToolsConfig) validate() error {
-	_, err := parseLogLevel(c.LogLevel)
+// ErrInvalidCPUs is returned for a negative --cpus.
+var ErrInvalidCPUs = errors.New("invalid --cpus")
 
-	return err
+// validate checks the log level and the resource limits.
+func (c ToolsConfig) validate() error {
+	if _, err := parseLogLevel(c.LogLevel); err != nil {
+		return err
+	}
+
+	if c.CPUs < 0 {
+		return fmt.Errorf("%w %d: want a number of CPUs, or 0 for all of them", ErrInvalidCPUs, c.CPUs)
+	}
+
+	if _, err := limits.ParseMemory(c.Memory); err != nil {
+		return fmt.Errorf("invalid --memory: %w", err)
+	}
+
+	return nil
 }
 
 // parseLogLevel reads a slog level name (debug, info, warn, error).

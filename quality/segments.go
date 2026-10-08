@@ -66,23 +66,26 @@ func segmentDecoders(
 func (r *run) exactPlan(
 	st *stratum,
 ) ([]clip, int, int) {
-	cpus := runtime.NumCPU()
+	cpus := runtime.GOMAXPROCS(0)
 	whole := []clip{{stratum: st, from: 0, to: r.n}}
 
+	_, wholeThreads := r.fitMemory(1, cpus)
+
 	if r.decoders <= 1 {
-		return whole, 1, cpus
+		return whole, 1, wholeThreads
 	}
 
 	workers := min(segmentWorkers, cpus)
+	workers, threads := r.fitMemory(workers, max(1, cpus/workers))
 
 	clips := r.segmentClips(st, workers)
 	if len(clips) == 1 {
-		return whole, 1, cpus
+		return whole, 1, wholeThreads
 	}
 
 	r.segments = true
 
-	return clips, workers, max(1, cpus/workers)
+	return clips, workers, threads
 }
 
 // segmentClips splits the video into clips of about equal length starting

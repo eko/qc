@@ -82,13 +82,21 @@ func (r *run) seekRuns(
 }
 
 // work scores queued clips on its own model instances (and pure-Go
-// meters) until the queue closes, freeing a slot after each clip.
+// meters) until the queue closes, freeing a slot after each clip. It first
+// waits for its share of the Meter's memory budget, when there is one.
 func (r *run) work(
+	ctx context.Context,
 	queue <-chan *clipJob,
 	slots <-chan struct{},
 	threads int,
 	collect func(clipResult, int),
 ) error {
+	release, err := r.meter.memory.acquire(ctx, r.threadCost()*int64(threads))
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	meter := r.newGoMeters(threads)
 
 	score := func(job *clipJob) (clipResult, error) {

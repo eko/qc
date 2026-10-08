@@ -139,6 +139,8 @@ the dashboard.
 | `--html file.html` | also write a self-contained, interactive HTML report (see [Reports](#reports)) |
 | `--ffmpeg`, `--ffprobe` | binaries (default from `PATH`) |
 | `--log-level` | debug, info, warn, error |
+| `--cpus N` | CPUs used by qc and the ffmpeg processes it starts: worker counts, libvmaf threads, decoder and encoder threads (default 0: all those of the machine, or of the container's CPU quota) |
+| `--memory 4g` | memory qc and its ffmpeg processes may use (`4g`, `512m`, bytes): fewer clips are scored and fewer probes encoded at once to fit, the results do not change (default: the container's memory limit, if any) — see [resource limits](install.md#resource-limits) |
 | `--config file` | [configuration file](#configuration-file) (YAML, TOML or JSON; also `QC_CONFIG`) |
 
 ### Configuration file
@@ -225,7 +227,7 @@ Loudness and defects of the audio tracks, decoded while the frames are
 | `--model` | auto | `auto`, a model name, a `.json` path or a built-in version |
 | `--model-dir` | Homebrew/`/usr/local`/`/usr` model dirs | where model files are searched |
 | `--vmaf-bit-depth` | 0 (auto) | 8 or 10 |
-| `--workers` | 0 (NumCPU/2) | clips scored concurrently |
+| `--workers` | 0 (half the CPUs) | clips scored concurrently |
 | `--metrics` | xpsnr,cambi,psnr | metrics measured on the frames VMAF decodes, each with its own CI: `xpsnr`, `cambi`, `psnr`, `psnr-hvs`, `ssim`, `ms-ssim`, `ciede2000`; `--metrics=` for VMAF only |
 | `--av2-ctc` | off | add the AOM AV2 CTC set: PSNR Y/Cb/Cr and PSNR-YUV 14:1:1, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI (MS-SSIM and CIEDE2000 cost 4× and 9× VMAF) |
 | `--devices` | none | also score the VMAF v1 model of `phone`, `tv`, `4k` (HFR variants above 30 fps); `4k` against a 1080p primary is a second pass at 2160p |

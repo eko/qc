@@ -35,7 +35,7 @@ func (f *FFmpeg) EncodeRendition(
 	}
 
 	args := progressArgs(spec.Progress != nil)
-	args = append(append(append(args, "-i", spec.Source.Path), codec.Args(spec.Params)...), spec.Destination)
+	args = append(append(append(args, "-i", spec.Source.Path), codec.Args(f.capped(spec.Params))...), spec.Destination)
 
 	if err := f.encodeWatched(ctx, args, spec.Destination, spec.Progress); err != nil {
 		_ = os.Remove(spec.Destination)

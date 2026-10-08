@@ -67,3 +67,15 @@ func TestStreamPairOutputPipeFailure(
 	err := StreamPair(testContext(t), "ffmpeg", []string{"-version"}, func(_, _ io.Reader) error { return nil })
 	require.ErrorIs(t, err, errNoDescriptor)
 }
+
+func TestStreamKilledFromOutside(
+	t *testing.T,
+) {
+	err := Stream(testContext(t), "sh", []string{"-c", "kill -KILL $$"}, func(r io.Reader) error {
+		_, err := io.Copy(io.Discard, r)
+
+		return err
+	})
+
+	require.ErrorIs(t, err, ErrKilled)
+}

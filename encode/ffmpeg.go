@@ -37,6 +37,9 @@ type FFmpeg struct {
 	// WithStallTimeout).
 	stall time.Duration
 
+	// threads caps the threads of every encode (see WithThreads).
+	threads int
+
 	// autoOnce resolves BurnAuto once: auto is the encoder it stands for.
 	autoOnce sync.Once
 	auto     BurnEncoder
@@ -70,6 +73,29 @@ func NewFFmpeg(
 	return f
 }
 
+// WithThreads caps the threads of every encode at threads (0, the default,
+// leaves each encoder to size itself on the cores of the machine): a
+// process limited to some CPUs, by a container or by its user, would
+// otherwise start encoders sized for all of them.
+func WithThreads(
+	threads int,
+) Option {
+	return func(f *FFmpeg) {
+		f.threads = threads
+	}
+}
+
+// capped is p with the thread cap of f, unless p sets its own.
+func (f *FFmpeg) capped(
+	p Params,
+) Params {
+	if p.Threads == 0 {
+		p.Threads = f.threads
+	}
+
+	return p
+}
+
 // Encode encodes src into dst with codec and the settings of p.
 func (f *FFmpeg) Encode(
 	ctx context.Context,
@@ -77,7 +103,7 @@ func (f *FFmpeg) Encode(
 	src, dst string,
 	p Params,
 ) error {
-	args := append([]string{"-v", "error", "-nostdin", "-y", "-i", src}, codec.Args(p)...)
+	args := append([]string{"-v", "error", "-nostdin", "-y", "-i", src}, codec.Args(f.capped(p))...)
 	args = append(args, dst)
 
 	if err := f.encodeWatched(ctx, args, dst, nil); err != nil {

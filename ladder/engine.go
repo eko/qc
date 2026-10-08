@@ -181,6 +181,10 @@ type Options struct {
 	BitDepth int
 	// WorkDir holds temporary files (default: a new directory in os.TempDir).
 	WorkDir string
+	// Memory is the memory the build may use, in bytes (0: unknown, no
+	// limit): Parallel is lowered until the ffmpeg processes of the probes
+	// fit in their share of it (see fitParallel).
+	Memory int64
 	// Progress, when set, is called as the build advances. Calls never
 	// overlap, and Done only increases within a batch of measurements.
 	Progress func(Progress)
@@ -362,6 +366,8 @@ func (e *Engine) newBuild(
 	res *Result,
 	p *program,
 ) *build {
+	opts.Parallel = fitParallel(opts.Parallel, opts.Memory, video.Width*video.Height)
+
 	run := &build{
 		engine: e, codec: codec, opts: opts, source: prepared.source, prepared: prepared, workDir: dir,
 		video: video, origin: videoOrigin(res.Source, video),

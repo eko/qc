@@ -213,11 +213,18 @@ does not allocate.
   applies backpressure to the decoder instead of letting frames pile up in
   memory (a bug caught during development: an unbounded queue grew to 11 GB
   on a 10-minute exact VMAF run).
-- CPU is split explicitly: VMAF clips run on `NumCPU/2` workers with
-  `NumCPU/workers` libvmaf threads each; ladder probes run two at a time; the
-  frame analysis decodes up to `NumCPU` segments at once, each analysed by
-  its own goroutine (a single-pass analysis runs SI/TI on a pool of
-  `NumCPU` goroutines).
+- CPU is split explicitly: VMAF clips run on half the CPUs as workers, with
+  `CPUs/workers` libvmaf threads each; ladder probes run two at a time; the
+  frame analysis decodes up to one segment per CPU at once, each analysed by
+  its own goroutine (a single-pass analysis runs SI/TI on a pool of one
+  goroutine per CPU). The CPUs are those of `--cpus`, else of the
+  container's quota, else of the machine (`runtime.GOMAXPROCS`).
+- Memory follows concurrency. The frames of every measurement come from
+  pools shared by the `quality.Meter` (one pool per sweep left gigabytes of
+  dead frames between two rare garbage collections). Under a memory limit
+  (`--memory`, or the container's), the scoring workers of all concurrent
+  measurements draw on one budget (`quality.WithMemory`) and a ladder
+  lowers its parallelism (`ladder.Options.Memory`).
 - The hot loops of the frame analysis (Sobel, SI's square roots, TI, luma
   statistics, thumbnails) have NEON versions on arm64 (`*_arm64.s`, with
   their encodings generated from the mnemonics in comments) next to the

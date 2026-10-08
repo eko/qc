@@ -47,7 +47,7 @@ func (r *run) sweep(
 	inFlight := max(minInFlight, 2*workers)
 	queue := make(chan *clipJob, inFlight)
 	slots := make(chan struct{}, inFlight)
-	pool := frame.NewPool(r.spec.Width, r.spec.Height, frame.PoolOptions{Chroma: true, HighBitDepth: r.bitDepth > 8})
+	pool := r.meter.pools.get(r.spec.Width, r.spec.Height, r.bitDepth > 8)
 	selection := selectRanges(jobs, w)
 
 	group, gctx := errgroup.WithContext(ctx)
@@ -74,7 +74,7 @@ func (r *run) sweep(
 
 	for range min(workers, len(jobs)) {
 		group.Go(func() error {
-			return r.work(queue, slots, threads, collect)
+			return r.work(gctx, queue, slots, threads, collect)
 		})
 	}
 

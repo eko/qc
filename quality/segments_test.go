@@ -240,7 +240,7 @@ func TestExactPlan(
 	}{
 		{name: "no hardware sessions", n: 3000, decoders: 1, wantClips: 1, wantWorkers: 1},
 		{name: "too short to split", n: 900, decoders: 12, wantClips: 1, wantWorkers: 1},
-		{name: "segments", n: 3000, decoders: 12, wantClips: 6, wantWorkers: min(segmentWorkers, runtime.NumCPU()), wantSegments: true},
+		{name: "segments", n: 3000, decoders: 12, wantClips: 6, wantWorkers: min(segmentWorkers, runtime.GOMAXPROCS(0)), wantSegments: true},
 	}
 
 	for _, testCase := range testCases {
@@ -252,7 +252,7 @@ func TestExactPlan(
 
 			assert.Len(t, clips, testCase.wantClips)
 			assert.Equal(t, testCase.wantWorkers, workers)
-			assert.Equal(t, max(1, runtime.NumCPU()/workers), threads)
+			assert.Equal(t, max(1, runtime.GOMAXPROCS(0)/workers), threads)
 			assert.Equal(t, testCase.wantSegments, r.segments)
 			assert.Equal(t, 0, clips[0].from)
 			assert.Equal(t, testCase.n, clips[len(clips)-1].to)

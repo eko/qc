@@ -131,6 +131,9 @@ type Params struct {
 	// Signal is the colour signal the encode carries (HDR sources); the
 	// zero value leaves it to the input frames.
 	Signal Signal
+	// Threads caps the threads of the encoder (0 = its own choice, from the
+	// cores of the machine). An FFmpeg built WithThreads sets it.
+	Threads int
 
 	// preFilter is a filter chain, ending with a comma, run before the
 	// scaling: a chunked encode trims its preroll there and restarts its
@@ -180,6 +183,10 @@ func (c Codec) Args(
 	}
 
 	args = append(args, impl.privateArgs(p)...)
+	if p.Threads > 0 {
+		args = append(args, "-threads", strconv.Itoa(p.Threads))
+	}
+
 	if c.Name == "hevc" {
 		// hvc1 is the sample entry Apple players require for HEVC in MP4,
 		// whichever encoder produced it.

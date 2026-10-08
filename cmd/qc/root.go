@@ -39,6 +39,8 @@ func newRootCommand(
 	flags.String("ffmpeg", "ffmpeg", "ffmpeg binary")
 	flags.String("log-level", "warn", "log level: debug, info, warn or error")
 	flags.String(configFlag, "", "configuration file (YAML, TOML or JSON) keyed by flag name")
+	flags.Int("cpus", 0, "CPUs used by qc and the ffmpeg processes it starts (0 = all those of the machine, or of the container's CPU quota)")
+	flags.String("memory", "", "memory qc and its ffmpeg processes may use (4g, 512m): concurrency is lowered to fit (default: the container's memory limit, if any)")
 
 	root.AddCommand(
 		commands.run,

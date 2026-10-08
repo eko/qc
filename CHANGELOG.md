@@ -9,6 +9,29 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Added
+
+- **`--cpus` and `--memory`** (every command): the CPUs and the memory qc
+  and the ffmpeg processes it starts may use. `--memory` defaults to the
+  memory limit of the container, and the CPU quota of a container
+  (`docker run --cpus`) is now followed: worker counts, libvmaf threads and
+  the threads of the decoders and encoders are sized on it instead of on
+  the cores of the host. Under a memory limit fewer clips are scored and
+  fewer probes encoded at once; the results do not change. Library:
+  `quality.WithMemory`, `ladder.Options.Memory`, `encode.WithThreads`,
+  `encode.Params.Threads`.
+
+### Fixed
+
+- **Memory of ladder builds**: the decoded frames of every measurement pass
+  were left to a garbage collector that rarely ran, and a build kept
+  gigabytes of dead frames (9.5 GB for qc on an H.264 ladder of a 1080p
+  title, 4.7 GB now). The Docker images also set `MALLOC_ARENA_MAX=2`
+  (3.3 GB). In a container short of memory the build was killed without a
+  message.
+- An ffmpeg process killed from outside (the kernel's out-of-memory killer)
+  is reported as such instead of `signal: killed`.
+
 ## [1.2.0] - 2026-10-03
 
 ### Added

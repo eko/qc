@@ -204,9 +204,13 @@ LABEL org.opencontainers.image.title="qc (CUDA)" \
       org.opencontainers.image.version="${VERSION}"
 
 # video: NVDEC/NVENC libraries, compute: libcuda (CUDA VMAF, scale_cuda).
+# MALLOC_ARENA_MAX: glibc gives every thread its own malloc arena, whose
+# fragmentation cost a CPU ladder build about 1.5 GB at 1080p (see
+# Dockerfile).
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
-    PATH=/opt/ffmpeg/bin:${PATH}
+    PATH=/opt/ffmpeg/bin:${PATH} \
+    MALLOC_ARENA_MAX=2
 
 # libass draws the --overlay in DejaVu Sans Mono (overlay.DefaultFont).
 # Ubuntu packages only, as in the toolchain.

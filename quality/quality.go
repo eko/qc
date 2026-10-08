@@ -145,6 +145,23 @@ type Progress struct {
 type Meter struct {
 	decoder decode.Source
 	engine  Engine
+	pools   framePools
+	memory  memoryBudget
+}
+
+// MeterOption configures a Meter.
+type MeterOption func(*Meter)
+
+// WithMemory bounds the memory of the scoring workers of the Meter, over
+// all its concurrent measurements, to bytes (0, the default: no bound).
+// Fewer clips are then scored at once, each on more libvmaf threads; the
+// scores do not change.
+func WithMemory(
+	bytes int64,
+) MeterOption {
+	return func(m *Meter) {
+		m.memory = newMemoryBudget(bytes)
+	}
 }
 
 // NewMeter returns a Meter decoding with decoder and scoring with engine
@@ -152,8 +169,14 @@ type Meter struct {
 func NewMeter(
 	decoder decode.Source,
 	engine Engine,
+	opts ...MeterOption,
 ) *Meter {
-	return &Meter{decoder: decoder, engine: engine}
+	m := &Meter{decoder: decoder, engine: engine}
+	for _, opt := range opts {
+		opt(m)
+	}
+
+	return m
 }
 
 // clip is a unit of work: frames [from, to) scored with warm-up frames around
@@ -550,16 +573,17 @@ func pendingClips(
 
 // parallelism splits the CPU between concurrently scored clips and libvmaf
 // threads per clip. Clips are short, so parallelism across clips pays more
-// than libvmaf's per-frame threading.
+// than libvmaf's per-frame threading. A memory budget lowers the workers,
+// not the threads of each: memory follows the total of threads.
 func (r *run) parallelism() (workers, threads int) {
-	cpus := runtime.NumCPU()
+	cpus := runtime.GOMAXPROCS(0)
 	workers = r.opts.Workers
 
 	if workers <= 0 {
 		workers = max(1, cpus/2)
 	}
 
-	return workers, max(1, cpus/workers)
+	return r.fitMemory(workers, max(1, cpus/workers))
 }
 
 // report counts a scored clip and reports progress.
