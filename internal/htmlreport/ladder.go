@@ -39,7 +39,7 @@ func ladderPage(
 	p := page{
 		Title: fmt.Sprintf("%s ladder · %s", r.Codec.Name, ladderSubject(r)),
 		Subtitle: fmt.Sprintf("%d rungs · digest of %d segments (%.1f%% of the %s%s) · %d probe encodes%s · %s",
-			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, ladderScope(r), samplingNote(r.Digest.Sampling), len(r.Probes), probingNote(r.Probing), r.Elapsed.Std().Round(time.Second)),
+			len(r.Rungs), len(r.Digest.Segments), r.Digest.Share*100, ladderScope(r), samplingNote(r.Digest.Sampling), r.ProbeEncodes(), probingNote(r.Probing, len(r.Probes)-r.ProbeEncodes()), r.Elapsed.Std().Round(time.Second)),
 		Sections: slices.Concat([]section{{
 			Title:    "Rate / quality",
 			Subtitle: "probe encodes per resolution, their upper envelope and the selected rungs",
@@ -591,6 +591,7 @@ func samplingNote(
 // probingNote describes adaptive probing in the page subtitle.
 func probingNote(
 	p ladder.ProbingReport,
+	predicted int,
 ) string {
 	var parts []string
 
@@ -601,6 +602,10 @@ func probingNote(
 		}
 
 		parts = append(parts, fmt.Sprintf("adaptive, %d rounds, %s", p.Rounds, state))
+	}
+
+	if p.Model != nil {
+		parts = append(parts, p.Model.Note(predicted))
 	}
 
 	if p.Challengers > 0 {
@@ -649,8 +654,12 @@ func ladderCards(
 		probing += fmt.Sprintf(", %d rounds", r.Probing.Rounds)
 	}
 
+	if predicted := len(r.Probes) - r.ProbeEncodes(); predicted > 0 {
+		probing += fmt.Sprintf(", %d more predicted", predicted)
+	}
+
 	return append(cards,
-		card{Label: "Probe encodes", Value: strconv.Itoa(len(r.Probes)), Detail: probing},
+		card{Label: "Probe encodes", Value: strconv.Itoa(r.ProbeEncodes()), Detail: probing},
 		card{Label: "Digest", Value: fmt.Sprintf("%.1f%%", r.Digest.Share*100), Detail: plural(len(r.Digest.Segments), "segment") + " of the " + digestSubject(r)},
 	)
 }

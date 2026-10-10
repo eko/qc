@@ -69,7 +69,11 @@ the mounted directory.
   `qc vmaf /masters/source.mov encode.mp4 -o report.json`.
 - **Live dashboard**: add `-it` to get the dashboard and the wizard
   (`docker run --rm -it -v "$PWD:/data" ghcr.io/eko/qc`). Without a terminal,
-  output stays plain, as in CI.
+  nothing is drawn and qc is silent until its report.
+- **Progress in the logs**: `--plain`, or `-e QC_PLAIN=1`, writes the
+  progress as plain lines on stderr, one per event
+  ([details](cli.md#plain-progress---plain)):
+  `docker run --rm -e QC_PLAIN=1 -v "$PWD:/data" ghcr.io/eko/qc ladder source.mov`.
 - **Configuration**: every flag has a `QC_` environment variable:
   `-e QC_PRECISION=0.25 -e QC_LOG_LEVEL=info`.
 - **An alias** makes the image feel native:

@@ -55,20 +55,37 @@ func TestProbingNote(
 	t *testing.T,
 ) {
 	testCases := []struct {
-		name string
-		in   ladder.ProbingReport
-		want string
+		name      string
+		in        ladder.ProbingReport
+		predicted int
+		want      string
 	}{
 		{name: "fixed", in: ladder.ProbingReport{Mode: ladder.ProbingFixed}, want: ""},
 		{name: "converged", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 3, Converged: true}, want: " (adaptive, 3 rounds, converged)"},
 		{name: "budget", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 5}, want: " (adaptive, 5 rounds, budget reached)"},
 		{name: "fixed with challengers", in: ladder.ProbingReport{Mode: ladder.ProbingFixed, Challengers: 4}, want: " (4 challenger probes)"},
 		{name: "adaptive with challengers", in: ladder.ProbingReport{Mode: ladder.ProbingAdaptive, Rounds: 4, Converged: true, Challengers: 2}, want: " (adaptive, 4 rounds, converged, 2 challenger probes)"},
+		{
+			name:      "model",
+			in:        ladder.ProbingReport{Mode: ladder.ProbingModel, Rounds: 1, Model: &ladder.ModelProbing{Titles: 3, MeanVMAFError: 0.74}},
+			predicted: 35,
+			want:      " (35 more predicted by a model of 3 titles, within 0.7 VMAF on average on titles it had not seen)",
+		},
+		{
+			name: "model not validated, with challengers",
+			in:   ladder.ProbingReport{Mode: ladder.ProbingModel, Rounds: 2, Challengers: 1, Model: &ladder.ModelProbing{Titles: 1}}, predicted: 35,
+			want: " (35 more predicted by a model of 1 titles, 1 challenger probes)",
+		},
+		{
+			name: "model not used",
+			in:   ladder.ProbingReport{Mode: ladder.ProbingFixed, Rounds: 1, Model: &ladder.ModelProbing{Fallback: "the model is for h264 slow on 1080p sources, not h264 fast on 1080p"}},
+			want: " (ladder model not used: the model is for h264 slow on 1080p sources, not h264 fast on 1080p)",
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.want, probingNote(testCase.in))
+			assert.Equal(t, testCase.want, probingNote(testCase.in, testCase.predicted))
 		})
 	}
 }

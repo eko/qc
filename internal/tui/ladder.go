@@ -76,7 +76,7 @@ func ladderHeader(
 		key.Render("target") + Bold.Render(res.Codec.Name) + Subtle.Render(fmt.Sprintf(" (%s, preset %s)", res.Codec.Encoder, res.Preset)) + "\n" +
 		key.Render("shape") + Subtle.Render(shapeLabel(res)) + "\n" +
 		key.Render("digest") + Subtle.Render(fmt.Sprintf("%d segment(s)%s · %s · %.1f%% of the %s · %d probe encodes%s",
-		len(res.Digest.Segments), samplingLabel(res.Digest.Sampling), Clock(res.Digest.Duration, false), res.Digest.Share*100, digestScope(res), len(res.Probes), probingLabel(res.Probing))) +
+		len(res.Digest.Segments), samplingLabel(res.Digest.Sampling), Clock(res.Digest.Duration, false), res.Digest.Share*100, digestScope(res), res.ProbeEncodes(), probingLabel(res.Probing, len(res.Probes)-res.ProbeEncodes()))) +
 		grainLine(res.Grain)
 }
 
@@ -327,6 +327,7 @@ func gainStyle(
 // and the challenger probes.
 func probingLabel(
 	p ladder.ProbingReport,
+	predicted int,
 ) string {
 	var parts []string
 
@@ -337,6 +338,10 @@ func probingLabel(
 		}
 
 		parts = append(parts, fmt.Sprintf("adaptive: %d rounds, budget %d, %s", p.Rounds, p.Budget, state))
+	}
+
+	if p.Model != nil {
+		parts = append(parts, p.Model.Note(predicted))
 	}
 
 	if p.Challengers > 0 {

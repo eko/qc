@@ -47,6 +47,12 @@ func (b *build) levelProbes(
 	ctx context.Context,
 	probes []Probe,
 ) ([]Probe, error) {
+	// Probes all predicted by a model are on the scale of its corpus,
+	// scored on every frame: there is no sampled level to correct.
+	if !slices.ContainsFunc(probes, func(p Probe) bool { return !p.Predicted }) {
+		return probes, nil
+	}
+
 	job, ok := b.levelJob(probes)
 	if !ok {
 		return probes, nil

@@ -7,6 +7,9 @@ qc analyze <file>       technical analysis
 qc vmaf <ref> <dist>    VMAF of dist against ref
 qc ladder <source>...   per-title ladder (-c h264,av1 for several codecs); several sources: one ladder for all
 qc sample <source>...   a sample of the videos: their most complex, representative or easiest scenes, copied
+qc model corpus <source or folder>...   measure and describe titles on a grid of resolutions and CRFs, for a ladder model
+qc model train <corpus>...    train a ladder model: qc ladder --ladder-model then measures a few probes and predicts the rest,
+                              or none at all with --instant
 qc version [--check]    versions of qc, Go and libvmaf; --check: the environment
 ```
 
@@ -48,6 +51,33 @@ In a terminal, every command draws a live dashboard on stderr:
   subprocesses are killed).
 - Without a terminal (pipes, CI), or in a background job (`qc run … &`,
   `brew test`), nothing is drawn and output stays clean.
+
+### Plain progress: `--plain`
+
+`--plain` (or `QC_PLAIN=1`) replaces the dashboard by plain lines on stderr,
+one per event, without colours nor cursor moves, and nothing is read from
+the keyboard: what a container, a CI job or a log file wants. It also
+applies in a terminal (`docker run -t`), and `qc` without a command then
+prints its help instead of starting the wizard.
+
+```
+qc ladder · source.mp4
+[1/2] Inspect: started
+[1/2] Inspect: done in 0.1s · h264 · 1920×1080 · 25 fps · 10m36s
+[2/2] Ladder · h264: started
+[2/2] Ladder · h264: 4/15 encodes (26%) after 21.4s · probe encodes
+[2/2] Ladder · h264: done in 1m42s · 6 rungs · top 1080p @ 4.68 Mb/s
+qc ladder: done in 1m42s
+```
+
+Each stage says when it starts and ends (with its summary, or `failed`),
+and its progress every ten seconds at most. The reports are unchanged:
+stdout, `-o` and `--html`. Without `--plain` and without a terminal, qc
+stays silent until its report, as before.
+
+`--quiet` (or `QC_QUIET=1`) is the opposite: no progress at all, in a
+terminal either. With `-f json` the only output is the JSON on stdout, and
+stderr stays empty unless the command fails.
 
 Charts use braille characters (2×4 dots per cell) and bars use `━`: both are
 single-width, so layouts stay aligned in every terminal.
@@ -139,6 +169,8 @@ the dashboard.
 | `--html file.html` | also write a self-contained, interactive HTML report (see [Reports](#reports)) |
 | `--ffmpeg`, `--ffprobe` | binaries (default from `PATH`) |
 | `--log-level` | debug, info, warn, error |
+| `--quiet` | no progress at all, neither dashboard nor lines: the report alone. With `-f json`, stdout holds the JSON and stderr nothing, unless the command fails; `QC_QUIET=1` does the same |
+| `--plain` | no live dashboard nor wizard: progress as plain lines on stderr ([details](#plain-progress---plain)); `QC_PLAIN=1` does the same |
 | `--cpus N` | CPUs used by qc and the ffmpeg processes it starts: worker counts, libvmaf threads, decoder and encoder threads (default 0: all those of the machine, or of the container's CPU quota) |
 | `--memory 4g` | memory qc and its ffmpeg processes may use (`4g`, `512m`, bytes): fewer clips are scored and fewer probes encoded at once to fit, the results do not change (default: the container's memory limit, if any) — see [resource limits](install.md#resource-limits) |
 | `--config file` | [configuration file](#configuration-file) (YAML, TOML or JSON; also `QC_CONFIG`) |
@@ -182,6 +214,25 @@ file counts as given, like `--precision`, and conflicts with `--sample`.
 | `--top-share` | 0.5 | share of a mixed sample given to the most complex scenes, between 0 and 1 |
 | `--piece` | 2 | least length of a scene in seconds: GOPs are joined until they reach it |
 | `-o`, `-f json` | | the report: every scene taken, with its SI and TI, and the check of the file |
+
+### `model`
+
+`qc model corpus <source or folder>... --to corpus.jsonl` measures titles (a
+folder stands for every video in it and in its subfolders) for a ladder
+model; `qc model train <corpus.jsonl>... --to model.json` trains it — see
+[model probing](ladder.md#probes-completed-by-a-model), and the
+[step-by-step guide](model.md).
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--to file` | required | `corpus`: the JSON-lines file the measurements are added to (encodes it already holds are skipped: a run resumes, titles and codecs can be added later); `train`: the model written |
+| `-c`, `--codec` | h264 | codec of the encodes, and of the model |
+| `--preset` | the codec's ladder preset | encoder preset of the encodes, and of the model |
+| `--segments` (`corpus`) | 60 | segments of 2 s measured in each title, taken evenly across it |
+| `--heights` (`corpus`) | 2160…270 | resolutions of the grid; heights above the source are dropped |
+| `--crf-count` (`corpus`) | 0 (the codec's grid: 11 CRFs for H.264) | number of CRFs of the grid, spread evenly over the codec's range (13 to 48 for H.264); in place of `--crfs`. One count for a whole corpus |
+| `--crfs` (`corpus`) | the codec's probe CRFs, the half steps between them and one step beyond | CRFs of the grid |
+| `--anchor-crfs` (`train`) | halfway between the codec's probe CRFs | the two CRFs the probes of a model are measured at, alternating between resolutions |
 
 ### `run`
 
@@ -262,7 +313,10 @@ several (`-c h264,av1`); `qc run` takes one source.
 | `--parallel` | 2 | probe encodes run concurrently |
 | `--digest-duration` | 0 (40 s) | length of the digest, in seconds: the ladder is estimated on that much of the title, and costs in proportion to it; shared equally between several videos |
 | `--digest` | balanced | segments of the digest the ladder is estimated on: `balanced` (one per part of the title, each moved until the digest has the title's SI and TI), `top` (the most complex scenes, one per shot: the ladder of the demanding scenes, with their bitrates, not the title's) or `uniform` (evenly spaced, no analysis); for `balanced` and `top` a standalone `qc ladder` analyses the source first — see [digest](ladder.md#1-digest) |
-| `--probing` | fixed | probe placement: `fixed` (3 CRFs per resolution) or `adaptive` (2 per resolution, then probes where the rungs and crossovers are least certain) — see [probing](ladder.md#adaptive-probing) |
+| `--probing` | fixed | probe placement: `fixed` (3 CRFs per resolution), `adaptive` (2 per resolution, then probes where the rungs and crossovers are least certain) `model` (a few encodes, the curves completed by `--ladder-model`) or `predicted` (no encode: `--ladder-model` predicts from the analysis of the digest; `--instant` adds `--digest uniform` and `--no-verify`) — see [probing](ladder.md#adaptive-probing) |
+| `--ladder-model` | none | ladder models trained by `qc model train`, one per codec: implies `--probing model`. A few probes are measured and the model predicts the others; a model that does not cover the build (another codec or preset, a source of another height, other `--heights`, 10-bit or film grain) leaves fixed probing, and the report says why — see [model probing](ladder.md#probes-completed-by-a-model) |
+| `--instant` | off | with `--ladder-model`: predict the ladder from the analysis of the video, without any probe: a digest taken evenly (`--digest uniform`), its features, the model's prediction, no verification. About 12 s instead of minutes, for the accuracy the model's validation reports — see [instant ladders](ladder.md#from-the-analysis-alone---instant) |
+| `--tolerance` | 0 (0.5) | VMAF error the curves may have between probes: adaptive probing adds probes until its curves are within it; a ladder model measures the fewest probes whose mean error on titles it had not seen was within it |
 | `--per-shot` | off | add a per-shot version of every rung: one CRF per shot at equal rate-quality slope, same pooled VMAF — see [per-shot](ladder.md#8-per-shot-rungs). The reports then show the per-shot ladder (every shot's CRF, bitrate and VMAF per rung) |
 | `--per-shot-resolution` | off | experimental, implies `--per-shot`: each shot also picks its resolution among the rung's and the neighbouring rung resolutions; renditions change resolution mid-stream — see [per-shot resolution](ladder.md#per-shot-resolution-experimental) |
 | `--film-grain` | off | AV1 only: `off`, `auto` (detect grain, calibrate the level) or a synthesis level `1`–`50`; fidelity is then scored against a denoised reference; cannot be combined with `--per-shot` on an AV1 ladder — see [film grain](ladder.md#9-film-grain-synthesis-av1) |

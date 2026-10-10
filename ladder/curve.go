@@ -20,6 +20,10 @@ type Probe struct {
 	// resolution just below the top rung's when it promises to reach the
 	// top quality at least 10% cheaper (see the package documentation).
 	Extra bool `json:"extra,omitempty"`
+	// Predicted marks a probe a model predicted from the measured ones
+	// (ProbingModel) instead of an encode: HalfWidth is then the error of
+	// the model at that point on the titles it was validated on.
+	Predicted bool `json:"predicted,omitempty"`
 }
 
 // Curve is the rate-quality curve of one resolution: VMAF and CRF as

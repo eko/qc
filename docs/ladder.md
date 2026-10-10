@@ -9,7 +9,7 @@ them](#12-one-ladder-for-several-videos).
 ```mermaid
 flowchart TD
     src[(source)] --> digest["1 · Digest<br/>20 × 2 s segments, one per part of the title,<br/>balanced on its SI and TI (or its most complex scenes)<br/>raw video, source bit depth"]
-    digest --> probes["2 · Probe encodes<br/>resolutions × 3 CRFs, fixed 2 s GOP<br/>VMAF ±1 with common random numbers"]
+    digest --> probes["2 · Probe encodes<br/>resolutions × 3 CRFs, fixed 2 s GOP<br/>VMAF ±1 with common random numbers<br/>(or a few, completed by a model)"]
     probes --> curves["3 · Curves<br/>VMAF vs log bitrate per resolution<br/>monotone (isotonic)"]
     curves --> hull["4 · Envelope<br/>best resolution at each bitrate"]
     hull --> rungs["5 · Rung selection<br/>top VMAF 95, step 6, ratios 1.5–2.5"]
@@ -291,6 +291,165 @@ Pairs to avoid: x265 ultrafast, whose tools differ too much from the other
 x265 presets (0.9–2.2 VMAF off after anchoring in replays), and another
 codec's probes (H.264 probes for an HEVC ladder: 1.8–6.5 VMAF off on the
 cartoon), which is not offered.
+
+### Probes completed by a model
+
+`--ladder-model model.json` (which implies `--probing model`) measures a
+few encodes of the digest and lets a **model trained on other titles**
+predict the others. (To build one, follow the [step-by-step
+guide](model.md); this section is how it works.)
+
+![Three grids of resolutions by CRFs: fixed probing measures 15 to 30 points, a model with 4 anchors measures 4, instant measures none and scores two very fast 360p encodes](assets/model/grid.svg) The rate-quality curves of one encoder are much alike
+from a title to the next: once a title is placed by a handful of measured
+encodes (the *anchors*), the bitrate and the VMAF of every other
+resolution and CRF follow closely.
+
+```mermaid
+flowchart LR
+    titles[(titles)] --> corpus["qc model corpus<br/>excerpt of each title, 2 s segments,<br/>5 resolutions × 11 CRFs, every frame scored"]
+    corpus --> train["qc model train<br/>one linear model per grid point<br/>validated on titles left out"]
+    train --> model[(model.json)]
+    model --> probe["qc ladder --ladder-model<br/>4–10 anchors measured,<br/>the grid predicted"]
+    probe --> rest["level, rung selection,<br/>verification: unchanged"]
+```
+
+- **Corpus** (`qc model corpus <source>... --to corpus.jsonl`): an excerpt
+  of each title (60 segments of 2 s by default, taken evenly across it) is
+  encoded as probes are, at every resolution and at CRFs half a probe step
+  apart (x264: 13 to 48), and **every frame is scored**: each segment gets
+  its bitrate and VMAF at every point of the grid. A title costs 55
+  encodes with exact scoring (about 40 minutes for two minutes of 1080p
+  with x264 on an M2 Max). The excerpt is also **described**: its
+  [features](#from-the-analysis-alone---instant), a few seconds more. The
+  file is appended to as measurements come: a run resumes, and titles or
+  codecs are added later. A folder stands for every video under it.
+  ![Two 3D surfaces over the grid of 5 resolutions by 11 CRFs, coloured by VMAF: the VMAF and the bitrate of a corpus of 30 titles at every point, with the lowest and highest title](assets/model/surface.svg)
+- **Model** (`qc model train corpus.jsonl... --to model.json`): for every
+  point of the grid, two ridge regressions, of the logarithm of the
+  bitrate per pixel and of the VMAF (on a logistic scale, so that a
+  prediction never passes 100), on the same two values measured at the
+  anchors. They are fitted on segments, the smallest clips the corpus
+  knows, and hold for digests made of them. A model is for **one codec and
+  preset, and sources of one height** (encodes are scored at the source's
+  resolution).
+- **Designs**: a model holds several sets of anchors, from ten encodes
+  (two per resolution) down to one, and to none with the features of the
+  title ([`--instant`](#from-the-analysis-alone---instant)). One anchor per resolution alternates
+  between two CRFs from a resolution to the next: a title differs from
+  another by the level of its curves *and* by how fast they fall with the
+  CRF, and anchors all at one CRF say nothing of the second (on the title
+  hardest to predict, five alternating anchors halved the error of five
+  anchors at one CRF). The top resolutions get a second anchor at a far
+  CRF: content that compresses well keeps 1080p down to its lowest rungs.
+- **Validation**: each title of the corpus is left out in turn, predicted
+  by a model trained on the others, on 40 digests of 20 segments drawn
+  from it. `qc model train` prints, for each design, the mean and the
+  worst VMAF error and the mean bitrate error over the qualities a ladder
+  uses (VMAF 30 to 98); they are stored in the model. A ladder build takes
+  the design with the **fewest anchors whose mean error is within
+  `--tolerance`** (0.5 VMAF by default), or the best validated design when
+  none is.
+- **In the build**: the anchors are measured like any probe; the predicted
+  points become probes marked `predicted` in the JSON, their half-width
+  being the 95th percentile of the design's validation error at that
+  point. Everything after is unchanged: the [level](#quality-level-of-the-probes)
+  of the probes is corrected, the rungs are placed on the envelope, and
+  **every rung is still verified by a real encode** and calibrated when it
+  misses. A resolution a rung needs below the grid still gets a measured
+  [challenger probe](#2-probe-encodes).
+- **When the model does not apply** (another codec or preset, a source of
+  another height, other `--heights`, 10-bit encodes, HDR, film grain
+  synthesis), the build probes as `fixed` does and the report says why
+  (`probing.model.fallback`).
+
+A reality-TV title of 59 minutes, with a model trained on two other titles
+(a drama and a cartoon: it had never seen that one), x264 fast, M2 Max:
+
+| | Probes encoded | Probing | Whole build | Rungs |
+|---|---|---|---|---|
+| `--probing fixed` | 30 (15 + 15 challengers) | 3 min 36 s | 7 min 16 s | the reference |
+| `--ladder-model` (10 anchors) | 10 | 52 s | 3 min 28 s | same resolutions; verification within 1.2 VMAF of the predictions, none calibrated |
+| `--ladder-model --tolerance 0.8` (6 anchors) | 6 | 37 s | 3 min 02 s | same resolutions but the last rung; within 0.4 VMAF, none calibrated |
+| `--ladder-model --tolerance 1` (4 anchors) | 4 | 25 s | 2 min 47 s | the second rung at 720p instead of 1080p; within 1.0 VMAF, none calibrated |
+| `--probing fixed --digest uniform --no-verify` | 27 | 2 min 31 s | 2 min 57 s | not verified |
+| `--ladder-model --tolerance 1 --digest uniform --no-verify` | 4 | 27 s | 52 s | not verified; the same resolutions as the line above on the seven top rungs, bitrates within 5% |
+
+How many anchors a tolerance asks for is what the validation of the model
+says, and a model of two titles validates each on the other alone: here
+ten anchors for the default 0.5 (0.40), six for 0.8, four for 1.
+
+#### From the analysis alone: `--instant`
+
+`qc ladder source --ladder-model model.json --instant` encodes **no probe
+and verifies nothing**: the digest is cut (evenly: `--digest uniform`, so
+that the title is not analysed first), described, and the model predicts
+every curve from that description. About 12 s for titles of 1 minute to
+1 hour on an M2 Max: 5 s cutting the digest, 7 s describing it.
+
+The description is the **features** of the digest (package
+`ladder/features`), which `qc model corpus` also stores for every segment
+of a corpus:
+
+| Source | Features (per 2 s segment) |
+|---|---|
+| Frame analysis | spatial and temporal information (ITU-T P.910) and their logarithms, mean luma, camera motion (speed of pan, tilt and zoom, shake) |
+| x264 ultrafast at 360p, CRF 23 and 35 | bits, residual bits and motion-vector bits per pixel and second (logarithms), PSNR, shares of skipped and intra macroblocks |
+| The same two encodes, scored | their **VMAF** against the video, as a viewer of its resolution gets it: three clips of each segment in a ladder build, every frame in a corpus |
+| Scaling | PSNR of a round trip through each lower resolution, one frame in ten: what a rendition there can no longer show |
+
+The third line is what makes the difference. The others tell what an
+encoder makes of the video; that one tells what **VMAF** makes of it, on
+two encodes that cost under a second: a micro-anchor. Without it the
+design below erred by 3.6 VMAF on a title it had not seen; with it, 1.2.
+
+![Mean VMAF error on a title never seen, by design: 3.62 without the scored encodes, 1.16 instant, 1.02 with one anchor, 0.48 with four, 0.31 with ten](assets/model/designs.svg)
+
+The model predicts **every segment** of the digest from its own features,
+then averages the bitrates and the scores it predicted: the bitrate of a
+digest is the mean of those of its segments. Predicting from the mean
+features of the digest gives instead the geometric mean of those bitrates,
+under the real one by as much as the segments differ: 13% on average on 39
+real titles, 0.6% segment by segment
+([validation](validation.md#probes-completed-by-a-model-qc-model)).
+
+A model whose corpus holds the features gets two more designs: **no
+anchor** (the features alone, what `--instant` uses) and one anchor plus
+the features. They are validated like the others, and `--probing model`
+takes the design without anchor by itself the day its validation is
+within `--tolerance`. `--probing predicted` is `--instant` without its
+other choices: the digest of `--digest`, and every rung verified unless
+`--no-verify`.
+
+**What it is worth depends on the corpus.** With the three titles at
+hand, each predicted by a model of the two others, then verified by the
+engine to see what the prediction was worth:
+
+| Title | `--instant` | Rungs right as predicted | The others |
+|---|---|---|---|
+| Cartoon, 10 min 36 s | 11 s | 4 of 6 (measured VMAF within 1.3 of the prediction) | one CRF step off |
+| Drama, 1 min | 12 s | 5 of 8 (within 1.4) | one CRF step off |
+| Reality show, 59 min | 12 to 14 s | 2 of 8, the two top rungs (within 1.2) | CRFs 1.5 to 2 too high |
+
+![Five small charts, one per resolution, of VMAF against bitrate for a cartoon the model had never seen: the predicted curve follows the measured encodes within about one VMAF point](assets/model/curves.svg)
+
+On the rungs left as predicted, announced bitrates are 0 to 18% under the
+measured ones on the cartoon, 2 to 8% over on the drama, and 12% under
+then 2% over on the reality show: the bitrate is the weaker half of the
+prediction (8% on average in validation), and a rung to be declared in a
+manifest deserves its verification. A corpus must also hold content like
+the video: segments calmer or busier than any it was trained on are
+predicted by extending straight lines, where errors are largest. *Right* means what it means for
+any rung: within 1.5 VMAF of its prediction once encoded, 0.5 for the top
+one.
+
+So an instant ladder is, today, right on titles that resemble what the
+model saw and 2 to 3 VMAF off on the one that does not: the reported
+error (`probing.model.meanVmafError`, printed with the ladder) is what
+tells them apart on average, not title by title. Two ways to make it
+safe: `--probing predicted`, which keeps the verification and corrects
+the rungs that miss (1 min 09 s to 2 min 09 s on these titles, against 2 min 50 s
+to 7 min 16 s with fixed probing), and a larger corpus
+([validation](validation.md#probes-completed-by-a-model-qc-model)).
 
 ### Quality level of the probes
 

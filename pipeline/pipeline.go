@@ -161,9 +161,12 @@ type LadderBuilder interface {
 	// PrepareProgram returns what the ladders of every codec of a run
 	// share of their source, or of the videos of their program: the frame
 	// analyses and the digest, made once.
-	PrepareProgram(
+	// A first source the run already inspected is given with its
+	// inspection, and is not inspected again.
+	PrepareInspected(
 		ctx context.Context,
 		sources []string,
+		inspection *analysis.Report,
 	) (*ladder.Prepared, error)
 	Build(
 		ctx context.Context,
@@ -473,7 +476,14 @@ func (r *Runner) buildLadder(
 	rep *Report,
 	shared *sharedSource,
 ) (*ladder.Result, error) {
-	prepared, err := shared.prepare(ctx, r.ladders, opts.videos())
+	// The inspection of the run is that of the ladders' source, unless
+	// they are built on another file.
+	var inspection *analysis.Report
+	if opts.LadderSource == "" {
+		inspection = rep.Analysis
+	}
+
+	prepared, err := shared.prepare(ctx, r.ladders, opts.videos(), inspection)
 	if err != nil {
 		return nil, err
 	}
@@ -512,9 +522,10 @@ func (s *sharedSource) prepare(
 	ctx context.Context,
 	ladders LadderBuilder,
 	sources []string,
+	inspection *analysis.Report,
 ) (*ladder.Prepared, error) {
 	if s.prepared == nil {
-		prepared, err := ladders.PrepareProgram(ctx, sources)
+		prepared, err := ladders.PrepareInspected(ctx, sources, inspection)
 		if err != nil {
 			return nil, err
 		}

@@ -72,6 +72,11 @@ type ToolsConfig struct {
 	// CPUs and Memory bound the resources of the run (see resourceLimits).
 	CPUs   int    `mapstructure:"cpus"`
 	Memory string `mapstructure:"memory"`
+	// Plain replaces the live dashboard and the wizard by plain progress
+	// lines (see tui.RunPlain).
+	Plain bool `mapstructure:"plain"`
+	// Quiet draws and prints no progress at all: the report alone.
+	Quiet bool `mapstructure:"quiet"`
 }
 
 // OutputConfig is where and how reports are written (addOutputFlags), and
@@ -124,29 +129,32 @@ type QualityConfig struct {
 // LadderConfig tunes ladder builds (addLadderFlags, and --codec of the
 // ladder command).
 type LadderConfig struct {
-	Codec             string  `mapstructure:"codec"`
-	Preset            string  `mapstructure:"preset"`
-	ProbePreset       string  `mapstructure:"probe-preset"`
-	TopVMAF           float64 `mapstructure:"top-vmaf"`
-	MinVMAF           float64 `mapstructure:"min-vmaf"`
-	Step              float64 `mapstructure:"step"`
-	MaxRungs          int     `mapstructure:"max-rungs"`
-	Rungs             string  `mapstructure:"rungs"`
-	MinBitrate        int64   `mapstructure:"min-bitrate"`
-	MaxBitrate        int64   `mapstructure:"max-bitrate"`
-	Heights           []int   `mapstructure:"heights"`
-	NoVerify          bool    `mapstructure:"no-verify"`
-	Commands          bool    `mapstructure:"commands"`
-	Parallel          int     `mapstructure:"parallel"`
-	EncodeBitDepth    int     `mapstructure:"encode-bit-depth"`
-	Probing           string  `mapstructure:"probing"`
-	Digest            string  `mapstructure:"digest"`
-	DigestDuration    float64 `mapstructure:"digest-duration"`
-	PerShot           bool    `mapstructure:"per-shot"`
-	PerShotResolution bool    `mapstructure:"per-shot-resolution"`
-	FilmGrain         string  `mapstructure:"film-grain"`
-	EncodeLadder      string  `mapstructure:"encode-ladder"`
-	NoRenditionCheck  bool    `mapstructure:"no-rendition-check"`
+	Codec             string   `mapstructure:"codec"`
+	Preset            string   `mapstructure:"preset"`
+	ProbePreset       string   `mapstructure:"probe-preset"`
+	TopVMAF           float64  `mapstructure:"top-vmaf"`
+	MinVMAF           float64  `mapstructure:"min-vmaf"`
+	Step              float64  `mapstructure:"step"`
+	MaxRungs          int      `mapstructure:"max-rungs"`
+	Rungs             string   `mapstructure:"rungs"`
+	MinBitrate        int64    `mapstructure:"min-bitrate"`
+	MaxBitrate        int64    `mapstructure:"max-bitrate"`
+	Heights           []int    `mapstructure:"heights"`
+	NoVerify          bool     `mapstructure:"no-verify"`
+	Commands          bool     `mapstructure:"commands"`
+	Parallel          int      `mapstructure:"parallel"`
+	EncodeBitDepth    int      `mapstructure:"encode-bit-depth"`
+	Probing           string   `mapstructure:"probing"`
+	LadderModel       []string `mapstructure:"ladder-model"`
+	Tolerance         float64  `mapstructure:"tolerance"`
+	Instant           bool     `mapstructure:"instant"`
+	Digest            string   `mapstructure:"digest"`
+	DigestDuration    float64  `mapstructure:"digest-duration"`
+	PerShot           bool     `mapstructure:"per-shot"`
+	PerShotResolution bool     `mapstructure:"per-shot-resolution"`
+	FilmGrain         string   `mapstructure:"film-grain"`
+	EncodeLadder      string   `mapstructure:"encode-ladder"`
+	NoRenditionCheck  bool     `mapstructure:"no-rendition-check"`
 }
 
 // RunConfig holds the flags of the run command alone.

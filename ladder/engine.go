@@ -10,6 +10,7 @@ import (
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/ladder/predict"
 	"github.com/eko/qc/media"
 	"github.com/eko/qc/quality"
 	"github.com/eko/qc/vmaf"
@@ -119,8 +120,15 @@ type Options struct {
 	// Probing places the probe encodes: fixed (every resolution at the
 	// codec's probe CRFs) or adaptive (see ProbingAdaptive). Default fixed.
 	Probing Probing
+	// Curves are the models ProbingModel may complete the probes with: a
+	// few measured encodes, the rest of every curve predicted (see package
+	// predict). A model is for one codec and preset and one source height;
+	// the build takes the first that covers it.
+	Curves []*predict.Model
 	// Tolerance is the interpolation error (VMAF) under which adaptive
-	// probing considers a rung known. Default 0.5.
+	// probing considers a rung known, and the mean error a model's design
+	// may have made on the titles it was validated on for ProbingModel to
+	// measure no more anchors than it has. Default 0.5.
 	Tolerance float64
 	// BitrateTolerance is the same criterion on the rung's bitrate at its
 	// quality, as a fraction: a rung within either is known. Default 0.03.
@@ -199,6 +207,8 @@ type Engine struct {
 	grainLab GrainLab
 	// renditions is optional: only encoding the renditions needs it.
 	renditions RenditionEncoder
+	// featurer is optional: only models reading features need it.
+	featurer Featurer
 }
 
 // NewEngine returns an Engine measuring with inspector, encoding with

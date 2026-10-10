@@ -104,10 +104,19 @@ func TestDashboardStageMessages(
 			},
 		},
 		{
+			name: "failed while the job goes on",
+			msgs: []tea.Msg{startMsg{i: 0}, failMsg{i: 0, reason: "failed"}},
+			check: func(t *testing.T, s stage) {
+				assert.Equal(t, stateFailed, s.state)
+				assert.Equal(t, "failed", s.summary)
+				assert.False(t, s.ended.Before(s.started))
+			},
+		},
+		{
 			name: "out of range stages are ignored",
 			msgs: []tea.Msg{
 				startMsg{i: 1}, progressMsg{i: -1, done: 1, total: 1}, unitMsg{i: 5, unit: "x"},
-				panelMsg{i: 5, panel: LadderPanel{}}, doneMsg{i: 2},
+				panelMsg{i: 5, panel: LadderPanel{}}, doneMsg{i: 2}, failMsg{i: 3},
 			},
 			check: func(t *testing.T, s stage) { assert.Equal(t, stage{label: "a", unit: defaultUnit}, s) },
 		},

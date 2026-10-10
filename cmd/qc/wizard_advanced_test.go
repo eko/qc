@@ -266,7 +266,8 @@ func TestWizardAdvancedArgsParse(
 	require.NoError(t, err)
 	require.NoError(t, config.validate())
 
-	opts := ladderOptions(config)
+	opts, err := ladderOptions(config)
+	require.NoError(t, err)
 	assert.Equal(t, []int{1080, 720}, opts.Constraints.Resolutions)
 	assert.InDelta(t, 92, opts.Constraints.TopVMAF, 1e-9)
 	assert.Equal(t, int64(4_500_000), opts.Constraints.MaxBitrate)

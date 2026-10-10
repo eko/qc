@@ -100,6 +100,19 @@ func TestAnalyzeSkipVideo(
 	assert.NotContains(t, report.Timings, "video")
 }
 
+func TestAnalyzeSkipBitstream(
+	t *testing.T,
+) {
+	report, err := world{info: fakeVideo(), decodeErr: errDecode}.analyzer().
+		Analyze(t.Context(), "clip.mp4", Options{SkipVideo: true, SkipBitstream: true})
+	require.NoError(t, err)
+
+	// What the container says, and nothing read of its packets.
+	require.NotNil(t, report.Info)
+	assert.Nil(t, report.Bitstream)
+	assert.NotContains(t, report.Timings, "bitstream")
+}
+
 func TestCompare(
 	t *testing.T,
 ) {

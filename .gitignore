@@ -1,5 +1,6 @@
 # Build output (go build of a main package without -o writes it here)
 /bin/
+/corpus*
 /qc
 /ladderval
 /ladderreplay

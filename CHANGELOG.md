@@ -9,6 +9,70 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Added
+
+- **Ladder models** (`qc model corpus`, `qc model train`, `qc ladder
+  --ladder-model`): a model trained on titles measured on a whole grid of
+  resolutions and CRFs completes the probes of a ladder. A build then
+  measures 4 to 10 encodes of the digest (the anchors) instead of 15 to 30
+  and predicts the others; the level correction, the rung selection and
+  the verification of every rung are unchanged. On a 59-minute title the
+  model had never seen (x264 fast, a model of two other titles), probing
+  went from 3 min 36 s to 52 s with the 10 anchors of the default tolerance
+  and to 37 s with 6 (`--tolerance 0.8`), and the whole build from
+  7 min 16 s to 3 min 28 s and 3 min 02 s, for the same rung resolutions
+  (but the last rung with 6) and verifications within 1.2 and 0.4 VMAF of
+  the predictions; with 4 anchors (`--tolerance 1`), without analysis nor
+  verification (`--digest uniform --no-verify`), 52 s instead of
+  2 min 57 s. Designs of anchors are fitted on digests of a few segments,
+  as the anchors of a build are measured: on a corpus of 39 titles the
+  error of four anchors went from 0.62 to 0.47 VMAF.
+  `qc model train` validates every set of anchors by leaving each title of
+  the corpus out in turn and stores the errors in the model; `--tolerance`
+  picks the fewest anchors whose mean error is within it. A model is for
+  one codec and preset and one source height; a build it does not cover
+  falls back on fixed probing and says why. Library: packages
+  `ladder/corpus` and `ladder/predict`, `ladder.ProbingModel`,
+  `ladder.Options.Curves`, `Probe.Predicted`, `Result.ProbeEncodes`.
+- **Instant ladders** (`qc ladder --ladder-model model.json --instant`): a
+  ladder predicted from the analysis of the video, without any probe nor
+  verification, in about 12 s for titles of 1 minute to 1 hour. `qc model
+  corpus` now also describes every segment (spatial and temporal
+  information, luma, camera motion, what x264 ultrafast spends on it at
+  360p and the VMAF of those two encodes, what scaling loses at each
+  resolution), and `qc model train` fits and validates a design that
+  reads those features and no anchor. Its accuracy is that of its corpus,
+  and is reported with the ladder: with three titles, 1.2 VMAF and 8% of
+  the bitrate on average on a title never seen; verified, 4 rungs of 6
+  and 5 of 8 were right as predicted on two titles, and the two top rungs
+  of 8 on the third (CRFs 1.5 to 2 steps high below them). The model
+  predicts every segment of the digest and averages them: from the mean
+  features of the digest, bitrates came out 13% low on average on a
+  corpus of 39 titles (7% of error now, 14% then).
+  `--probing predicted` is the same prediction with the digest and the
+  verification of any build. Library: package
+  `ladder/features`, `ladder.ProbingPredicted`, `ladder.WithFeatures`,
+  `encode.FFmpeg.Stats` and `ScaleLoss`. `qc model corpus` takes folders,
+  for every video under them.
+- **`--plain`** (every command, or `QC_PLAIN=1`): the progress as plain
+  lines on stderr, one per event, in place of the live dashboard and of the
+  wizard: for containers, CI jobs and logs. Without it and without a
+  terminal, qc is silent until its report, as before.
+- **`--quiet`** (every command, or `QC_QUIET=1`): no progress at all, in a
+  terminal either: with `-f json`, nothing but the JSON.
+- **`qc model corpus --crf-count`**: the number of CRFs a corpus is
+  measured at, spread evenly over the codec's range (default: 11 for
+  H.264, as before).
+- **`--tolerance`** (`ladder`, `run`): the VMAF error the curves may have
+  between probes, for adaptive probing and for ladder models (it was a
+  library option only).
+
+### Changed
+
+- A ladder no longer inspects its source twice (`qc ladder`, `qc run`):
+  1.5 s less for an hour of video. Library:
+  `ladder.Engine.PrepareInspected`, `analysis.Options.SkipBitstream`.
+
 ## [1.2.1] - 2026-10-08
 
 ### Added

@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 372" width="900" height="372" role="img">
+<title>What is measured, what is predicted</title>
+<desc>Three grids of 5 resolutions by 11 CRFs. Fixed probing measures 15 points and interpolates; a model with 4 anchors measures 4 points and predicts 51; instant measures none and predicts 55 from the analysis.</desc>
+<style>
+:root{--surface:#fcfcfb;--border:#e1e0d9;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--quiet:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--q1:#cde2fb;--q2:#9ec5f4;--q3:#6da7ec;--q4:#3987e5;--q5:#1c5cab;--q6:#0d366b;}
+@media (prefers-color-scheme: dark){:root{--surface:#1a1a19;--border:#2c2c2a;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--quiet:#52514e;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--q1:#0d366b;--q2:#184f95;--q3:#256abf;--q4:#3987e5;--q5:#6da7ec;--q6:#b7d3f6;}}
+text{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;fill:var(--ink2)}
+.title{font-size:15px;font-weight:600;fill:var(--ink)}
+.sub{font-size:12.5px;fill:var(--ink2)}
+.head{font-size:13px;font-weight:600;fill:var(--ink)}
+.val{fill:var(--ink);font-variant-numeric:tabular-nums}
+.tick{fill:var(--muted);font-variant-numeric:tabular-nums}
+.note{fill:var(--muted)}
+.grid{stroke:var(--grid);stroke-width:1}
+.axis{stroke:var(--axis);stroke-width:1}
+</style>
+<rect x="0.5" y="0.5" width="899" height="371" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+<text class="title" x="24" y="32">What is measured, what is predicted</text>
+<text class="sub" x="24" y="52">The grid of a title: every resolution at every CRF. A ladder is placed on the curves this grid draws.</text>
+<text x="68.0" y="84.0" text-anchor="start" class="head">Fixed probing</text>
+<text x="68.0" y="100.0" text-anchor="start" class="note">no model</text>
+<text x="54.0" y="136.0" text-anchor="end" class="tick">1080p</text>
+<circle cx="74" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="93" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="112" cy="132" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="131" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="150" cy="132" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="169" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="188" cy="132" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="207" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="226" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="245" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="264" cy="132" r="2.5" fill="var(--quiet)"/>
+<text x="54.0" y="162.0" text-anchor="end" class="tick">720p</text>
+<circle cx="74" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="93" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="112" cy="158" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="131" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="150" cy="158" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="169" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="188" cy="158" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="207" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="226" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="245" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="264" cy="158" r="2.5" fill="var(--quiet)"/>
+<text x="54.0" y="188.0" text-anchor="end" class="tick">540p</text>
+<circle cx="74" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="93" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="112" cy="184" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="131" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="150" cy="184" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="169" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="188" cy="184" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="207" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="226" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="245" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="264" cy="184" r="2.5" fill="var(--quiet)"/>
+<text x="54.0" y="214.0" text-anchor="end" class="tick">360p</text>
+<circle cx="74" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="93" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="112" cy="210" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="131" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="150" cy="210" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="169" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="188" cy="210" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="207" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="226" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="245" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="264" cy="210" r="2.5" fill="var(--quiet)"/>
+<text x="54.0" y="240.0" text-anchor="end" class="tick">270p</text>
+<circle cx="74" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="93" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="112" cy="236" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="131" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="150" cy="236" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="169" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="188" cy="236" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="207" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="226" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="245" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="264" cy="236" r="2.5" fill="var(--quiet)"/>
+<text x="74.0" y="264.0" text-anchor="middle" class="tick">13</text>
+<text x="264.0" y="264.0" text-anchor="middle" class="tick">48</text>
+<text x="169.0" y="264.0" text-anchor="middle" class="tick">CRF</text>
+<text x="68.0" y="292.0" text-anchor="start" class="val">15 to 30 encodes</text>
+<text x="68.0" y="309.0" text-anchor="start" class="note">probing a 1 h title: 3 min 36 s</text>
+<text x="346.0" y="84.0" text-anchor="start" class="head">Model, 4 anchors</text>
+<text x="346.0" y="100.0" text-anchor="start" class="note">--ladder-model</text>
+<circle cx="352" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="371" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="390" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="409" cy="132" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="428" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="447" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="466" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="485" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="504" cy="132" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="523" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="542" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="352" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="371" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="390" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="409" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="428" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="447" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="466" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="485" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="504" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="523" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="542" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="352" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="371" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="390" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="409" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="428" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="447" cy="184" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="466" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="485" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="504" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="523" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="542" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="352" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="371" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="390" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="409" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="428" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="447" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="466" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="485" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="504" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="523" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="542" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="352" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="371" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="390" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="409" cy="236" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="428" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="447" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="466" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="485" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="504" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="523" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="542" cy="236" r="2.5" fill="var(--quiet)"/>
+<text x="352.0" y="264.0" text-anchor="middle" class="tick">13</text>
+<text x="542.0" y="264.0" text-anchor="middle" class="tick">48</text>
+<text x="447.0" y="264.0" text-anchor="middle" class="tick">CRF</text>
+<text x="346.0" y="292.0" text-anchor="start" class="val">4 encodes</text>
+<text x="346.0" y="309.0" text-anchor="start" class="note">probing a 1 h title: 26 s</text>
+<text x="624.0" y="84.0" text-anchor="start" class="head">Instant</text>
+<text x="624.0" y="100.0" text-anchor="start" class="note">--ladder-model --instant</text>
+<circle cx="630" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="649" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="668" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="687" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="706" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="725" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="744" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="763" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="782" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="801" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="820" cy="132" r="2.5" fill="var(--quiet)"/>
+<circle cx="630" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="649" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="668" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="687" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="706" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="725" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="744" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="763" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="782" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="801" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="820" cy="158" r="2.5" fill="var(--quiet)"/>
+<circle cx="630" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="649" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="668" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="687" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="706" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="725" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="744" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="763" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="782" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="801" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="820" cy="184" r="2.5" fill="var(--quiet)"/>
+<circle cx="630" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="649" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="668" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="687" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="706" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="725" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="744" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="763" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="782" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="801" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="820" cy="210" r="2.5" fill="var(--quiet)"/>
+<circle cx="630" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="649" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="668" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="687" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="706" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="725" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="744" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="763" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="782" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="801" cy="236" r="2.5" fill="var(--quiet)"/>
+<circle cx="820" cy="236" r="2.5" fill="var(--quiet)"/>
+<rect x="681.5" y="204.5" width="11" height="11" rx="2" transform="rotate(45 687 210)" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<rect x="757.5" y="204.5" width="11" height="11" rx="2" transform="rotate(45 763 210)" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="630.0" y="264.0" text-anchor="middle" class="tick">13</text>
+<text x="820.0" y="264.0" text-anchor="middle" class="tick">48</text>
+<text x="725.0" y="264.0" text-anchor="middle" class="tick">CRF</text>
+<text x="624.0" y="292.0" text-anchor="start" class="val">no encode of the target encoder</text>
+<text x="624.0" y="309.0" text-anchor="start" class="note">probing a 1 h title: 4 s</text>
+<circle cx="30" cy="344" r="6" fill="var(--s1)"/>
+<text x="42.0" y="348.0" text-anchor="start">encoded and scored with VMAF</text>
+<circle cx="246" cy="344" r="2.5" fill="var(--quiet)"/>
+<text x="256.0" y="348.0" text-anchor="start">not encoded: interpolated, or predicted by the model</text>
+<rect x="573.5" y="338.5" width="11" height="11" rx="2" transform="rotate(45 579 344)" fill="var(--s2)"/>
+<text x="592.0" y="348.0" text-anchor="start">x264 ultrafast at 360p, scored: the micro-anchor</text>
+</svg>

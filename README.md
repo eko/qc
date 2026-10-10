@@ -42,6 +42,15 @@ reliability you ask for allows.
   synthesise film grain; verified rungs are checked for banding and for
   VMAF/XPSNR disagreements. Several videos get one ladder for all of them
   (per-program encoding), every rung read video by video.
+- **Ladder models**: `qc model corpus` measures your titles on a grid of
+  resolutions and CRFs, `qc model train` learns how their curves follow
+  from a few encodes, and `qc ladder --ladder-model` then measures 4 to 10
+  probes instead of 15 to 30 and predicts the rest, every rung still
+  verified: the same rung resolutions in 40 to 60% of the time on a title
+  the model had never seen ([model probing](docs/ladder.md#probes-completed-by-a-model)).
+  With `--instant` no probe is encoded at all: the ladder is predicted from
+  the analysis of the video in about nine seconds, as well as the corpus
+  allows ([instant ladders](docs/ladder.md#from-the-analysis-alone---instant)).
 - **Samples**: `qc sample` copies the most complex, representative or
   easiest scenes of several videos into one file, without re-encoding
   ([samples](docs/sample.md)).
@@ -106,6 +115,9 @@ qc ladder source.mov --rungs 1080,720,540,360 --top-vmaf 93   # impose the rungs
 qc ladder source.mov -c av1 --encode-ladder renditions/    # + the renditions, checked on the whole title
 qc ladder ep1.mov ep2.mov ep3.mov -c h264,av1             # one ladder per codec for a programme, read video by video
 qc sample ep1.mov ep2.mov ep3.mov --to sample.mkv --scenes top   # a minute of their most complex scenes, copied
+qc model corpus films/*.mov --to corpus.jsonl && qc model train corpus.jsonl --to h264.json   # a ladder model of your content
+qc ladder source.mov --ladder-model h264.json             # a few probes measured, the rest predicted, every rung verified
+qc ladder source.mov --ladder-model h264.json --instant   # no encode: the ladder predicted from the analysis, in seconds
 ```
 
 Every command accepts `-o report.json`, `--html report.html` and `-f json`.
@@ -136,6 +148,7 @@ content: [docs/validation.md](docs/validation.md).
 - [HDR](docs/hdr.md): detection, light levels, HDR metrics, HDR ladders
 - [Audio](docs/audio.md): loudness (BS.1770, EBU R 128, ATSC A/85) and defects
 - [Ladder engine](docs/ladder.md)
+- [Ladder models](docs/model.md): building a model of your content, step by step, for instant ladders
 - [Validation](docs/validation.md)
 - [CLI](docs/cli.md)
 - [NVIDIA GPUs](docs/gpu.md): NVDEC decoding, NVENC ladders and CUDA VMAF with `--gpu`

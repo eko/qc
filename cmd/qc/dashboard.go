@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -50,10 +52,30 @@ func runDashboard(
 		}
 	}()
 
-	return tui.RunDashboard(ctx, cmd.ErrOrStderr(), env.dashboard, gpuTitle(name, gpuSettingsOf(config)), subject, labels,
-		func(ctx context.Context, e *tui.Emitter) error {
-			return fn(ctx, svc, e)
-		})
+	run := func(ctx context.Context, e *tui.Emitter) error {
+		return fn(ctx, svc, e)
+	}
+
+	switch {
+	case config.Tools.Quiet:
+		// Nothing drawn, nothing printed: the report alone.
+		return tui.RunDashboard(ctx, cmd.ErrOrStderr(), false, name, subject, labels, run)
+	case config.Tools.Plain:
+		return tui.RunPlain(ctx, cmd.ErrOrStderr(), gpuTitle(name, gpuSettingsOf(config)), subject, labels, run)
+	}
+
+	return tui.RunDashboard(ctx, cmd.ErrOrStderr(), env.dashboard, gpuTitle(name, gpuSettingsOf(config)), subject, labels, run)
+}
+
+// envFlag tells whether the environment variable name is set to a true
+// value, for the one place that reads QC_PLAIN and QC_QUIET before the
+// configuration is loaded: qc without a command.
+func envFlag(
+	name string,
+) bool {
+	set, _ := strconv.ParseBool(os.Getenv(name))
+
+	return set
 }
 
 // executePipeline runs opts behind the live dashboard and returns the report.

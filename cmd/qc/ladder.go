@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/internal/htmlreport"
 	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/pipeline"
@@ -58,13 +59,21 @@ func runLadder(
 		return err
 	}
 
+	ladderOpts, err := ladderOptions(config)
+	if err != nil {
+		return err
+	}
+
 	report, err := executePipeline(cmd, env, config, "ladder", pipeline.Options{
 		Source:       sources[0],
 		Program:      sources[1:],
 		SkipAnalysis: true,
-		Codecs:       config.ladderCodecs(),
-		Ladder:       ladderOptions(config),
-		Renditions:   renditionOptions(config),
+		// An instant ladder does not wait for the packets of the source to
+		// be read, unless something of the run reads them.
+		Analysis:   analysis.Options{SkipBitstream: config.Ladder.Instant && !config.Ladder.PerShot && config.Ladder.EncodeLadder == ""},
+		Codecs:     config.ladderCodecs(),
+		Ladder:     ladderOpts,
+		Renditions: renditionOptions(config),
 	})
 	if err != nil {
 		return err

@@ -84,6 +84,11 @@ func runOptions(
 		return pipeline.Options{}, err
 	}
 
+	ladderOpts, err := ladderOptions(config)
+	if err != nil {
+		return pipeline.Options{}, err
+	}
+
 	return pipeline.Options{
 		Source:       source,
 		Reference:    config.Run.Reference,
@@ -91,7 +96,7 @@ func runOptions(
 		Codecs:       config.Run.Codecs,
 		Analysis:     analysis.Options{Audio: audioOptions(config.Analysis)},
 		Quality:      qualityOptions(config),
-		Ladder:       ladderOptions(config),
+		Ladder:       ladderOpts,
 		Overlay:      overlayOpts,
 		Renditions:   renditionOptions(config),
 	}, nil

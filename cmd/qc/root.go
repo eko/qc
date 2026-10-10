@@ -26,7 +26,10 @@ func newRootCommand(
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if !env.wizard {
+			plain, _ := cmd.Flags().GetBool("plain")
+			quiet, _ := cmd.Flags().GetBool("quiet")
+
+			if !env.wizard || plain || quiet || envFlag("QC_PLAIN") || envFlag("QC_QUIET") {
 				return cmd.Help()
 			}
 
@@ -40,6 +43,8 @@ func newRootCommand(
 	flags.String("log-level", "warn", "log level: debug, info, warn or error")
 	flags.String(configFlag, "", "configuration file (YAML, TOML or JSON) keyed by flag name")
 	flags.Int("cpus", 0, "CPUs used by qc and the ffmpeg processes it starts (0 = all those of the machine, or of the container's CPU quota)")
+	flags.Bool("quiet", false, "no progress at all, neither dashboard nor lines: the report alone (with -f json, nothing but the JSON); errors still go to stderr")
+	flags.Bool("plain", false, "no live dashboard nor wizard: progress as plain lines on stderr, one per event, without colours nor cursor moves (for containers, CI and logs)")
 	flags.String("memory", "", "memory qc and its ffmpeg processes may use (4g, 512m): concurrency is lowered to fit (default: the container's memory limit, if any)")
 
 	root.AddCommand(
@@ -48,6 +53,7 @@ func newRootCommand(
 		newVMAFCommand(env),
 		commands.ladder,
 		commands.sample,
+		newModelCommand(env),
 		newVersionCommand(),
 	)
 

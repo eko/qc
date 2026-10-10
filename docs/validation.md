@@ -402,6 +402,238 @@ average, every rung at its optimal resolution; probed at fast, −0.03 and
 the option pays only for delivery presets several times slower than the
 probes'.
 
+### Probes completed by a model (`qc model`)
+
+Three 1080p25 titles (a drama of 1 min, a cartoon of 10 min 36 s, a
+reality show of 59 min) were measured with `qc model corpus`: 30, 60 and 90
+segments of 2 s, x264 fast, 5 resolutions × 11 CRFs (13 to 48), every frame
+scored. Everything below is **leave-one-title-out**: a title is predicted
+by a model trained on the two others.
+
+**What `qc model train` reports** (mean absolute error of the predicted
+grid, over the points whose VMAF is between 30 and 98, on 40 digests of 20
+segments drawn from each title left out, plus its whole excerpt):
+
+| Anchors | Measured at | VMAF error, mean | Worst point | Bitrate error, mean |
+|---|---|---|---|---|
+| 10 | two per resolution | 0.31 | 2.9 | 1.6% |
+| 7 | one per resolution, alternating CRF 23.5 / 30.5, plus 1080p and 540p at CRF 41 | 0.41 | 3.1 | 1.7% |
+| 6 | the same without 540p at CRF 41 | 0.43 | 3.5 | 1.7% |
+| 5 | one per resolution, alternating | 0.59 | 4.6 | 2.1% |
+| 4 | 1080p at CRF 23.5 and 41, 540p at 30.5, 270p at 23.5 | 0.48 | 3.5 | 2.0% |
+| 3 | 1080p, 540p, 270p, alternating | 0.69 | 5.8 | 2.3% |
+| 2 | 1080p at 23.5, 270p at 30.5 | 1.05 | 6.2 | 3.1% |
+| 1 | 1080p at 23.5 | 2.40 | 11.6 | 16.0% |
+
+The worst points are corners of the grid no rung uses (270p at CRF 13,
+1080p at CRF 48). The drama is the title the two others predict worst:
+two titles are few.
+
+These designs are **fitted on digests of five segments**, drawn six times
+from each title, not on single segments: the anchors a build measures are
+those of a digest, encoded as one video. Fitted on segments, the same
+table read 0.27, 0.47, 0.55, 0.76, 0.56, 0.97, 1.29 and 2.99 from ten
+anchors to one; on a corpus of 39 titles of 30 s the gain is at every
+design (10 anchors 0.32 → 0.26, 4 anchors 0.62 → 0.47 with a worst point
+of 4.1 instead of 6.6, 2 anchors 1.79 → 1.41). A digest never takes more
+than half of a title: a title of three segments is fitted on each of them.
+
+**Real ladders** (`qc ladder`, default options, M2 Max), each title with
+the model that had not seen it:
+
+| Title | Probing | Probes encoded | Probing time | Whole build | Rungs: verification − prediction |
+|---|---|---|---|---|---|
+| Reality show, 59 min | fixed | 30 | 3 min 36 s | 7 min 16 s | within 1.0 |
+| | model, 10 anchors | 10 | 52 s | 3 min 28 s | within 1.2 |
+| | model, 6 anchors (`--tolerance 0.8`) | 6 | 37 s | 3 min 02 s | within 0.4 |
+| | model, 4 anchors (`--tolerance 1`) | 4 | 25 s | 2 min 47 s | within 1.0 |
+| Cartoon, 10 min 36 s | fixed | 18 | 1 min 27 s | 2 min 50 s | within 0.7, 1 rung calibrated |
+| | model, 6 anchors | 6 | 31 s | 1 min 43 s | within 1.0 |
+| | model, 3 anchors (`--tolerance 0.8`) | 3 | 15 s | 1 min 31 s | within 1.0, 1 rung calibrated |
+| Drama, 1 min | fixed | 27 | 2 min 23 s | 3 min 57 s | within 0.9 |
+| | model, 10 anchors | 10 | 49 s | 2 min 06 s | within 1.4 |
+| | model, 4 anchors (`--tolerance 1.4`) | 4 | 25 s | 1 min 41 s | within 1.1 |
+
+The fixed rows were measured once; the model rows are those of models
+whose designs of anchors are fitted on digests (above), which changed how
+many anchors a tolerance asks of these models of two titles.
+
+The model ladders have the rung resolutions of the fixed one on every rung
+of the reality show with ten anchors, and on all but one of the eight
+rungs of the drama; where the resolutions agree the bitrates are within
+8%, and the CRFs of the top rungs half a step apart. On the cartoon they
+differ at the top: fixed probing took 1080p at 3.14 Mb/s (VMAF 95.2
+measured), the model 720p at 2.23 Mb/s (95.0 measured), which is where the
+dense grid of the corpus puts that title's optimum at VMAF 95 (720p).
+These ladders were not checked against whole-title encodes: the digest
+and its verification are those of any build, and what the table compares
+is the probing.
+
+**From the analysis alone** (`--instant`). The same corpus with the
+features of every segment (frame analysis, x264 ultrafast statistics at
+360p and the VMAF of its two encodes, scale loss: 27 numbers), the design
+without anchor validated the same way:
+
+| Design | VMAF error, mean | Worst point | Bitrate error, mean |
+|---|---|---|---|
+| The features alone | 1.16 | 6.1 | 7.7% |
+| 1080p at CRF 23.5 and the features | 1.02 | 4.7 | 10.5% |
+| 1080p at CRF 23.5 alone | 2.40 | 11.6 | 16.0% |
+| The features without the VMAF of the two encodes | 3.62 | 11.9 | 12.7% |
+
+The last line and the table below were measured when a digest was predicted
+from the means of its features (the features alone then erred by 1.17 and
+12.9%, see *A digest is predicted segment by segment* below). Which of
+the scores of the ultrafast encodes matter, same validation:
+
+| VMAF features | VMAF error, mean |
+|---|---|
+| None | 3.62 |
+| CRF 23 against the video | 1.46 |
+| CRF 35 against the video | 1.78 |
+| Both against the video (kept) | 1.17 |
+| Both, plus both against a lossless 360p copy (the encoding loss alone) | 1.01 |
+| The VMAF of a lossless copy at each lower resolution (its ceiling), without the above | 3.50 |
+
+The copy at 360p doubled the time of the description (VMAF is evaluated
+at 1080p whatever the resolution of what it compares) for a gain three
+titles cannot tell from noise, and the ceilings added nothing: neither
+was kept. In a corpus the two encodes are scored on every frame; scored
+on two clips per segment there, the same design erred by 1.8: a model is
+fitted segment by segment, and four frames are a noisy reading of one. A
+ladder build scores three clips of each segment (see *The scores of a
+ladder build* below).
+
+Real instant ladders, each title with the model that had not seen it,
+then the same prediction verified by the engine (`--probing predicted
+--digest uniform`: a rung is corrected when its encode is more than 1.5
+VMAF from its prediction, 0.5 for the top rung):
+
+| Title | `--instant` | Rungs right as predicted | Corrected rungs | Predicted and verified |
+|---|---|---|---|---|
+| Cartoon, 10 min 36 s | 11.1 s | 4 of 6 | one CRF step | 1 min 09 s |
+| Drama, 1 min | 11.8 s | 5 of 8 | one CRF step | 1 min 31 s |
+| Reality show, 59 min | 11.9 to 13.6 s | 2 of 8 (the two top rungs) | 1.5 to 2 CRF steps down | 2 min 09 s |
+
+Before the VMAF features, the verification corrected every rung of the
+three titles (20 of 20), by 1 to 4 CRF steps. Measured against predicted
+VMAF of the rungs left as they were: within 1.3 on the cartoon, 1.4 on
+the drama, 1.2 on the reality show. Bitrates announced against measured
+on those rungs: 0 to 18% under on the cartoon, 2 to 8% over on the drama,
+12% under and 2% over on the reality show, whose top rung is now where a
+measured ladder puts it (CRF 22 at 6.8 Mb/s announced, 7.7 measured; from
+the means of the features it came out at CRF 23.5 and 5.5 Mb/s).
+
+**A digest is predicted segment by segment.** The design reading
+features alone is fitted on the segments of the corpus, on the logarithm
+of their bitrate. Given the means of the features of a digest, it
+predicts the mean of the logarithms of the bitrates of its segments:
+their geometric mean, when the bitrate of a digest is their arithmetic
+mean. The gap is what the segments differ by. On a corpus of 39 titles
+of 30 s (1080p25, x264 fast), each title predicted whole by a model of
+the others (13 folds):
+
+| A digest is predicted… | Bitrate error, mean | Bias | By title | VMAF error |
+|---|---|---|---|---|
+| from the means of its features | 14.2% | −13.5% | −28% to +5% | 1.21 |
+| the same, the model fitted on digests of 5 segments | 7.5% | −1.5% | −19% to +22% | 1.07 |
+| segment by segment, the predictions averaged (kept) | 6.9% | −0.6% | −17% to +12% | 1.05 |
+| from features taken as those of one video (logarithm of the mean bits, logit of the mean VMAF) | 9.7% | −7.9% | −24% to +9% | 1.24 |
+
+Fitting on digests cancels the bias on average by learning it as a
+constant, which is wrong for a title whose segments differ less, or
+more, than those of the corpus: a dialogue with little motion, measured
+as a title of 30 segments, went from 10% over to 24% over, where segment
+by segment it is 16% over. Four titles outside that corpus, measured the
+same way (bias of the bitrate, means → segment by segment): reality show
+−9% → −2%, drama −4% → +2%, cartoon −17% → −10%, dialogue +10% → +16%.
+`qc model train` reports this validation: 14.1% → 6.8% of bitrate error
+on that corpus, 1.22 → 1.06 VMAF. The 14% that did not fall as titles
+were added was this bias.
+
+**The scores of a ladder build.** A corpus scores the two ultrafast
+encodes on every frame; a ladder build scored one clip of four frames in
+each segment. The frames scored are right (the same score as in an exact
+run, frame for frame), their mean is not: the quality of an encode falls
+along each GOP (81.8 on the keyframe, 77.7 after it, 74 at the end, on
+the dialogue at CRF 23), and twenty clips are a draw. The feature (VMAF
+of the encode), against its value on every frame, for three digests of
+20 segments:
+
+| Clips per segment | Frames scored | Dialogue, CRF 23 / 35 | Reality show | Cartoon | Instant ladder |
+|---|---|---|---|---|---|
+| 1 | 82 | +3.1 / +5.6 | −0.6 / −0.4 | +0.2 / +0.7 | 9.9 s |
+| 2 | 168 | +3.5 / +6.4 | 0.0 / +0.2 | +0.3 / +0.7 | 10.9 s |
+| 3 (kept) | 252 | +0.8 / +1.4 | +0.1 / +0.2 | −0.1 / +0.2 | 12.6 s |
+| 4 | 332 | +0.4 / +0.9 | +0.1 / 0.0 | +0.1 / +0.6 | 13.8 s |
+| every frame | 1000 | 0 | 0 | 0 | 24.4 s |
+
+With one clip the dialogue's 540p, 360p and 270p curves were predicted
+2.6, 4.1 and 4.9 VMAF too high against encodes of the same digest, and
+its rungs under the top one all went to 540p and 360p; with three, 0.0,
+1.5 and 2.2. Its 1080p and 720p curves are then 1.2 and 1.1 too low, and
+its rungs 2 to 5 are still at 540p where the measured ladder has 720p:
+that title is outside what the corpus holds: its segments have a median
+temporal information of 3.8 and spatial information of 19, under the 5th
+percentile of the segments of the corpus (3.9 and 20), whose titles are
+samples of the most complex and of average scenes (`qc sample --scenes
+mixed`). The calmest of the 39 has a median temporal information of
+12.5; the uniform digests of the four whole titles tested have 3.8, 11.5,
+12.5 and 12.8, and all four show the same tilt after both fixes (1080p
+0.3 to 1.7 VMAF under, 270p 0.9 to 2.2 over). Inside the corpus the
+errors of a title left out do not follow how calm it is (correlation
+−0.3 at 1080p); whether calmer titles in the corpus remove the tilt was
+not tested.
+
+Where the 12 s go, on the hour-long title: inspection 1.6 s (it was made
+twice, and reads every packet; an instant ladder now reads the container
+alone, and no ladder inspects its source twice), digest 5.2 s, features
+6.7 s (frame analysis, statistics pass then its two scores, scale loss,
+at once; 3.8 s with one clip per segment). The digest is bound by
+decoding twenty seeks into a 25 Mb/s mezzanine: one process per segment
+gained under a second and VideoToolbox lost six, so it was left as it is.
+
+**How many titles.** A second corpus, 39 titles of 30 s (1080p25, x264
+fast): for each size from 5 to 34, models trained on titles drawn at
+random (40 draws), each judged on five titles left out, and compared with
+the model of one title fewer:
+
+| Titles | Instant: bitrate error | VMAF error | Change of a bitrate when a title is added (mean / 95%) | Of the top rung (mean / 95%) | 4 anchors: bitrate error | Change (mean / 95%) | Top rung (mean / 95%) |
+|---|---|---|---|---|---|---|---|
+| 5 | 9.0% | 1.39 | 3.3% / 9.8% | 8.5% / 24.8% | 3.1% | 1.1% / 4.0% | 2.6% / 9.9% |
+| 10 | 7.9% | 1.19 | 1.4% / 4.3% | 3.9% / 11.5% | 2.8% | 0.6% / 2.2% | 1.3% / 4.8% |
+| 15 | 7.4% | 1.13 | 0.8% / 2.4% | 2.2% / 6.7% | 2.6% | 0.3% / 1.2% | 0.6% / 2.0% |
+| 20 | 7.1% | 1.09 | 0.6% / 1.6% | 1.6% / 4.4% | 2.4% | 0.2% / 0.9% | 0.5% / 1.8% |
+| 27 | 6.9% | 1.09 | 0.5% / 1.4% | 1.2% / 3.2% | 2.3% | 0.2% / 0.7% | 0.5% / 1.8% |
+| 34 | 6.8% | 1.06 | 0.3% / 1.0% | 0.9% / 3.0% | 2.3% | 0.2% / 0.6% | 0.3% / 1.0% |
+
+The changes follow a constant over the number of titles (instant: about
+12/n on average and 35/n for 95% of the rungs; about 32/n and 96/n for
+the top rung, whose 95% figure is the noisiest; four anchors: 4.5/n,
+17.5/n, 11/n and 44/n), which is where the counts of
+[the guide](model.md#read-the-validation) beyond 34 titles come from:
+they are that law drawn further, not measurements. The errors fall more
+slowly: the bitrate error of an instant ladder went from 9.0% to 6.8%
+between 5 and 34 titles, its VMAF error from 1.39 to 1.06. Before a
+digest was predicted segment by segment, that bitrate error stayed at 14%
+whatever the size of the corpus: it was a bias, not a lack of titles.
+
+**What was tried and left out.** Gradient-boosted trees on the same
+features: worse than the per-grid-point ridge with so few titles. Adding
+the features to several measured anchors: mean rung errors of 0.4–0.8 VMAF
+with two anchors became 0.9–1.3, so the designs with anchors read none
+(but the one above). Anchors at one CRF for every resolution:
+errors of 0.4 / 0.7 / 1.7 VMAF on the three titles against 0.3 / 0.6 / 0.6
+alternating (grid of 8 CRFs). CRFs growing as the resolution falls (1080p
+at 20 down to 270p at 34): 1.8–2.6 on the two titles measured then, level
+and slope being confounded with the resolution. A grid stopping at CRF
+37.5: the reality show's low rungs are 1080p and 720p at CRF 38 to 45, and
+6 of its 11 probes were measured challengers; the grid now reaches CRF 48.
+Scoring an anchor on every frame to save the encode of the level stage:
+52 s instead of 54 s, not kept. Verifying an instant ladder, before its
+VMAF features: every rung corrected, and 3 min 27 s on the reality show
+against 2 min 54 s with the 4 anchors of that time.
+
 ## Digest: balanced or uniform (`bench/digestsim`)
 
 ```sh

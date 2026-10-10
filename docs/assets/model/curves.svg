@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" width="900" height="330" role="img">
+<title>An instant prediction against the truth</title>
+<desc>Five small charts, one per resolution, of VMAF against bitrate. The line is the curve predicted without any encode, the dots the measured encodes. They agree within about one VMAF point; the predicted bitrates are 10 to 20 percent low.</desc>
+<style>
+:root{--surface:#fcfcfb;--border:#e1e0d9;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--quiet:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--q1:#cde2fb;--q2:#9ec5f4;--q3:#6da7ec;--q4:#3987e5;--q5:#1c5cab;--q6:#0d366b;}
+@media (prefers-color-scheme: dark){:root{--surface:#1a1a19;--border:#2c2c2a;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--quiet:#52514e;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--q1:#0d366b;--q2:#184f95;--q3:#256abf;--q4:#3987e5;--q5:#6da7ec;--q6:#b7d3f6;}}
+text{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;fill:var(--ink2)}
+.title{font-size:15px;font-weight:600;fill:var(--ink)}
+.sub{font-size:12.5px;fill:var(--ink2)}
+.head{font-size:13px;font-weight:600;fill:var(--ink)}
+.val{fill:var(--ink);font-variant-numeric:tabular-nums}
+.tick{fill:var(--muted);font-variant-numeric:tabular-nums}
+.note{fill:var(--muted)}
+.grid{stroke:var(--grid);stroke-width:1}
+.axis{stroke:var(--axis);stroke-width:1}
+</style>
+<rect x="0.5" y="0.5" width="899" height="329" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+<text class="title" x="24" y="32">An instant prediction against the truth</text>
+<text class="sub" x="24" y="52">A 10-minute cartoon the model had never seen: its curves predicted from the analysis alone, and as measured.</text>
+<text x="62.0" y="84.0" text-anchor="start" class="head">1080p</text>
+<line x1="62.0" y1="228.6" x2="210.0" y2="228.6" class="grid"/>
+<text x="54.0" y="232.6" text-anchor="end" class="tick">40</text>
+<line x1="62.0" y1="185.7" x2="210.0" y2="185.7" class="grid"/>
+<text x="54.0" y="189.7" text-anchor="end" class="tick">60</text>
+<line x1="62.0" y1="142.9" x2="210.0" y2="142.9" class="grid"/>
+<text x="54.0" y="146.9" text-anchor="end" class="tick">80</text>
+<line x1="62.0" y1="100.0" x2="210.0" y2="100.0" class="grid"/>
+<text x="54.0" y="104.0" text-anchor="end" class="tick">100</text>
+<line x1="62.0" y1="250.0" x2="210.0" y2="250.0" class="axis"/>
+<line x1="77.9" y1="250.0" x2="77.9" y2="254.0" class="axis"/>
+<text x="77.9" y="268.0" text-anchor="middle" class="tick">200k</text>
+<line x1="127.9" y1="250.0" x2="127.9" y2="254.0" class="axis"/>
+<text x="127.9" y="268.0" text-anchor="middle" class="tick">1M</text>
+<line x1="178.0" y1="250.0" x2="178.0" y2="254.0" class="axis"/>
+<text x="178.0" y="268.0" text-anchor="middle" class="tick">5M</text>
+<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="197.4,104.5 175.2,107.0 155.2,111.4 139.0,117.9 125.8,126.1 115.0,136.4 105.2,149.1 96.2,166.4 88.4,186.2 80.4,208.5"/>
+<circle cx="197.0" cy="104.0" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="176.5" cy="106.8" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="158.5" cy="110.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="144.6" cy="116.3" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="133.2" cy="123.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="123.3" cy="133.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="114.7" cy="146.3" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="107.0" cy="163.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="100.0" cy="185.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="92.1" cy="210.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="230.0" y="84.0" text-anchor="start" class="head">720p</text>
+<line x1="230.0" y1="228.6" x2="378.0" y2="228.6" class="grid"/>
+<line x1="230.0" y1="185.7" x2="378.0" y2="185.7" class="grid"/>
+<line x1="230.0" y1="142.9" x2="378.0" y2="142.9" class="grid"/>
+<line x1="230.0" y1="100.0" x2="378.0" y2="100.0" class="grid"/>
+<line x1="230.0" y1="250.0" x2="378.0" y2="250.0" class="axis"/>
+<line x1="245.9" y1="250.0" x2="245.9" y2="254.0" class="axis"/>
+<text x="245.9" y="268.0" text-anchor="middle" class="tick">200k</text>
+<line x1="295.9" y1="250.0" x2="295.9" y2="254.0" class="axis"/>
+<text x="295.9" y="268.0" text-anchor="middle" class="tick">1M</text>
+<line x1="346.0" y1="250.0" x2="346.0" y2="254.0" class="axis"/>
+<text x="346.0" y="268.0" text-anchor="middle" class="tick">5M</text>
+<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="351.4,105.5 331.4,108.2 314.1,113.4 298.9,119.8 285.4,128.0 274.0,138.4 263.5,151.9 253.6,168.9 244.1,189.7 236.0,214.6"/>
+<circle cx="352.6" cy="105.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="334.0" cy="108.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="317.9" cy="111.7" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="304.4" cy="116.8" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="292.6" cy="124.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="281.9" cy="134.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="272.0" cy="147.6" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="263.1" cy="165.4" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="255.2" cy="188.2" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="247.7" cy="214.2" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="239.6" cy="242.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="398.0" y="84.0" text-anchor="start" class="head">540p</text>
+<line x1="398.0" y1="228.6" x2="546.0" y2="228.6" class="grid"/>
+<line x1="398.0" y1="185.7" x2="546.0" y2="185.7" class="grid"/>
+<line x1="398.0" y1="142.9" x2="546.0" y2="142.9" class="grid"/>
+<line x1="398.0" y1="100.0" x2="546.0" y2="100.0" class="grid"/>
+<line x1="398.0" y1="250.0" x2="546.0" y2="250.0" class="axis"/>
+<line x1="413.9" y1="250.0" x2="413.9" y2="254.0" class="axis"/>
+<text x="413.9" y="268.0" text-anchor="middle" class="tick">200k</text>
+<line x1="463.9" y1="250.0" x2="463.9" y2="254.0" class="axis"/>
+<text x="463.9" y="268.0" text-anchor="middle" class="tick">1M</text>
+<line x1="514.0" y1="250.0" x2="514.0" y2="254.0" class="axis"/>
+<text x="514.0" y="268.0" text-anchor="middle" class="tick">5M</text>
+<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="501.5,109.8 483.5,115.4 467.5,121.7 453.0,129.8 440.2,140.4 428.9,153.7 418.3,170.5 408.0,191.0 398.2,215.9"/>
+<circle cx="502.7" cy="110.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="486.5" cy="114.0" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="472.4" cy="118.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="459.8" cy="125.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="448.2" cy="134.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="437.4" cy="147.4" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="427.2" cy="164.8" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="417.9" cy="186.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="409.5" cy="213.7" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="401.7" cy="243.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="566.0" y="84.0" text-anchor="start" class="head">360p</text>
+<line x1="566.0" y1="228.6" x2="714.0" y2="228.6" class="grid"/>
+<line x1="566.0" y1="185.7" x2="714.0" y2="185.7" class="grid"/>
+<line x1="566.0" y1="142.9" x2="714.0" y2="142.9" class="grid"/>
+<line x1="566.0" y1="100.0" x2="714.0" y2="100.0" class="grid"/>
+<line x1="566.0" y1="250.0" x2="714.0" y2="250.0" class="axis"/>
+<line x1="581.9" y1="250.0" x2="581.9" y2="254.0" class="axis"/>
+<text x="581.9" y="268.0" text-anchor="middle" class="tick">200k</text>
+<line x1="631.9" y1="250.0" x2="631.9" y2="254.0" class="axis"/>
+<text x="631.9" y="268.0" text-anchor="middle" class="tick">1M</text>
+<line x1="682.0" y1="250.0" x2="682.0" y2="254.0" class="axis"/>
+<text x="682.0" y="268.0" text-anchor="middle" class="tick">5M</text>
+<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="645.5,126.6 629.9,132.2 615.4,139.6 602.4,149.6 590.3,162.3 579.0,178.9 568.1,198.7"/>
+<circle cx="648.1" cy="126.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="634.5" cy="131.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="622.0" cy="137.0" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="610.2" cy="145.7" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="598.7" cy="157.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="587.7" cy="174.4" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="577.1" cy="196.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="567.4" cy="222.0" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="734.0" y="84.0" text-anchor="start" class="head">270p</text>
+<line x1="734.0" y1="228.6" x2="882.0" y2="228.6" class="grid"/>
+<line x1="734.0" y1="185.7" x2="882.0" y2="185.7" class="grid"/>
+<line x1="734.0" y1="142.9" x2="882.0" y2="142.9" class="grid"/>
+<line x1="734.0" y1="100.0" x2="882.0" y2="100.0" class="grid"/>
+<line x1="734.0" y1="250.0" x2="882.0" y2="250.0" class="axis"/>
+<line x1="749.9" y1="250.0" x2="749.9" y2="254.0" class="axis"/>
+<text x="749.9" y="268.0" text-anchor="middle" class="tick">200k</text>
+<line x1="799.9" y1="250.0" x2="799.9" y2="254.0" class="axis"/>
+<text x="799.9" y="268.0" text-anchor="middle" class="tick">1M</text>
+<line x1="850.0" y1="250.0" x2="850.0" y2="254.0" class="axis"/>
+<text x="850.0" y="268.0" text-anchor="middle" class="tick">5M</text>
+<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="797.9,153.0 783.1,159.3 769.6,168.0 756.9,179.8 745.0,195.4"/>
+<circle cx="801.5" cy="152.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="788.9" cy="157.2" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="777.0" cy="164.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="765.2" cy="174.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="753.7" cy="188.4" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="742.4" cy="207.8" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+<text x="54.0" y="90.0" text-anchor="end" class="tick">VMAF</text>
+<text x="882.0" y="288.0" text-anchor="end" class="tick">bitrate, bits per second (log scale)</text>
+<line x1="62" y1="300" x2="88" y2="300" stroke="var(--s1)" stroke-width="2" stroke-linecap="round"/>
+<text x="96.0" y="304.0" text-anchor="start">predicted from the analysis, nothing encoded</text>
+<circle cx="392" cy="300" r="4" fill="var(--s2)"/>
+<text x="404.0" y="304.0" text-anchor="start">measured: the title encoded at that point and scored</text>
+</svg>

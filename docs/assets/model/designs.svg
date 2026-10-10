@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 396" width="900" height="396" role="img">
+<title>How wrong, for how much measuring</title>
+<desc>Horizontal bars of the mean VMAF error by design: 3.62 for the analysis without its scored encodes, 1.16 for instant, 1.02 with one anchor, 1.05 with two, 0.69 with three, 0.48 with four, 0.41 with seven and 0.31 with ten. The default tolerance is 0.5.</desc>
+<style>
+:root{--surface:#fcfcfb;--border:#e1e0d9;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--quiet:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--q1:#cde2fb;--q2:#9ec5f4;--q3:#6da7ec;--q4:#3987e5;--q5:#1c5cab;--q6:#0d366b;}
+@media (prefers-color-scheme: dark){:root{--surface:#1a1a19;--border:#2c2c2a;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--quiet:#52514e;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--q1:#0d366b;--q2:#184f95;--q3:#256abf;--q4:#3987e5;--q5:#6da7ec;--q6:#b7d3f6;}}
+text{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;fill:var(--ink2)}
+.title{font-size:15px;font-weight:600;fill:var(--ink)}
+.sub{font-size:12.5px;fill:var(--ink2)}
+.head{font-size:13px;font-weight:600;fill:var(--ink)}
+.val{fill:var(--ink);font-variant-numeric:tabular-nums}
+.tick{fill:var(--muted);font-variant-numeric:tabular-nums}
+.note{fill:var(--muted)}
+.grid{stroke:var(--grid);stroke-width:1}
+.axis{stroke:var(--axis);stroke-width:1}
+</style>
+<rect x="0.5" y="0.5" width="899" height="395" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+<text class="title" x="24" y="32">How wrong, for how much measuring</text>
+<text class="sub" x="24" y="52">Mean VMAF error on a title the model had never seen (three titles, each predicted by a model of the two others).</text>
+<line x1="330.0" y1="84.0" x2="330.0" y2="348.0" class="axis"/>
+<text x="330.0" y="366.0" text-anchor="middle" class="tick">0</text>
+<line x1="446.0" y1="84.0" x2="446.0" y2="348.0" class="grid"/>
+<text x="446.0" y="366.0" text-anchor="middle" class="tick">1</text>
+<line x1="562.0" y1="84.0" x2="562.0" y2="348.0" class="grid"/>
+<text x="562.0" y="366.0" text-anchor="middle" class="tick">2</text>
+<line x1="678.0" y1="84.0" x2="678.0" y2="348.0" class="grid"/>
+<text x="678.0" y="366.0" text-anchor="middle" class="tick">3</text>
+<line x1="794.0" y1="84.0" x2="794.0" y2="348.0" class="grid"/>
+<text x="794.0" y="366.0" text-anchor="middle" class="tick">4</text>
+<text x="794.0" y="386.0" text-anchor="end" class="tick">VMAF points</text>
+<text x="318.0" y="107.0" text-anchor="end">The analysis without its two scored encodes</text>
+<path d="M330.0,95.0 h415.9 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-415.9 z" fill="var(--quiet)"/>
+<text x="757.9" y="107.0" text-anchor="start" class="val">3.62</text>
+<text x="793.9" y="107.0" text-anchor="start" class="note">0 encode</text>
+<text x="318.0" y="139.0" text-anchor="end" class="val">The analysis alone: --instant</text>
+<path d="M330.0,127.0 h130.6 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-130.6 z" fill="var(--s1)"/>
+<text x="472.6" y="139.0" text-anchor="start" class="val">1.16</text>
+<text x="508.6" y="139.0" text-anchor="start" class="note">0 encode</text>
+<text x="318.0" y="171.0" text-anchor="end">1 anchor and the analysis</text>
+<path d="M330.0,159.0 h114.3 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-114.3 z" fill="var(--quiet)"/>
+<text x="456.3" y="171.0" text-anchor="start" class="val">1.02</text>
+<text x="492.3" y="171.0" text-anchor="start" class="note">1 encode</text>
+<text x="318.0" y="203.0" text-anchor="end">2 anchors</text>
+<path d="M330.0,191.0 h117.8 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-117.8 z" fill="var(--quiet)"/>
+<text x="459.8" y="203.0" text-anchor="start" class="val">1.05</text>
+<text x="495.8" y="203.0" text-anchor="start" class="note">2 encodes</text>
+<text x="318.0" y="235.0" text-anchor="end">3 anchors</text>
+<path d="M330.0,223.0 h76.0 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-76.0 z" fill="var(--quiet)"/>
+<text x="418.0" y="235.0" text-anchor="start" class="val">0.69</text>
+<text x="454.0" y="235.0" text-anchor="start" class="note">3 encodes</text>
+<text x="318.0" y="267.0" text-anchor="end">4 anchors</text>
+<path d="M330.0,255.0 h51.7 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-51.7 z" fill="var(--quiet)"/>
+<text x="396.0" y="267.0" text-anchor="start" class="val">0.48</text>
+<text x="432.0" y="267.0" text-anchor="start" class="note">4 encodes</text>
+<text x="318.0" y="299.0" text-anchor="end">7 anchors</text>
+<path d="M330.0,287.0 h43.6 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-43.6 z" fill="var(--quiet)"/>
+<text x="396.0" y="299.0" text-anchor="start" class="val">0.41</text>
+<text x="432.0" y="299.0" text-anchor="start" class="note">7 encodes</text>
+<text x="318.0" y="331.0" text-anchor="end">10 anchors</text>
+<path d="M330.0,319.0 h32.0 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-32.0 z" fill="var(--quiet)"/>
+<text x="396.0" y="331.0" text-anchor="start" class="val">0.31</text>
+<text x="432.0" y="331.0" text-anchor="start" class="note">10 encodes</text>
+<line x1="388.0" y1="84" x2="388.0" y2="348" stroke="var(--ink2)" stroke-width="1"/>
+<text x="394.0" y="80.0" text-anchor="start" class="note">default --tolerance 0.5: under it, the ladder needs nothing more</text>
+</svg>

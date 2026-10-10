@@ -7,6 +7,7 @@ import (
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/analyze/grain"
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/ladder/features"
 )
 
 // The engine's ports: each is the narrow part of an adapter the engine
@@ -55,6 +56,16 @@ type Digester interface {
 	) error
 }
 
+// Featurer extracts the features of the segments of a digest, which a
+// ladder model may predict from (features.Extractor). It is optional:
+// without it, models predict from measured anchors only.
+type Featurer interface {
+	Extract(
+		ctx context.Context,
+		spec features.Spec,
+	) (features.Set, error)
+}
+
 // GrainLab decodes encodes and measures their grain: AV1 film grain
 // synthesis (Options.FilmGrain) needs it, other builds never call it.
 type GrainLab interface {
@@ -88,5 +99,15 @@ func WithGrainLab(
 ) Option {
 	return func(e *Engine) {
 		e.grainLab = lab
+	}
+}
+
+// WithFeatures gives the engine what models predicting from the analysis
+// of a video need: the features of the digest.
+func WithFeatures(
+	featurer Featurer,
+) Option {
+	return func(e *Engine) {
+		e.featurer = featurer
 	}
 }

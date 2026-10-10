@@ -395,3 +395,20 @@ func TestDigestTimeline(
 		})
 	}
 }
+
+func TestDigestArgsCountFrames(
+	t *testing.T,
+) {
+	args := digestArgs(DigestSpec{
+		Source: "in.mov", Destination: "out.nut", Rate: media.Rational{Num: 25, Den: 1}, BitDepth: 8, Frames: 50,
+		Segments: []media.Interval{{Start: media.Seconds(1), End: media.Seconds(3)}, {Start: media.Seconds(9), End: media.Seconds(11)}},
+	})
+
+	// Each segment is read half a second past its end and cut at 50
+	// frames: a source with frames missing still gives whole segments.
+	assert.Contains(t, args, "2.500000")
+	assert.NotContains(t, args, "2.000000")
+	assert.Contains(t, args,
+		"[0:v:0]trim=end_frame=50,format=yuv420p,setsar=1[v0];[1:v:0]trim=end_frame=50,format=yuv420p,setsar=1[v1];"+
+			"[v0][v1]concat=n=2:v=1:a=0,setpts=N/(25/1*TB)[out]")
+}

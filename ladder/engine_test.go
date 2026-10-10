@@ -618,3 +618,32 @@ func mustCodec(
 
 	return codec
 }
+
+func TestPrepareInspected(
+	t *testing.T,
+) {
+	lab := newFakeLab(rateModel{}, sourceReport(1920, 1080, 8, 25, 600))
+	engine := labEngine(lab)
+
+	// A source the caller inspected is not inspected again.
+	prepared, err := engine.PrepareInspected(t.Context(), []string{sourcePath}, sourceReport(1920, 1080, 8, 25, 600))
+	require.NoError(t, err)
+	defer prepared.Close()
+
+	assert.Empty(t, lab.analyses)
+
+	res, err := engine.Build(t.Context(), sourcePath, Options{Codec: "h264", SkipVerify: true, DigestSampling: DigestUniform, Prepared: prepared})
+	require.NoError(t, err)
+	assert.NotEmpty(t, res.Rungs)
+	assert.Empty(t, lab.analyses, "nor by the build")
+
+	// Without an inspection, it is made.
+	other, err := engine.PrepareInspected(t.Context(), []string{sourcePath}, nil)
+	require.NoError(t, err)
+	defer other.Close()
+
+	assert.Len(t, lab.analyses, 1)
+
+	_, err = engine.PrepareInspected(t.Context(), nil, nil)
+	require.ErrorIs(t, err, ErrNoSource)
+}

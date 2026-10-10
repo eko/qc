@@ -121,13 +121,17 @@ type fakeLadders struct {
 	// prepared lists the sources prepared; prepareErr fails Prepare.
 	prepared   []string
 	prepareErr error
+	// inspections are the inspections the sources were prepared with.
+	inspections []*analysis.Report
 }
 
-func (l *fakeLadders) PrepareProgram(
+func (l *fakeLadders) PrepareInspected(
 	_ context.Context,
 	sources []string,
+	inspection *analysis.Report,
 ) (*ladder.Prepared, error) {
 	l.prepared = append(l.prepared, strings.Join(sources, "+"))
+	l.inspections = append(l.inspections, inspection)
 
 	if l.prepareErr != nil {
 		return nil, l.prepareErr
@@ -572,6 +576,8 @@ func TestRunSharesThePreparedSource(
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"a.mp4"}, ladders.prepared, "the source is prepared once for the three codecs")
+	require.Len(t, ladders.inspections, 1)
+	assert.NotNil(t, ladders.inspections[0], "with the inspection of the run: it is not inspected again")
 	require.Len(t, ladders.built, 3)
 	require.NotNil(t, ladders.built[0].Prepared)
 	assert.Same(t, ladders.built[0].Prepared, ladders.built[1].Prepared)

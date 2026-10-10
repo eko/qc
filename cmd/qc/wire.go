@@ -16,6 +16,8 @@ import (
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/internal/limits"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/ladder/corpus"
+	"github.com/eko/qc/ladder/features"
 	"github.com/eko/qc/overlay"
 	"github.com/eko/qc/pipeline"
 	"github.com/eko/qc/probe"
@@ -40,6 +42,7 @@ import (
 //	                overlay.NewRenderer → pipeline.Overlayer
 //	                newRunner → *pipeline.Runner
 //	                sample.NewEngine → *sample.Engine
+//	                corpus.NewBuilder → *corpus.Builder
 //
 // ctx bounds the preflights, which run while the application is built: a
 // missing GPU or libass then fails before anything starts.
@@ -62,11 +65,13 @@ func module(
 			fx.Annotate(newEncoder,
 				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.GrainLab)),
 				fx.As(new(ladder.RenditionEncoder)), fx.As(new(overlay.Burner)), fx.As(new(burnChecker)),
-				fx.As(new(sample.Cutter))),
+				fx.As(new(sample.Cutter)), fx.As(new(features.Encoder))),
+			fx.Annotate(newFeaturer, fx.As(new(ladder.Featurer))),
 			fx.Annotate(newLadderEngine, fx.As(new(pipeline.LadderBuilder)), fx.As(new(pipeline.LadderEncoder))),
 			fx.Annotate(overlay.NewRenderer, fx.As(new(pipeline.Overlayer))),
 			newRunner,
 			sample.NewEngine,
+			newCorpusBuilder,
 		),
 		fx.Invoke(applyLimits, checkGPU, checkOverlay, registerProfile),
 	)
@@ -77,6 +82,7 @@ type services struct {
 	analyzer *analysis.Analyzer
 	runner   *pipeline.Runner
 	sampler  *sample.Engine
+	corpus   *corpus.Builder
 }
 
 // newApp builds the application of one command run: its services, checked
@@ -92,7 +98,7 @@ func newApp(
 	return fx.New(
 		fx.WithLogger(newEventLogger),
 		module(ctx, config),
-		fx.Populate(&svc.analyzer, &svc.runner, &svc.sampler),
+		fx.Populate(&svc.analyzer, &svc.runner, &svc.sampler, &svc.corpus),
 	)
 }
 
@@ -160,8 +166,31 @@ func newLadderEngine(
 	digester ladder.Digester,
 	lab ladder.GrainLab,
 	renditions ladder.RenditionEncoder,
+	featurer ladder.Featurer,
 ) *ladder.Engine {
-	return ladder.NewEngine(inspector, encoder, digester, ladder.WithGrainLab(lab), ladder.WithRenditionEncoder(renditions))
+	return ladder.NewEngine(inspector, encoder, digester,
+		ladder.WithGrainLab(lab), ladder.WithRenditionEncoder(renditions), ladder.WithFeatures(featurer))
+}
+
+// newFeaturer extracts the features ladder models read: the frame
+// analysis of the analyzer and the cheap looks of the encoder.
+func newFeaturer(
+	analyzer *analysis.Analyzer,
+	encoder features.Encoder,
+) *features.Extractor {
+	return features.NewExtractor(analyzer, encoder)
+}
+
+// newCorpusBuilder gives the corpus builder the feature extractor, so that
+// a corpus describes its titles and models can predict from the analysis
+// of a video.
+func newCorpusBuilder(
+	inspector ladder.Inspector,
+	encoder ladder.Encoder,
+	digester ladder.Digester,
+	featurer ladder.Featurer,
+) *corpus.Builder {
+	return corpus.NewBuilder(inspector, encoder, digester, corpus.WithFeatures(featurer))
 }
 
 // newRunner gives the runner the ladder encoder and the overlayer, so that

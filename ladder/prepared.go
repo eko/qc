@@ -64,16 +64,7 @@ func (e *Engine) Prepare(
 	ctx context.Context,
 	source string,
 ) (*Prepared, error) {
-	prepared, err := e.inspect(ctx, source)
-	if err != nil {
-		return nil, err
-	}
-
-	if prepared.dir, prepared.cleanup, err = workDir(""); err != nil {
-		return nil, err
-	}
-
-	return prepared, nil
+	return e.PrepareInspected(ctx, []string{source}, nil)
 }
 
 // PrepareProgram is Prepare for the ladders of a program
@@ -83,12 +74,33 @@ func (e *Engine) PrepareProgram(
 	ctx context.Context,
 	sources []string,
 ) (*Prepared, error) {
+	return e.PrepareInspected(ctx, sources, nil)
+}
+
+// PrepareInspected is PrepareProgram for a first source already inspected
+// (or analysed) as inspection says: it is not inspected again, which for
+// an hour of video saves reading its packets a second time. A nil
+// inspection is made here.
+func (e *Engine) PrepareInspected(
+	ctx context.Context,
+	sources []string,
+	inspection *analysis.Report,
+) (*Prepared, error) {
 	if len(sources) == 0 {
 		return nil, fmt.Errorf("ladder: %w", ErrNoSource)
 	}
 
-	prepared, err := e.Prepare(ctx, sources[0])
-	if err != nil {
+	prepared := &Prepared{source: sources[0], inspection: inspection}
+
+	if inspection == nil || inspection.Info == nil {
+		var err error
+		if prepared, err = e.inspect(ctx, sources[0]); err != nil {
+			return nil, err
+		}
+	}
+
+	var err error
+	if prepared.dir, prepared.cleanup, err = workDir(""); err != nil {
 		return nil, err
 	}
 

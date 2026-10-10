@@ -61,7 +61,8 @@ func TestLadderOptionsShape(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			opts := ladderOptions(Config{Ladder: LadderConfig{Rungs: testCase.rungs}})
+			opts, err := ladderOptions(Config{Ladder: LadderConfig{Rungs: testCase.rungs}})
+			require.NoError(t, err)
 
 			assert.Equal(t, testCase.wantCount, opts.Constraints.Rungs)
 			assert.Equal(t, testCase.wantHeights, opts.Constraints.Resolutions)

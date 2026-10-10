@@ -15,6 +15,7 @@ import (
 	"github.com/eko/qc/audio/loudness"
 	"github.com/eko/qc/bitstream"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/ladder/predict"
 	"github.com/eko/qc/media"
 	"github.com/eko/qc/quality"
 	"github.com/eko/qc/vmaf"
@@ -124,7 +125,10 @@ func addLadderFlags(
 	flags.Int("encode-bit-depth", 8, "bit depth of the ladder encodes: 8 or 10 (Main10, best for HEVC/AV1)")
 	flags.Float64("digest-duration", 0, "length of the digest in seconds (0: 40 s); a ladder costs in proportion to it")
 	flags.String("digest", "balanced", "segments of the digest the ladder is estimated on: balanced (moved until the digest has the SI and TI of the title), top (the most complex scenes: a ladder for the demanding parts) or uniform (evenly spaced); balanced and top analyse the title first")
-	flags.String("probing", "fixed", "probe placement: fixed (3 CRFs per resolution) or adaptive (uncertainty-driven)")
+	flags.String("probing", "fixed", "probe placement: fixed (3 CRFs per resolution), adaptive (uncertainty-driven), model (a few encodes, the curves completed by --ladder-model) or predicted (no encode: --ladder-model predicts from the analysis of the digest)")
+	flags.Float64("tolerance", 0, "VMAF error the curves may have between probes (0: 0.5): adaptive probing adds probes until its curves are within it, and a ladder model measures the fewest encodes whose mean error on unseen titles was within it")
+	flags.Bool("instant", false, "predict the ladder from the analysis of the video, without any encode: a digest taken evenly (--digest uniform), its analysis, the prediction of --ladder-model, no verification; a few seconds, for the accuracy the model's validation reports")
+	flags.StringSlice("ladder-model", nil, "ladder models (qc model train) completing the probes: implies --probing model; a model is for one codec and preset, give one per codec")
 	flags.Bool("per-shot", false, "add a per-shot version of every rung: one CRF per shot at equal rate-quality slope")
 	flags.Bool("per-shot-resolution", false, "experimental: per-shot rungs whose shots also pick their resolution among neighbouring rungs' (implies --per-shot)")
 	flags.String("film-grain", "off", "AV1 film grain synthesis: off, auto (detect and calibrate) or a level 1-50")
@@ -261,8 +265,14 @@ func (c QualityConfig) metrics() []string {
 // metrics of the VMAF flags apply to the verification of the rungs.
 func ladderOptions(
 	config Config,
-) ladder.Options {
+) (ladder.Options, error) {
 	l := config.Ladder
+
+	probing, curves, err := ladderModels(l)
+	if err != nil {
+		return ladder.Options{}, err
+	}
+
 	// validate already rejected malformed values.
 	rungCount, resolutions, _ := parseRungs(l.Rungs)
 	filmGrain, _ := parseFilmGrain(l.FilmGrain)
@@ -282,7 +292,7 @@ func ladderOptions(
 			MaxBitrate:  l.MaxBitrate,
 		},
 		Heights:        l.Heights,
-		SkipVerify:     l.NoVerify,
+		SkipVerify:     l.NoVerify || l.Instant,
 		Model:          config.Quality.Model,
 		ModelDirs:      config.Quality.ModelDir,
 		Metrics:        config.Quality.metrics(),
@@ -291,8 +301,10 @@ func ladderOptions(
 		Parallel:       l.Parallel,
 		Memory:         resourceLimits(config.Tools).Memory,
 		BitDepth:       l.EncodeBitDepth,
-		Probing:        ladder.Probing(l.Probing),
-		DigestSampling: ladder.DigestSampling(l.Digest),
+		Probing:        probing,
+		Curves:         curves,
+		Tolerance:      l.Tolerance,
+		DigestSampling: digestSampling(l),
 		DigestDuration: media.Seconds(l.DigestDuration),
 		PerShot:        l.PerShot,
 		// PerShotResolution implies PerShot in the ladder options.
@@ -300,7 +312,61 @@ func ladderOptions(
 		FilmGrain:         filmGrain,
 		Encoder:           gpu.encoder,
 		Backend:           gpu.backend,
+	}, nil
+}
+
+// ErrNoLadderModel is returned for a probing by model without
+// --ladder-model.
+var ErrNoLadderModel = errors.New("--probing model, --probing predicted and --instant need --ladder-model")
+
+// digestSampling is --digest, or uniform with --instant: a digest placed
+// on the content needs the frame analysis of the whole title, which an
+// instant ladder does not wait for.
+func digestSampling(
+	l LadderConfig,
+) ladder.DigestSampling {
+	if l.Instant {
+		return ladder.DigestUniform
 	}
+
+	return ladder.DigestSampling(l.Digest)
+}
+
+// ladderModels loads the models of --ladder-model and returns the probing
+// mode: giving models asks for model probing, unless --probing says
+// adaptive.
+func ladderModels(
+	l LadderConfig,
+) (ladder.Probing, []*predict.Model, error) {
+	probing := ladder.Probing(l.Probing)
+	if l.Instant {
+		probing = ladder.ProbingPredicted
+	}
+
+	if len(l.LadderModel) == 0 {
+		if probing == ladder.ProbingModel || probing == ladder.ProbingPredicted {
+			return "", nil, ErrNoLadderModel
+		}
+
+		return probing, nil, nil
+	}
+
+	models := make([]*predict.Model, 0, len(l.LadderModel))
+
+	for _, path := range l.LadderModel {
+		model, err := predict.Load(path)
+		if err != nil {
+			return "", nil, fmt.Errorf("--ladder-model: %w", err)
+		}
+
+		models = append(models, model)
+	}
+
+	if probing != ladder.ProbingAdaptive && probing != ladder.ProbingPredicted {
+		probing = ladder.ProbingModel
+	}
+
+	return probing, models, nil
 }
 
 // ErrInvalidFilmGrain is returned for a malformed --film-grain value.

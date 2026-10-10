@@ -406,8 +406,10 @@ func TestExplicitCPUSettings(
 ) {
 	config := Config{Ladder: LadderConfig{Codec: "h264"}, GPU: GPUConfig{Encoder: "cpu", VMAFBackend: "cpu"}}
 
-	assert.Equal(t, encode.HardwareCPU, ladderOptions(config).Encoder)
-	assert.Equal(t, vmaf.BackendCPU, ladderOptions(config).Backend)
+	opts, err := ladderOptions(config)
+	require.NoError(t, err)
+	assert.Equal(t, encode.HardwareCPU, opts.Encoder)
+	assert.Equal(t, vmaf.BackendCPU, opts.Backend)
 	assert.Equal(t, vmaf.BackendCPU, qualityOptions(config).Backend)
 	assert.Equal(t, vmaf.BackendAuto, qualityOptions(Config{GPU: GPUConfig{VMAFBackend: "AUTO"}}).Backend)
 }

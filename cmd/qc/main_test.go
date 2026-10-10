@@ -576,3 +576,72 @@ func TestDetectEnvironment(
 	assert.NotNil(t, env.askWizard)
 	assert.NotNil(t, env.gpuAvailable)
 }
+
+// TestPlainProgress checks --plain and QC_PLAIN: the progress of a command
+// as plain lines on stderr, and no wizard for qc alone.
+func TestPlainProgress(
+	t *testing.T,
+) {
+	source, _ := clips(t)
+
+	code, stdout, stderr := execute(t, testEnv, "analyze", source, "--plain", "-f", "json")
+	require.Equal(t, 0, code, stderr)
+	assert.Contains(t, stderr, "qc analyze · source.mp4\n[1/2] Inspect: started\n")
+	assert.Regexp(t, `\[2/2\] Frame analysis: done in [\d.]+s`, stderr)
+	assert.Regexp(t, `qc analyze: done in [\d.]+s\n$`, stderr)
+	assert.NotContains(t, stderr, "\x1b")
+	assert.True(t, json.Valid([]byte(stdout)), "the report on stdout is untouched")
+
+	t.Setenv("QC_PLAIN", "true")
+
+	code, _, stderr = execute(t, testEnv, "analyze", source, "--fast", "-f", "json")
+	require.Equal(t, 0, code, stderr)
+	assert.Contains(t, stderr, "[1/1] Inspect: started")
+
+	// Even in a terminal, qc alone prints its help instead of the wizard.
+	interactive := testEnv
+	interactive.wizard = true
+	interactive.askWizard = func(wizardContext) (wizardAnswers, error) {
+		t.Fatal("the wizard was started")
+
+		return wizardAnswers{}, nil
+	}
+
+	code, stdout, _ = execute(t, interactive)
+	assert.Equal(t, 0, code)
+	assert.Contains(t, stdout, "Usage:")
+}
+
+// TestQuiet checks --quiet: no progress on stderr, even where a dashboard
+// or plain lines would be, and the report alone on stdout.
+func TestQuiet(
+	t *testing.T,
+) {
+	source, _ := clips(t)
+
+	terminal := testEnv
+	terminal.dashboard = true
+
+	testCases := []struct {
+		name string
+		env  environment
+		args []string
+	}{
+		{name: "in a terminal", env: terminal, args: []string{"analyze", source, "-f", "json", "--quiet"}},
+		{name: "wins over --plain", env: testEnv, args: []string{"analyze", source, "-f", "json", "--quiet", "--plain"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			code, stdout, stderr := execute(t, testCase.env, testCase.args...)
+			require.Equal(t, 0, code, stderr)
+			assert.Empty(t, stderr)
+			assert.True(t, json.Valid([]byte(stdout)))
+		})
+	}
+
+	// Errors are still reported.
+	code, _, stderr := execute(t, testEnv, "analyze", filepath.Join(t.TempDir(), "missing.mp4"), "-f", "json", "--quiet")
+	assert.NotEqual(t, 0, code)
+	assert.NotEmpty(t, stderr)
+}

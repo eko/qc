@@ -111,7 +111,8 @@ func TestLadderInnovationFlags(
 
 			require.NoError(t, err)
 
-			got := ladderOptions(testCase.config)
+			got, err := ladderOptions(testCase.config)
+			require.NoError(t, err)
 			assert.Equal(t, testCase.want.Probing, got.Probing)
 			assert.Equal(t, testCase.want.DigestSampling, got.DigestSampling)
 			assert.Equal(t, testCase.want.DigestDuration, got.DigestDuration)

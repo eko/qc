@@ -61,6 +61,11 @@ type Options struct {
 	Audio AudioOptions
 	// SkipVideo only runs stage 1 (no decoding).
 	SkipVideo bool
+	// SkipBitstream leaves the packets of the file unread: the report then
+	// has no Bitstream, only what the container says of itself (Info).
+	// Reading every packet of an hour of video takes a second or two,
+	// which an instant ladder does not spend.
+	SkipBitstream bool
 	// DeferHDRMetadata leaves the HDR metadata of the first frame out of an
 	// inspection (SkipVideo): the dynamic range then relies on the
 	// container's signalling. Set it when a frame analysis of the same file
@@ -314,6 +319,10 @@ func (a *Analyzer) inspect(
 	})
 
 	group.Go(func() error {
+		if opts.SkipBitstream {
+			return nil
+		}
+
 		defer timings.track("bitstream")()
 
 		var packets []media.Packet

@@ -32,11 +32,11 @@ func ParseProbing(
 	s string,
 ) (Probing, error) {
 	switch p := Probing(s); p {
-	case "", ProbingFixed, ProbingAdaptive:
+	case "", ProbingFixed, ProbingAdaptive, ProbingModel, ProbingPredicted:
 		return p, nil
 	}
 
-	return "", fmt.Errorf("%w %q (supported: fixed, adaptive)", ErrInvalidProbing, s)
+	return "", fmt.Errorf("%w %q (supported: fixed, adaptive, model, predicted)", ErrInvalidProbing, s)
 }
 
 // Defaults of adaptive probing.
@@ -80,6 +80,9 @@ type ProbingReport struct {
 	// Level corrected the quality level of the probes, and of the sampled
 	// rung measurements.
 	Level *Level `json:"level,omitempty"`
+	// Model reports how a model completed the probes (ProbingModel), or
+	// why it could not.
+	Model *ModelProbing `json:"model,omitempty"`
 }
 
 // probeBudget is the maximum number of adaptive probes: two fewer than the

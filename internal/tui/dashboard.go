@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -83,6 +84,10 @@ type (
 	panelMsg struct {
 		i     int
 		panel Panel
+	}
+	failMsg struct {
+		i      int
+		reason string
 	}
 	finishMsg struct{ err error }
 	tickMsg   time.Time
@@ -222,6 +227,10 @@ func (d *dashboard) updateStage(
 		if s := d.stage(m.i); s != nil {
 			s.state, s.summary, s.ended = stateDone, m.summary, time.Now()
 		}
+	case failMsg:
+		if s := d.stage(m.i); s != nil {
+			s.state, s.summary, s.ended = stateFailed, m.reason, time.Now()
+		}
 	}
 }
 
@@ -306,7 +315,7 @@ func (d *dashboard) stageLine(
 	case stateDone:
 		return "  " + Green.Render("✓") + "  " + label + stageDuration(s.ended.Sub(s.started)) + s.summary
 	case stateFailed:
-		return "  " + Red.Render("✗") + "  " + label + stageDuration(s.ended.Sub(s.started)) + Red.Render("interrupted")
+		return "  " + Red.Render("✗") + "  " + label + stageDuration(s.ended.Sub(s.started)) + Red.Render(cmp.Or(s.summary, "interrupted"))
 	}
 
 	line := "  " + d.spinner.View() + "  " + label
@@ -414,6 +423,15 @@ func (e *Emitter) Done(
 	summary string,
 ) {
 	e.emit(doneMsg{i: i, summary: summary})
+}
+
+// Fail marks stage i as failed, for the reason given in a few words, while
+// the job goes on with its other stages.
+func (e *Emitter) Fail(
+	i int,
+	reason string,
+) {
+	e.emit(failMsg{i: i, reason: reason})
 }
 
 // Unit sets the unit counted by stage i's progress (default "frames").

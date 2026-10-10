@@ -24,6 +24,8 @@ func TestParseProbing(
 		{name: "default", in: "", want: ""},
 		{name: "fixed", in: "fixed", want: ProbingFixed},
 		{name: "adaptive", in: "adaptive", want: ProbingAdaptive},
+		{name: "model", in: "model", want: ProbingModel},
+		{name: "predicted", in: "predicted", want: ProbingPredicted},
 		{name: "unknown", in: "random", wantErr: true},
 	}
 

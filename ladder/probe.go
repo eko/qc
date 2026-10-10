@@ -117,11 +117,14 @@ func (b *build) heights() []int {
 func (b *build) probe(
 	ctx context.Context,
 ) ([]Probe, error) {
-	if b.opts.Probing == ProbingAdaptive {
+	switch b.opts.Probing {
+	case ProbingAdaptive:
 		return b.probeAdaptive(ctx)
+	case ProbingModel, ProbingPredicted:
+		return b.probeModel(ctx)
+	default:
+		return b.probeFixed(ctx)
 	}
-
-	return b.probeFixed(ctx)
 }
 
 // probeFixed encodes the digest at every candidate resolution and probe

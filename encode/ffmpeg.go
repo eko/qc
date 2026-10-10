@@ -129,6 +129,13 @@ type DigestSpec struct {
 	Origin media.Duration
 	// BitDepth is 8 or 10.
 	BitDepth int
+	// Frames, when set, gives every segment exactly that many frames: the
+	// source is read a little past the end of each segment and cut by
+	// count. A segment's length says how many frames it holds only when
+	// the source has every frame at its time: one with frames missing
+	// (a gap in its timestamps) gives fewer for the same length, and one
+	// whose average frame rate is thereby under its real one gives more.
+	Frames int
 	// Lossless keeps the digest compact (FFV1); otherwise it is raw video in
 	// a NUT container, which costs nothing to decode for the many encodes
 	// and measurements that read it.
@@ -209,9 +216,15 @@ func digestArgs(
 
 	for _, part := range spec.parts() {
 		for _, seg := range part.Segments {
+			length, count := seg.Length(), ""
+			if spec.Frames > 0 {
+				length += overread
+				count = fmt.Sprintf("trim=end_frame=%d,", spec.Frames)
+			}
+
 			args = append(args, seekArgs(part.Origin+seg.Start)...)
-			args = append(args, "-t", seconds(seg.Length()), "-i", part.Source)
-			fmt.Fprintf(&graph, "[%d:v:0]format=%s,setsar=1[v%d];", inputs, format, inputs)
+			args = append(args, "-t", seconds(length), "-i", part.Source)
+			fmt.Fprintf(&graph, "[%d:v:0]%sformat=%s,setsar=1[v%d];", inputs, count, format, inputs)
 
 			inputs++
 		}
@@ -235,6 +248,11 @@ func digestArgs(
 
 	return append(args, spec.Destination)
 }
+
+// overread is how far past the end of a segment the source is read when
+// its frames are counted (DigestSpec.Frames): room for the frames a gap
+// in the timestamps pushed later.
+const overread = media.Duration(time.Second / 2)
 
 // seekArgs are the input arguments seeking to seek on the container's
 // timeline: an absolute seek (-seek_timestamp), as decoding seeks. A plain
