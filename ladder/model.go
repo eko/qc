@@ -150,7 +150,7 @@ func (b *build) design(
 	case ok:
 		return design, ""
 	case b.opts.NoEncode:
-		if _, any := model.Instant(nil); any {
+		if _, some := model.Instant(nil); some {
 			return predict.Design{}, "the model has no design predicting without an encode: train it again with this version of qc"
 		}
 	}

@@ -281,13 +281,7 @@ func (e *Extractor) Extract(
 		}
 	}()
 
-	var lower []int
-
-	for _, h := range spec.Heights {
-		if want.scale && h < spec.Height && !slices.Contains(lower, h) {
-			lower = append(lower, h)
-		}
-	}
+	lower := lowerHeights(spec, want)
 
 	read, err := e.read(ctx, spec, pass, lower, want)
 	if err != nil {
@@ -322,6 +316,23 @@ func (e *Extractor) Extract(
 	}
 
 	return set, nil
+}
+
+// lowerHeights are the resolutions under that of the video whose scale
+// loss is asked, each once.
+func lowerHeights(
+	spec Spec,
+	want wants,
+) []int {
+	var lower []int
+
+	for _, h := range spec.Heights {
+		if want.scale && h < spec.Height && !slices.Contains(lower, h) {
+			lower = append(lower, h)
+		}
+	}
+
+	return lower
 }
 
 // wants is what the features asked of a video are read from, next to its

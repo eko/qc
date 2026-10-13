@@ -389,16 +389,7 @@ func (f *FFmpeg) digestFast(
 		}
 	}()
 
-	workers := spec.Workers
-	if workers <= 0 {
-		workers = runtime.GOMAXPROCS(0)
-	}
-
-	// Under a cap of threads, each of the processes run at once takes one.
-	threads := 0
-	if f.threads > 0 {
-		workers, threads = min(workers, f.threads), 1
-	}
+	workers, threads := f.fastWorkers(spec)
 
 	group, gctx := errgroup.WithContext(ctx)
 	group.SetLimit(workers)
@@ -441,6 +432,24 @@ func (f *FFmpeg) digestFast(
 	}
 
 	return joinFiles(spec.Quantisers, quantisers)
+}
+
+// fastWorkers returns how many processes cut the segments of a fast
+// digest at once, and the threads each decodes on (0: as many as ffmpeg
+// takes): under a cap of threads, each of the processes takes one.
+func (f *FFmpeg) fastWorkers(
+	spec DigestSpec,
+) (workers, threads int) {
+	workers = spec.Workers
+	if workers <= 0 {
+		workers = runtime.GOMAXPROCS(0)
+	}
+
+	if f.threads > 0 {
+		return min(workers, f.threads), 1
+	}
+
+	return workers, 0
 }
 
 // listMode is the mode of the temporary list of the pieces of a digest.

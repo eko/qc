@@ -9,6 +9,8 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-13
+
 ### Added
 
 - **`qc model report`** (`qc model report corpus.jsonl --model model.json
@@ -634,7 +636,8 @@ The packages of the first release, for Go programs that embed qc:
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before
   a long run (`nvidia.Check`, `nvidia.Available`).
 
-[Unreleased]: https://github.com/eko/qc/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/eko/qc/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/eko/qc/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/eko/qc/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/eko/qc/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/eko/qc/compare/v1.0.0...v1.1.0

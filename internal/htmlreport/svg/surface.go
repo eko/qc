@@ -306,13 +306,24 @@ func (c Surface) floor(
 	sx, sy, _ = v.project(nearX*(surfaceHalfX+surfaceName), 0, 0)
 	fmt.Fprintf(b, `<text class="axis name" x="%.1f" y="%.1f" text-anchor="%s">%s</text>`, sx, sy+4, rowAnchor, template.HTMLEscapeString(c.RowTitle))
 
-	x0, y0, _ := v.project(postX, postY, 0)
-	x1, y1, _ := v.project(postX, postY, 1)
+	post(b, v, panel, postX, postY)
+}
+
+// post draws the scale of the height of a panel on a post standing at
+// (x, y) of the floor.
+func post(
+	b *strings.Builder,
+	v view,
+	panel SurfacePanel,
+	x, y float64,
+) {
+	x0, y0, _ := v.project(x, y, 0)
+	x1, y1, _ := v.project(x, y, 1)
 	fmt.Fprintf(b, `<line class="baseline" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>`, x0, y0, x1, y1)
 
 	for n := range surfaceLevels + 1 {
 		level := float64(n) / surfaceLevels
-		sx, sy, _ := v.project(postX, postY, level)
+		sx, sy, _ := v.project(x, y, level)
 		fmt.Fprintf(b, `<line class="tick" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>`, sx-surfaceTick, sy, sx, sy)
 
 		// The lowest level is written above its tick: the labels of the

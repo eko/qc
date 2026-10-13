@@ -297,21 +297,7 @@ func gridErrorSection(
 		},
 	}
 
-	var shown []predict.Design
-
-	if d, ok := instant(m); ok {
-		shown = append(shown, d)
-	}
-
-	if d, ok := noEncode(m); ok {
-		shown = append(shown, d)
-	}
-
-	if d := m.Design(modelTolerance, nil); len(d.Anchors) > 0 {
-		shown = append(shown, d)
-	}
-
-	shown = slices.DeleteFunc(shown, func(d predict.Design) bool { return d.Validation == nil })
+	shown := mainDesigns(m)
 	if len(shown) == 0 {
 		s.Notes = append(s.Notes, "Not validated: leaving a title out needs at least two.")
 
@@ -349,6 +335,29 @@ func gridErrorSection(
 	}
 
 	return s
+}
+
+// mainDesigns are the validated designs a reader chooses between: the one
+// predicting without a probe, the one without any encode, and the one a
+// ladder build measures anchors for at its default tolerance.
+func mainDesigns(
+	m *predict.Model,
+) []predict.Design {
+	var shown []predict.Design
+
+	if d, ok := instant(m); ok {
+		shown = append(shown, d)
+	}
+
+	if d, ok := noEncode(m); ok {
+		shown = append(shown, d)
+	}
+
+	if d := m.Design(modelTolerance, nil); len(d.Anchors) > 0 {
+		shown = append(shown, d)
+	}
+
+	return slices.DeleteFunc(shown, func(d predict.Design) bool { return d.Validation == nil })
 }
 
 // figureRow lays figures side by side, one under the other on a narrow
@@ -439,7 +448,7 @@ func titleErrorSection(
 	}
 
 	if !ok {
-		lead, ok = m.Design(modelTolerance, nil), true
+		lead = m.Design(modelTolerance, nil)
 	}
 
 	if lead.Validation == nil || len(lead.Validation.Titles) == 0 {
