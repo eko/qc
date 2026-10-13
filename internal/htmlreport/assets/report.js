@@ -1319,6 +1319,339 @@
 
   /* ---------- start ---------- */
 
+  /* ---------- surfaces ---------- */
+
+  // The geometry of svg/surface.go: the picture drawn here replaces the
+  // static one, seen from the same angles until the reader turns it.
+  var S_YAW = -0.62, S_PITCH = 0.5, S_HALF_X = 1, S_HALF_Y = 0.8, S_RISE = 1.3, S_SCALE = 0.31, S_CENTRE = 0.47;
+  var S_LABEL = 0.16, S_NAME = 0.52, S_LEAN = 0.35, S_FAINT = 16, S_LEVELS = 4, S_TICK = 4;
+  // A change of shape takes S_TWEEN ms, a played shape stays S_HOLD ms, and
+  // the pointer reads the corner within S_REACH units of it.
+  var S_TWEEN = 550, S_HOLD = 1800, S_REACH = 28, S_MIN_PITCH = 0.12, S_MAX_PITCH = 1.25;
+
+  function Surface(fig, d) {
+    this.fig = fig;
+    this.d = d;
+    this.plotEl = fig.querySelector('.plot');
+    this.svg = fig.querySelector('svg');
+    this.w = this.svg.viewBox.baseVal.width;
+    this.h = this.svg.viewBox.baseVal.height;
+    this.cols = d.cols.length;
+    this.rows = d.rows.length;
+    this.yaw = S_YAW;
+    this.pitch = S_PITCH;
+    this.shape = 0;
+    this.z = d.shapes[0].z.map(function (z) { return z.slice(); });
+    this.shade = d.shapes[0].shade.slice();
+    this.hover = -1;
+    this.playing = null;
+    this.tween = null;
+    this.build();
+    this.render();
+  }
+
+  Surface.prototype.level = function (k, v) {
+    var p = this.d.panels[k];
+    if (p.max <= p.min) return 0;
+    var l = p.log ? Math.log(Math.max(v, 1e-9) / p.min) / Math.log(p.max / p.min) : (v - p.min) / (p.max - p.min);
+    return Math.max(0, Math.min(1, l));
+  };
+
+  Surface.prototype.value = function (k, level) {
+    var p = this.d.panels[k];
+    return p.log ? p.min * Math.pow(p.max / p.min, level) : p.min + level * (p.max - p.min);
+  };
+
+  Surface.prototype.fx = function (i) {
+    var c = this.d.cols, first = c[0], last = c[c.length - 1];
+    return last === first ? 0 : ((c[i] - first) / (last - first) * 2 - 1) * S_HALF_X;
+  };
+
+  Surface.prototype.fy = function (j) {
+    return this.rows < 2 ? 0 : (j / (this.rows - 1) * 2 - 1) * S_HALF_Y;
+  };
+
+  // project returns where the point (x, y) of the floor of panel k raised
+  // to z is drawn, and its depth: the larger, the nearer.
+  Surface.prototype.project = function (k, x, y, z) {
+    var pw = this.w / this.d.panels.length, scale = pw * S_SCALE;
+    var across = x * Math.cos(this.yaw) - y * Math.sin(this.yaw);
+    var depth = x * Math.sin(this.yaw) + y * Math.cos(this.yaw);
+    return [pw * (k + 0.5) + scale * across,
+      this.h * S_CENTRE + scale * (depth * Math.sin(this.pitch) - (z - 0.5) * S_RISE * Math.cos(this.pitch)), depth];
+  };
+
+  Surface.prototype.corner = function (k, i, j, values) {
+    return this.project(k, this.fx(i), this.fy(j), this.level(k, values[j * this.cols + i]));
+  };
+
+  Surface.prototype.tick = function (k, v) {
+    return this.d.panels[k].unit === 'bitrate' ? bitrateLabel(v) : String(Math.round(v));
+  };
+
+  // points joins projected points for a polygon or a polyline.
+  function joinPoints(list) {
+    return list.map(function (p) { return r1(p[0]) + ',' + r1(p[1]); }).join(' ');
+  }
+
+  function line(cls, a, b, parent) {
+    svgEl('line', { 'class': cls, x1: r1(a[0]), y1: r1(a[1]), x2: r1(b[0]), y2: r1(b[1]) }, parent);
+  }
+
+  Surface.prototype.floor = function (k, g) {
+    var self = this, corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    // The post stands on the corner drawn leftmost.
+    var post = corners[0], leftmost = Infinity;
+    var outline = corners.map(function (c) {
+      var p = self.project(k, c[0] * S_HALF_X, c[1] * S_HALF_Y, 0);
+      if (p[0] < leftmost) { leftmost = p[0]; post = c; }
+      return p;
+    });
+    svgEl('polygon', { 'class': 'floor', points: joinPoints(outline) }, g);
+
+    // The sides nearest to the reader: where labels hide nothing. Labels
+    // hang away from the floor: the way their side leans.
+    var nearY = Math.cos(this.yaw) < 0 ? -1 : 1, nearX = Math.sin(this.yaw) < 0 ? -1 : 1;
+    var hang = function (lean) { return lean < -S_LEAN ? 'end' : lean > S_LEAN ? 'start' : 'middle'; };
+    var colAnchor = hang(-nearY * Math.sin(this.yaw)), rowAnchor = hang(nearX * Math.cos(this.yaw));
+    var text = function (p, label, cls, anchor, lift) {
+      svgEl('text', { 'class': 'axis' + (cls ? ' ' + cls : ''), x: r1(p[0]), y: r1(p[1] + (lift == null ? 4 : lift)), 'text-anchor': anchor }, g).textContent = label;
+    };
+    this.d.cols.forEach(function (col, i) { text(self.project(k, self.fx(i), nearY * (S_HALF_Y + S_LABEL), 0), col, '', colAnchor); });
+    text(this.project(k, 0, nearY * (S_HALF_Y + S_NAME), 0), this.d.colTitle, 'name', colAnchor);
+    this.d.rows.forEach(function (row, j) { text(self.project(k, nearX * (S_HALF_X + S_LABEL), self.fy(j), 0), row, '', rowAnchor); });
+    text(this.project(k, nearX * (S_HALF_X + S_NAME), 0, 0), this.d.rowTitle, 'name', rowAnchor);
+
+    line('baseline', this.project(k, post[0] * S_HALF_X, post[1] * S_HALF_Y, 0), this.project(k, post[0] * S_HALF_X, post[1] * S_HALF_Y, 1), g);
+    for (var n = 0; n <= S_LEVELS; n++) {
+      var p = this.project(k, post[0] * S_HALF_X, post[1] * S_HALF_Y, n / S_LEVELS);
+      line('tick', [p[0] - S_TICK, p[1]], p, g);
+      // The lowest level is written above its tick: the labels of the
+      // floor start under it.
+      text([p[0] - S_TICK - 3, p[1]], this.tick(k, this.value(k, n / S_LEVELS)), '', 'end', n ? 4 : -2);
+    }
+  };
+
+  // outline joins the corners of the first shape along the rows and the
+  // columns: what another shape is read against.
+  Surface.prototype.outline = function (k, g) {
+    var self = this, mean = this.d.shapes[0].z[k], i, j, pts;
+    for (j = 0; j < this.rows; j++) {
+      pts = [];
+      for (i = 0; i < this.cols; i++) pts.push(self.corner(k, i, j, mean));
+      svgEl('polyline', { 'class': 'ghost', points: joinPoints(pts) }, g);
+    }
+    for (i = 0; i < this.cols; i++) {
+      pts = [];
+      for (j = 0; j < this.rows; j++) pts.push(self.corner(k, i, j, mean));
+      svgEl('polyline', { 'class': 'ghost', points: joinPoints(pts) }, g);
+    }
+  };
+
+  Surface.prototype.render = function () {
+    var self = this, d = this.d, frame = doc.createDocumentFragment();
+    d.panels.forEach(function (panel, k) {
+      var pw = self.w / d.panels.length, faces = [], i, j;
+      var g = svgEl('g', { 'class': 'surface-panel' }, frame);
+      svgEl('text', { 'class': 'panel-title', x: r1(pw * (k + 0.5)), y: 16, 'text-anchor': 'middle' }, g).textContent = panel.name;
+      self.floor(k, g);
+      for (j = 0; j < self.rows - 1; j++) {
+        for (i = 0; i < self.cols - 1; i++) {
+          var pts = [], depth = 0, shade = 0;
+          [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].forEach(function (c) {
+            var p = self.corner(k, c[0], c[1], self.z[k]);
+            pts.push(p);
+            depth += p[2];
+            shade += self.shade[c[1] * self.cols + c[0]] / 4;
+          });
+          faces.push({ pts: joinPoints(pts), depth: depth, shade: shade });
+        }
+      }
+      faces.sort(function (a, b) { return a.depth - b.depth; });
+      faces.forEach(function (f) {
+        svgEl('polygon', { 'class': 'face', points: f.pts,
+          fill: 'color-mix(in oklab, ' + d.color + ' ' + Math.round(S_FAINT + (100 - S_FAINT) * f.shade) + '%, var(--surface-3))' }, g);
+      });
+      if (self.shape === 0 && !self.tween && d.lo && d.hi && d.lo[k] && d.hi[k]) {
+        for (j = 0; j < self.rows; j++) {
+          for (i = 0; i < self.cols; i++) line('spread', self.corner(k, i, j, d.lo[k]), self.corner(k, i, j, d.hi[k]), g);
+        }
+      }
+      if (self.shape !== 0 || self.tween) self.outline(k, g);
+      if (self.hover >= 0) {
+        var at = self.corner(k, self.hover % self.cols, Math.floor(self.hover / self.cols), self.z[k]);
+        svgEl('circle', { 'class': 'ring', cx: r1(at[0]), cy: r1(at[1]), r: 6 }, g);
+      }
+    });
+    this.svg.replaceChildren(frame);
+  };
+
+  // show morphs the surfaces into shape n.
+  Surface.prototype.show = function (n) {
+    var self = this, target = this.d.shapes[n];
+    this.shape = n;
+    this.select.value = String(n);
+    this.caption.textContent = target.name;
+    cancelAnimationFrame(this.frame);
+    if (reduceMotion) {
+      this.z = target.z.map(function (z) { return z.slice(); });
+      this.shade = target.shade.slice();
+      this.tween = null;
+      this.render();
+      this.refreshTip();
+      return;
+    }
+    var fromZ = this.z.map(function (z) { return z.slice(); }), fromShade = this.shade.slice(), t0 = null;
+    this.tween = true;
+    var step = function (now) {
+      if (t0 === null) t0 = now;
+      var t = Math.min(1, (now - t0) / S_TWEEN), e = t * t * (3 - 2 * t);
+      self.z = fromZ.map(function (z, k) { return z.map(function (v, i) {
+        // Bitrates move along their log scale, as they are drawn.
+        var to = target.z[k][i];
+        return self.d.panels[k].log && v > 0 && to > 0 ? v * Math.pow(to / v, e) : v + (to - v) * e;
+      }); });
+      self.shade = fromShade.map(function (v, i) { return v + (target.shade[i] - v) * e; });
+      if (t >= 1) self.tween = null;
+      self.render();
+      if (t < 1) self.frame = requestAnimationFrame(step);
+      else self.refreshTip();
+    };
+    this.frame = requestAnimationFrame(step);
+  };
+
+  Surface.prototype.play = function (on) {
+    var self = this;
+    clearInterval(this.playing);
+    this.playing = null;
+    if (on) {
+      this.show((this.shape + 1) % this.d.shapes.length);
+      this.playing = setInterval(function () { self.show((self.shape + 1) % self.d.shapes.length); }, S_HOLD);
+    }
+    this.playBtn.textContent = on ? 'Pause' : 'Play titles';
+    this.playBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
+
+  Surface.prototype.build = function () {
+    var self = this, d = this.d, tools = this.fig.querySelector('.surface-tools');
+    this.caption = htmlEl('span', 'surface-caption', d.shapes[0].name);
+    this.select = htmlEl('select', null, null, tools);
+    this.select.setAttribute('aria-label', 'Title shown');
+    d.shapes.forEach(function (shape, n) {
+      var o = htmlEl('option', null, shape.name, self.select);
+      o.value = String(n);
+    });
+    this.select.addEventListener('change', function () { self.play(false); self.show(Number(self.select.value)); });
+    this.playBtn = htmlEl('button', null, 'Play titles', tools);
+    this.playBtn.type = 'button';
+    this.playBtn.addEventListener('click', function () { self.play(!self.playing); });
+    var reset = htmlEl('button', null, 'Reset view', tools);
+    reset.type = 'button';
+    reset.addEventListener('click', function () { self.yaw = S_YAW; self.pitch = S_PITCH; self.render(); });
+    tools.hidden = d.shapes.length < 2;
+    this.plotEl.appendChild(this.caption);
+
+    this.tip = htmlEl('div', 'tip', null, this.plotEl);
+    this.tip.hidden = true;
+    this.plotEl.setAttribute('data-turns', '');
+    this.plotEl.tabIndex = 0;
+    this.plotEl.setAttribute('aria-label', 'Surfaces: drag or use the arrow keys to turn them');
+
+    var drag = null;
+    var local = function (e) {
+      var rect = self.svg.getBoundingClientRect();
+      return [(e.clientX - rect.left) * self.w / rect.width, (e.clientY - rect.top) * self.h / rect.height];
+    };
+    this.plotEl.addEventListener('pointerdown', function (e) {
+      if (e.button) return;
+      drag = { x: e.clientX, y: e.clientY, yaw: self.yaw, pitch: self.pitch };
+      self.plotEl.setPointerCapture(e.pointerId);
+      self.hideTip();
+    });
+    this.plotEl.addEventListener('pointermove', function (e) {
+      if (drag) {
+        self.yaw = drag.yaw - (e.clientX - drag.x) * 0.01;
+        self.pitch = Math.max(S_MIN_PITCH, Math.min(S_MAX_PITCH, drag.pitch + (e.clientY - drag.y) * 0.006));
+        self.render();
+        return;
+      }
+      self.pointAt(local(e));
+    });
+    var release = function () { drag = null; };
+    this.plotEl.addEventListener('pointerup', release);
+    this.plotEl.addEventListener('pointercancel', release);
+    this.plotEl.addEventListener('pointerleave', function () { if (!drag) self.hideTip(); });
+    this.plotEl.addEventListener('keydown', function (e) {
+      var turn = { ArrowLeft: [0.12, 0], ArrowRight: [-0.12, 0], ArrowUp: [0, -0.08], ArrowDown: [0, 0.08] }[e.key];
+      if (!turn) return;
+      e.preventDefault();
+      self.yaw += turn[0];
+      self.pitch = Math.max(S_MIN_PITCH, Math.min(S_MAX_PITCH, self.pitch + turn[1]));
+      self.render();
+    });
+  };
+
+  // pointAt reads the corner nearest to pos, on whichever panel it is.
+  Surface.prototype.pointAt = function (pos) {
+    var best = -1, reach = S_REACH * S_REACH, at = null;
+    for (var k = 0; k < this.d.panels.length; k++) {
+      for (var n = 0; n < this.rows * this.cols; n++) {
+        var p = this.corner(k, n % this.cols, Math.floor(n / this.cols), this.z[k]);
+        var dist = (p[0] - pos[0]) * (p[0] - pos[0]) + (p[1] - pos[1]) * (p[1] - pos[1]);
+        if (dist < reach) { reach = dist; best = n; at = p; }
+      }
+    }
+    if (best < 0) { this.hideTip(); return; }
+    this.at = at;
+    if (best !== this.hover) { this.hover = best; this.render(); }
+    this.refreshTip();
+  };
+
+  Surface.prototype.hideTip = function () {
+    this.tip.hidden = true;
+    if (this.hover >= 0) { this.hover = -1; this.render(); }
+  };
+
+  Surface.prototype.refreshTip = function () {
+    if (this.hover < 0 || !this.at) return;
+    var self = this, d = this.d, n = this.hover, tip = this.tip;
+    tip.textContent = '';
+    var head = htmlEl('div', 'tip-head', null, tip);
+    htmlEl('b', null, d.rows[Math.floor(n / this.cols)] + ' · ' + d.colTitle + ' ' + d.cols[n % this.cols], head);
+    var fields = function (label, read) {
+      htmlEl('div', 'tip-sep', label, tip);
+      d.panels.forEach(function (panel, k) {
+        var row = htmlEl('div', 'tip-field', null, tip);
+        htmlEl('span', null, panel.name.replace(/ \(.*/, ''), row);
+        htmlEl('b', null, read(k), row);
+      });
+    };
+    var one = function (k, v) { return valueLabel(d.panels[k].unit, v, 1); };
+    fields(d.shapes[this.shape].name, function (k) { return one(k, d.shapes[self.shape].z[k][n]); });
+    if (this.shape !== 0) fields(d.shapes[0].name, function (k) { return one(k, d.shapes[0].z[k][n]); });
+    else if (d.lo && d.hi) fields('Lowest to highest title', function (k) { return one(k, d.lo[k][n]) + ' – ' + one(k, d.hi[k][n]); });
+
+    var rect = this.svg.getBoundingClientRect(), scale = rect.width / this.w;
+    tip.hidden = false;
+    var x = this.at[0] * scale, y = this.at[1] * scale, tw = tip.offsetWidth, th = tip.offsetHeight, w = this.plotEl.clientWidth;
+    var left = x + 16;
+    if (left + tw > w) left = Math.max(0, x - 16 - tw);
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(Math.max(0, Math.min(y - th / 2, rect.height - th))) + 'px';
+  };
+
+  function setupSurfaces() {
+    doc.querySelectorAll('figure.surface').forEach(function (fig) {
+      try {
+        var d = JSON.parse(fig.querySelector('.surface-data').textContent);
+        if (d.shapes && d.shapes.length) new Surface(fig, d);
+      } catch (err) {
+        // A surface that cannot be enhanced keeps its static rendering.
+        if (window.console) console.warn('qc: surface left static', err);
+      }
+    });
+  }
+
   function start() {
     // Touching outside a chart closes its tooltip.
     doc.addEventListener('pointerdown', function (e) {
@@ -1330,6 +1663,7 @@
     doc.querySelectorAll('.findings a.ts').forEach(bindTimestamp);
     setupTools();
     setupPalette();
+    setupSurfaces();
 
     var figs = Array.prototype.slice.call(doc.querySelectorAll('figure.chart'));
     Promise.all(figs.map(function (fig) {

@@ -10,6 +10,7 @@ qc sample <source>...   a sample of the videos: their most complex, representati
 qc model corpus <source or folder>...   measure and describe titles on a grid of resolutions and CRFs, for a ladder model
 qc model train <corpus>...    train a ladder model: qc ladder --ladder-model then measures a few probes and predicts the rest,
                               or none at all with --instant
+qc model report [corpus]...   an HTML report of a model (--model), of its corpus, or of both
 qc version [--check]    versions of qc, Go and libvmaf; --check: the environment
 ```
 
@@ -219,19 +220,24 @@ file counts as given, like `--precision`, and conflicts with `--sample`.
 
 `qc model corpus <source or folder>... --to corpus.jsonl` measures titles (a
 folder stands for every video in it and in its subfolders) for a ladder
-model; `qc model train <corpus.jsonl>... --to model.json` trains it — see
+model; `qc model train <corpus.jsonl>... --to model.json` trains it;
+`qc model report [corpus.jsonl]... [--model model.json] --to report.html`
+writes a page showing what the model is worth and what its corpus holds
+(the errors of its designs, across the grid and by title; the corpus as
+surfaces to turn, its curves and its coverage) — see
 [model probing](ladder.md#probes-completed-by-a-model), and the
 [step-by-step guide](model.md).
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--to file` | required | `corpus`: the JSON-lines file the measurements are added to (encodes it already holds are skipped: a run resumes, titles and codecs can be added later); `train`: the model written |
-| `-c`, `--codec` | h264 | codec of the encodes, and of the model |
+| `--to file` | required | `corpus`: the JSON-lines file the measurements are added to (encodes it already holds are skipped: a run resumes, titles and codecs can be added later); `train`: the model written; `report`: the HTML page |
+| `--model file` (`report`) | none | the model to report; its codec and preset are then those of the corpus read |
+| `-c`, `--codec` | h264 | codec of the encodes, and of the model; `report`: of the corpus, without `--model` |
 | `--preset` | the codec's ladder preset | encoder preset of the encodes, and of the model |
 | `--segments` (`corpus`) | 60 | segments of 2 s measured in each title, taken evenly across it |
 | `--heights` (`corpus`) | 2160…270 | resolutions of the grid; heights above the source are dropped |
-| `--crf-count` (`corpus`) | 0 (the codec's grid: 11 CRFs for H.264) | number of CRFs of the grid, spread evenly over the codec's range (13 to 48 for H.264); in place of `--crfs`. One count for a whole corpus |
-| `--crfs` (`corpus`) | the codec's probe CRFs, the half steps between them and one step beyond | CRFs of the grid |
+| `--crf-count` (`corpus`) | 0 (the codec's grid: 11 CRFs for H.264, 9 for AV1) | number of CRFs of the grid, spread evenly over the codec's range (13 to 48 for H.264, 16 to 63 for AV1); in place of `--crfs`. One count for a whole corpus |
+| `--crfs` (`corpus`) | the codec's probe CRFs, the half steps between them and one step beyond; for AV1 also CRF 63, the highest of SVT-AV1 | CRFs of the grid |
 | `--anchor-crfs` (`train`) | halfway between the codec's probe CRFs | the two CRFs the probes of a model are measured at, alternating between resolutions |
 
 ### `run`
@@ -315,7 +321,8 @@ several (`-c h264,av1`); `qc run` takes one source.
 | `--digest` | balanced | segments of the digest the ladder is estimated on: `balanced` (one per part of the title, each moved until the digest has the title's SI and TI), `top` (the most complex scenes, one per shot: the ladder of the demanding scenes, with their bitrates, not the title's) or `uniform` (evenly spaced, no analysis); for `balanced` and `top` a standalone `qc ladder` analyses the source first — see [digest](ladder.md#1-digest) |
 | `--probing` | fixed | probe placement: `fixed` (3 CRFs per resolution), `adaptive` (2 per resolution, then probes where the rungs and crossovers are least certain) `model` (a few encodes, the curves completed by `--ladder-model`) or `predicted` (no encode: `--ladder-model` predicts from the analysis of the digest; `--instant` adds `--digest uniform` and `--no-verify`) — see [probing](ladder.md#adaptive-probing) |
 | `--ladder-model` | none | ladder models trained by `qc model train`, one per codec: implies `--probing model`. A few probes are measured and the model predicts the others; a model that does not cover the build (another codec or preset, a source of another height, other `--heights`, 10-bit or film grain) leaves fixed probing, and the report says why — see [model probing](ladder.md#probes-completed-by-a-model) |
-| `--instant` | off | with `--ladder-model`: predict the ladder from the analysis of the video, without any probe: a digest taken evenly (`--digest uniform`), its features, the model's prediction, no verification. About 12 s instead of minutes, for the accuracy the model's validation reports — see [instant ladders](ladder.md#from-the-analysis-alone---instant) |
+| `--instant` | off | with `--ladder-model`: predict the ladder from the analysis of the video, without any probe: a digest taken evenly (`--digest uniform`), its features, the model's prediction, no verification, no challenger probe (a rung past the CRFs of the model's grid is placed on what the model knows). About 4 s instead of minutes (its digest is 20 s long unless `--digest-duration` says another), for the accuracy the model's validation reports — see [instant ladders](ladder.md#from-the-analysis-alone---instant) |
+| `--no-encode` | off | with `--instant` or `--probing predicted`: describe the digest without encoding anything, from its frames and from the source's own encode, leaving out the two very fast encodes a prediction otherwise scores. About 2 s instead of 4, for about twice the error, reported with the ladder (2.2 against 1.2 VMAF on 40 titles). It never falls back on probes: without a model trained for it, it fails and says why |
 | `--tolerance` | 0 (0.5) | VMAF error the curves may have between probes: adaptive probing adds probes until its curves are within it; a ladder model measures the fewest probes whose mean error on titles it had not seen was within it |
 | `--per-shot` | off | add a per-shot version of every rung: one CRF per shot at equal rate-quality slope, same pooled VMAF — see [per-shot](ladder.md#8-per-shot-rungs). The reports then show the per-shot ladder (every shot's CRF, bitrate and VMAF per rung) |
 | `--per-shot-resolution` | off | experimental, implies `--per-shot`: each shot also picks its resolution among the rung's and the neighbouring rung resolutions; renditions change resolution mid-stream — see [per-shot resolution](ladder.md#per-shot-resolution-experimental) |

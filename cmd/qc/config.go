@@ -148,6 +148,7 @@ type LadderConfig struct {
 	LadderModel       []string `mapstructure:"ladder-model"`
 	Tolerance         float64  `mapstructure:"tolerance"`
 	Instant           bool     `mapstructure:"instant"`
+	NoEncode          bool     `mapstructure:"no-encode"`
 	Digest            string   `mapstructure:"digest"`
 	DigestDuration    float64  `mapstructure:"digest-duration"`
 	PerShot           bool     `mapstructure:"per-shot"`

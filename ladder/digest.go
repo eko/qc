@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"runtime"
+	"time"
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
@@ -83,6 +85,8 @@ func (b *build) makeDigest(
 	}
 
 	spec := encode.DigestSpec{Source: b.source, Segments: digest.Segments, Origin: b.origin}
+	spec.Fast = b.opts.Probing == ProbingPredicted && digest.Sampling == DigestUniform && apart(digest.Segments, fastSpacing)
+	spec.Workers = fitWorkers(runtime.GOMAXPROCS(0), b.opts.Memory, b.video.Width*b.video.Height)
 
 	path, report, err := b.extractDigest(ctx, b.prepared.digestDir(b.workDir), digest.Duration, spec)
 	if err != nil {
@@ -93,6 +97,45 @@ func (b *build) makeDigest(
 
 	return digest, nil
 }
+
+// fastSpacing is how far apart the segments of a digest must start to be
+// cut from their keyframes (encode.DigestSpec.Fast): further than GOPs
+// are long, or two of them would be cut from one keyframe.
+const fastSpacing = 20 * time.Second
+
+// apart tells whether every segment starts at least spacing after the one
+// before it.
+func apart(
+	segments []media.Interval,
+	spacing time.Duration,
+) bool {
+	for i := 1; i < len(segments); i++ {
+		if segments[i].Start-segments[i-1].Start < media.Duration(spacing) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// quantisersSuffix names, after the digest's, the file holding the
+// quantisers of its source (encode.DigestSpec.Quantisers).
+const quantisersSuffix = ".qp"
+
+// sourceQuantisers tells whether the digest should come with the
+// quantisers of the source's own encode: a model may read them, and the
+// decoder of the source exports them (8-bit H.264).
+func (b *build) sourceQuantisers() bool {
+	modelled := b.opts.Probing == ProbingModel || b.opts.Probing == ProbingPredicted
+
+	return modelled && b.engine.featurer != nil && b.video.Codec == quantisedCodec && b.video.BitDepth <= quantisedDepth
+}
+
+// The sources whose quantisers are read.
+const (
+	quantisedCodec = "h264"
+	quantisedDepth = 8
+)
 
 // extractDigest writes the digest spec cuts (its sources and segments) into
 // dir, raw or compressed losslessly as its duration asks, inspects it and
@@ -110,6 +153,10 @@ func (b *build) extractDigest(
 	spec.Destination = filepath.Join(dir, "digest.nut")
 	if spec.Lossless {
 		spec.Destination = filepath.Join(dir, "digest.mkv")
+	}
+
+	if b.sourceQuantisers() && len(spec.Parts) == 0 {
+		spec.Quantisers = spec.Destination + quantisersSuffix
 	}
 
 	if err := b.engine.digester.Digest(ctx, spec); err != nil {

@@ -20,10 +20,18 @@ const maxChallengeRounds = 5
 // resolutions probed at the rung's bitrate (their CRF extrapolated along
 // their curve), and the rungs are planned again, for up to
 // maxChallengeRounds.
+//
+// A build that predicts its probes and measures nothing (see measuresNothing)
+// gets none: its rungs past the grid of its model are read on the curves
+// extended, and marked Rung.Extrapolated.
 func (b *build) challenge(
 	ctx context.Context,
 	probes []Probe,
 ) ([]Probe, error) {
+	if b.measuresNothing() {
+		return probes, nil
+	}
+
 	for range maxChallengeRounds {
 		jobs := b.challengers(probes)
 		if len(jobs) == 0 {
@@ -43,6 +51,16 @@ func (b *build) challenge(
 	}
 
 	return probes, nil
+}
+
+// measuresNothing tells whether the build is one of predicted probes that
+// verifies nothing, or was asked not to encode: an instant ladder, which
+// a challenger probe would turn into a build of half a minute (six probes
+// on an AV1 title whose low rungs needed CRFs past the last of the grid).
+func (b *build) measuresNothing() bool {
+	predicted := b.opts.Probing == ProbingPredicted && b.probing.Model != nil && b.probing.Model.Fallback == ""
+
+	return predicted && (b.opts.SkipVerify || b.opts.NoEncode)
 }
 
 // challengers lists the challenger probes of the rungs planned on probes

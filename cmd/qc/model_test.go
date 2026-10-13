@@ -11,6 +11,7 @@ import (
 
 	"github.com/eko/qc/internal/testutil"
 	"github.com/eko/qc/ladder"
+	"github.com/eko/qc/ladder/features"
 	"github.com/eko/qc/ladder/predict"
 )
 
@@ -38,7 +39,8 @@ func TestModelCommands(
 	assert.Equal(t, predict.FeaturesKind, rows[0].Kind)
 	assert.Len(t, rows[0].Features["si"], 2)
 	assert.Len(t, rows[0].Features["x264_23_bits"], 2)
-	assert.Len(t, rows[0].Features["scale_90"], 2)
+	assert.Len(t, rows[0].Features[features.SourceQP], 2, "the quantisers of an H.264 source")
+	assert.NotContains(t, rows[0].Features, "scale_90", "the scale loss is no longer described")
 	assert.Len(t, rows[1].Bits, 2)
 	assert.Len(t, rows[1].VMAF, 2)
 	assert.Equal(t, 180, rows[1].SourceHeight)
@@ -53,8 +55,28 @@ func TestModelCommands(
 	assert.Contains(t, stdout, "h264 fast, 180p sources: 2 titles, 4 segments, grid of 2 resolutions × 4 CRFs")
 	assert.Contains(t, stdout, "180p@26 90p@32")
 	assert.Contains(t, stdout, "the analysis alone (--instant)")
-	assert.Contains(t, stdout, "From the analysis alone, without any encode")
+	assert.Contains(t, stdout, "the frames alone (--instant --no-encode)")
+	assert.Contains(t, stdout, "From the analysis alone, without any probe")
 	assert.Contains(t, stdout, "Model written to "+modelPath)
+
+	// The report of the model and of its corpus, of either alone, and of
+	// the corpus for a codec it holds nothing of.
+	page := filepath.Join(dir, "model.html")
+
+	for _, args := range [][]string{{corpusPath, "--model", modelPath}, {"--model", modelPath}, {corpusPath}} {
+		code, stdout, stderr = execute(t, testEnv, append([]string{"model", "report", "--to", page}, args...)...)
+		require.Equal(t, 0, code, stderr)
+		assert.Contains(t, stdout, "Report written to "+page)
+
+		html, err := os.ReadFile(page)
+		require.NoError(t, err)
+		assert.Contains(t, string(html), "h264 fast")
+		assert.Contains(t, string(html), "180p sources")
+	}
+
+	code, _, stderr = execute(t, testEnv, "model", "report", corpusPath, "-c", "av1", "--to", page)
+	assert.NotEqual(t, 0, code)
+	assert.Contains(t, stderr, "no av1 8 encodes")
 
 	report := filepath.Join(dir, "ladder.json")
 	code, _, stderr = execute(t, testEnv, "ladder", titles[0], "--heights", "180,90", "--ladder-model", modelPath,
@@ -91,6 +113,27 @@ func TestModelCommands(
 	assert.Zero(t, res.ProbeEncodes())
 	require.NotEmpty(t, res.Rungs)
 	assert.Nil(t, res.Rungs[0].Measured)
+
+	withEncodes := res.Probing.Model.Features
+
+	// Without the two fast encodes either: the frames and the source's own
+	// encode, a design reading fewer features.
+	code, _, stderr = execute(t, testEnv, "ladder", titles[1], "--heights", "180,90", "--ladder-model", modelPath,
+		"--instant", "--no-encode", "--min-bitrate", "1000", "-f", "json", "-o", report)
+	require.Equal(t, 0, code, stderr)
+
+	data, err = os.ReadFile(report)
+	require.NoError(t, err)
+
+	res = ladder.Result{}
+	require.NoError(t, json.Unmarshal(data, &res))
+
+	assert.Equal(t, ladder.ProbingPredicted, res.Probing.Mode)
+	assert.Empty(t, res.Probing.Model.Fallback)
+	assert.Positive(t, res.Probing.Model.Features)
+	assert.Less(t, res.Probing.Model.Features, withEncodes)
+	assert.Zero(t, res.ProbeEncodes())
+	require.NotEmpty(t, res.Rungs)
 }
 
 func TestModelCommandErrors(
@@ -114,8 +157,12 @@ func TestModelCommandErrors(
 		{name: "train without a file", args: []string{"model", "train", empty}, want: "--to is required"},
 		{name: "train on nothing", args: []string{"model", "train", empty, "--to", filepath.Join(dir, "m.json")}, want: "no h264 fast encodes"},
 		{name: "one anchor CRF", args: []string{"model", "train", empty, "--to", filepath.Join(dir, "m.json"), "--anchor-crfs", "27"}, want: "--anchor-crfs takes three CRFs"},
+		{name: "report of nothing", args: []string{"model", "report", "--to", filepath.Join(dir, "r.html")}, want: "nothing to report"},
+		{name: "report without a file", args: []string{"model", "report", empty}, want: "--to is required"},
+		{name: "report of a model that does not exist", args: []string{"model", "report", "--model", filepath.Join(dir, "missing.json"), "--to", filepath.Join(dir, "r.html")}, want: "missing.json"},
 		{name: "probing by model without one", args: []string{"ladder", "a.mp4", "--probing", "model"}, want: "need --ladder-model"},
 		{name: "instant without a model", args: []string{"ladder", "a.mp4", "--instant"}, want: "need --ladder-model"},
+		{name: "no encode without a predicted ladder", args: []string{"ladder", "a.mp4", "--no-encode"}, want: "--no-encode needs --instant or --probing predicted"},
 		{name: "model that does not exist", args: []string{"ladder", "a.mp4", "--ladder-model", filepath.Join(dir, "missing.json")}, want: "--ladder-model"},
 	}
 
@@ -181,4 +228,25 @@ func TestModelCorpusGoesOnAfterAFailedTitle(
 	require.Len(t, rows, 2)
 	assert.Equal(t, good, rows[0].Source)
 	assert.Equal(t, 1, rows[0].Segments)
+}
+
+func TestDigestDuration(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name   string
+		config LadderConfig
+		want   float64
+	}{
+		{name: "the engine's default", config: LadderConfig{}, want: 0},
+		{name: "an instant ladder reads a shorter digest", config: LadderConfig{Instant: true}, want: 20},
+		{name: "unless told another", config: LadderConfig{Instant: true, DigestDuration: 40}, want: 40},
+		{name: "as asked", config: LadderConfig{DigestDuration: 12}, want: 12},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.InDelta(t, testCase.want, digestDuration(testCase.config).Seconds(), 1e-9)
+		})
+	}
 }

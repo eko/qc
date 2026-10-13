@@ -106,6 +106,15 @@ func TestTrainPredictsTitlesItHasNotSeen(
 	assert.Less(t, full.Validation.MeanVMAFError, 0.5)
 	assert.Less(t, full.Validation.MeanBitrateError, 0.05)
 
+	// Each title keeps the error it was predicted with, in corpus order.
+	require.Len(t, full.Validation.Titles, 3)
+
+	for i, title := range syntheticCorpus() {
+		assert.Equal(t, title.Name, full.Validation.Titles[i].Name)
+		assert.Positive(t, full.Validation.Titles[i].VMAFError)
+		assert.LessOrEqual(t, full.Validation.Titles[i].VMAFError, full.Validation.WorstVMAFError)
+	}
+
 	// A title unlike those of the corpus, measured at its anchors only.
 	unseen := syntheticTitle("documentary", 9, 20, 0.4, 0.5)
 	segs := allSegments(unseen)
@@ -132,7 +141,7 @@ func TestTrainPredictsFromFeaturesAlone(
 	model, err := Train(syntheticCorpus(), TrainOptions{FeaturePenalty: 0.001})
 	require.NoError(t, err)
 
-	instant, ok := model.Instant()
+	instant, ok := model.Instant(nil)
 	require.True(t, ok)
 	assert.Empty(t, instant.Anchors)
 	assert.Equal(t, []string{"busy", "noise", "soft"}, instant.Features)
@@ -178,16 +187,16 @@ func TestDesignsReadingFeaturesNeedThem(
 
 	// A tolerance any design meets: without features to give, the fewest
 	// anchors of the designs reading none; with them, none at all.
-	assert.Len(t, model.Design(50, false).Anchors, 1)
-	assert.Empty(t, model.Design(50, false).Features)
-	assert.Empty(t, model.Design(50, true).Anchors)
+	assert.Len(t, model.Design(50, nil).Anchors, 1)
+	assert.Empty(t, model.Design(50, nil).Features)
+	assert.Empty(t, model.Design(50, func(string) bool { return true }).Anchors)
 
 	// A corpus without features, or told to leave them, has no such design.
 	for _, opts := range []TrainOptions{{NoFeatures: true}} {
 		plain, err := Train(syntheticCorpus(), opts)
 		require.NoError(t, err)
 
-		_, ok := plain.Instant()
+		_, ok := plain.Instant(nil)
 		assert.False(t, ok)
 	}
 
@@ -197,7 +206,7 @@ func TestDesignsReadingFeaturesNeedThem(
 	partial, err := Train(titles, TrainOptions{})
 	require.NoError(t, err)
 
-	_, ok := partial.Instant()
+	_, ok := partial.Instant(nil)
 	assert.False(t, ok, "a title without features leaves the designs reading them out")
 }
 
@@ -282,20 +291,20 @@ func TestDesignTakesTheFewestAnchorsWithinTolerance(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Len(t, model.Design(testCase.tolerance, false).Anchors, testCase.want)
+			assert.Len(t, model.Design(testCase.tolerance, nil).Anchors, testCase.want)
 		})
 	}
 
 	// A design that was not validated is never trusted.
 	model.Designs[3].Validation = nil
-	assert.Len(t, model.Design(3, false).Anchors, 3)
+	assert.Len(t, model.Design(3, nil).Anchors, 3)
 
 	// Without any validation, the most anchors.
 	for i := range model.Designs {
 		model.Designs[i].Validation = nil
 	}
 
-	assert.Len(t, model.Design(1, false).Anchors, 10)
+	assert.Len(t, model.Design(1, nil).Anchors, 10)
 }
 
 func TestDefaultDesigns(
@@ -665,7 +674,7 @@ func TestPredictAveragesSegments(
 	model, err := Train(syntheticCorpus(), TrainOptions{FeaturePenalty: 0.001})
 	require.NoError(t, err)
 
-	instant, ok := model.Instant()
+	instant, ok := model.Instant(nil)
 	require.True(t, ok)
 
 	title := syntheticTitle("documentary", 9, 20, 0.4, 0.5)
@@ -692,4 +701,41 @@ func TestPredictAveragesSegments(
 		assert.InDelta(t, (first[i].VMAF+second[i].VMAF)/2, grid[i].VMAF, 1e-9)
 		assert.LessOrEqual(t, fromMeans[i].Bitrate, grid[i].Bitrate*(1+1e-9))
 	}
+}
+
+func TestFeatureSets(
+	t *testing.T,
+) {
+	// A design for each thing a build can read: here everything, and the
+	// features that need no encode.
+	model, err := Train(syntheticCorpus(), TrainOptions{
+		FeaturePenalty: 0.001,
+		FeatureSets:    [][]string{{"busy", "noise", "soft"}, {"busy", "soft", "unknown"}, {"soft", "busy"}, {"unknown"}},
+	})
+	require.NoError(t, err)
+
+	var sets [][]string
+
+	for _, d := range model.Designs {
+		if len(d.Anchors) == 0 && len(d.Features) > 0 {
+			sets = append(sets, d.Features)
+		}
+	}
+
+	assert.Equal(t, [][]string{{"busy", "noise", "soft"}, {"busy", "soft"}}, sets, "the features the corpus holds, a set once")
+
+	full, ok := model.Instant(nil)
+	require.True(t, ok)
+	assert.Len(t, full.Features, 3, "all that can be read")
+
+	light, ok := model.Instant(func(name string) bool { return name != "noise" })
+	require.True(t, ok)
+	assert.Equal(t, []string{"busy", "soft"}, light.Features)
+
+	_, ok = model.Instant(func(name string) bool { return name == "busy" })
+	assert.False(t, ok, "no design reads that little")
+
+	// A design reading features is taken only when all of them can be read.
+	assert.NotEmpty(t, model.Design(50, func(name string) bool { return name == "busy" }).Anchors)
+	assert.Empty(t, model.Design(50, func(name string) bool { return name != "noise" }).Anchors)
 }

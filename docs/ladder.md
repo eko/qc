@@ -316,7 +316,7 @@ flowchart LR
 - **Corpus** (`qc model corpus <source>... --to corpus.jsonl`): an excerpt
   of each title (60 segments of 2 s by default, taken evenly across it) is
   encoded as probes are, at every resolution and at CRFs half a probe step
-  apart (x264: 13 to 48), and **every frame is scored**: each segment gets
+  apart (x264: 13 to 48; SVT-AV1: 16 to 58, then 63, its highest), and **every frame is scored**: each segment gets
   its bitrate and VMAF at every point of the grid. A title costs 55
   encodes with exact scoring (about 40 minutes for two minutes of 1080p
   with x264 on an M2 Max). The excerpt is also **described**: its
@@ -356,7 +356,9 @@ flowchart LR
   of the probes is corrected, the rungs are placed on the envelope, and
   **every rung is still verified by a real encode** and calibrated when it
   misses. A resolution a rung needs below the grid still gets a measured
-  [challenger probe](#2-probe-encodes).
+  [challenger probe](#2-probe-encodes), except in an
+  [instant ladder](#from-the-analysis-alone---instant), which measures
+  nothing.
 - **When the model does not apply** (another codec or preset, a source of
   another height, other `--heights`, 10-bit encodes, HDR, film grain
   synthesis), the build probes as `fixed` does and the report says why
@@ -383,8 +385,25 @@ ten anchors for the default 0.5 (0.40), six for 0.8, four for 1.
 `qc ladder source --ladder-model model.json --instant` encodes **no probe
 and verifies nothing**: the digest is cut (evenly: `--digest uniform`, so
 that the title is not analysed first), described, and the model predicts
-every curve from that description. About 12 s for titles of 1 minute to
-1 hour on an M2 Max: 5 s cutting the digest, 7 s describing it.
+every curve from that description. About 4 s for titles of 10 minutes to
+1 hour on an M2 Max (1.6 s cutting the digest, 2.4 s describing it), 5 s
+for a title of a minute, whose segments are too close to each other to be
+cut from keyframes.
+
+An instant ladder reads a digest of **20 s**, ten segments, where the
+other ladders read 40 s: what an hour-long title allows in five seconds.
+`--digest-duration 40` gives the twenty segments back, in 7.5 s. What it
+changes, on four whole titles predicted from that many of their segments
+(the error of the model and that of the digest together, against the
+encodes of 30 to 90 of their segments):
+
+| Segments | VMAF error, mean | Bitrate error, mean | Top rung at VMAF 93 |
+|---|---|---|---|
+| 5 | 1.40 | 14.8% | 16% |
+| 10 (`--instant`) | 1.13 | 9.8% | 13% |
+| 15 | 1.01 | 8.4% | 11% |
+| 20 | 1.00 | 8.8% | 11% |
+| 10, without the encodes (`--no-encode`) | 2.64 | 11.0% | 40% |
 
 The description is the **features** of the digest (package
 `ladder/features`), which `qc model corpus` also stores for every segment
@@ -393,9 +412,13 @@ of a corpus:
 | Source | Features (per 2 s segment) |
 |---|---|
 | Frame analysis | spatial and temporal information (ITU-T P.910) and their logarithms, mean luma, camera motion (speed of pan, tilt and zoom, shake) |
+| The source's own encode | the mean **quantiser** of its frames, read while the digest is cut (8-bit H.264 sources): what its encoder had to do to hold its bitrate |
 | x264 ultrafast at 360p, CRF 23 and 35 | bits, residual bits and motion-vector bits per pixel and second (logarithms), PSNR, shares of skipped and intra macroblocks |
-| The same two encodes, scored | their **VMAF** against the video, as a viewer of its resolution gets it: three clips of each segment in a ladder build, every frame in a corpus |
-| Scaling | PSNR of a round trip through each lower resolution, one frame in ten: what a rendition there can no longer show |
+| The same two encodes, scored | their **VMAF** against the video, as a viewer of its resolution gets it: four frames spread evenly in each segment in a ladder build, every frame in a corpus |
+
+The quantiser of the source means what it meant in the corpus: it tells
+titles apart when the sources are encoded alike (one house mezzanine
+format), not across sources of different bitrates.
 
 The third line is what makes the difference. The others tell what an
 encoder makes of the video; that one tells what **VMAF** makes of it, on
@@ -412,9 +435,43 @@ under the real one by as much as the segments differ: 13% on average on 39
 real titles, 0.6% segment by segment
 ([validation](validation.md#probes-completed-by-a-model-qc-model)).
 
-A model whose corpus holds the features gets two more designs: **no
-anchor** (the features alone, what `--instant` uses) and one anchor plus
-the features. They are validated like the others, and `--probing model`
+**Without any encode: `--no-encode`.** With `--instant --no-encode` (or
+`--probing predicted --no-encode`) the two fast encodes and their scores
+are left out too: the model reads the frame analysis and the quantiser of
+the source. The description then takes 0.5 s instead of 2.4 (a ladder in
+about 2 s), and the prediction about twice its error: on 40 titles, each predicted by a
+model of the others, 2.18 VMAF and 9.3% of the bitrate against 1.20 and
+6.4%. The bitrate holds, thanks to the quantiser of the source (12.2%
+without it); the quality does not, because nothing but an encode scored
+against the source tells what VMAF makes of a title. No published method
+does better without an encode (2.4 to 3.3 VMAF,
+[validation](validation.md#probes-completed-by-a-model-qc-model)): use it
+to sort or pre-size, not to publish.
+
+An instant ladder measures no challenger probe either: where its rungs
+need CRFs past the grid of its model, they are placed on what the model
+knows, at lower resolutions. A model of AV1 measured by an earlier
+version stops at CRF 58, and the low rungs of a title that compresses
+well, which belong at 1080p and CRF 60 to 62, came out at 540p and 360p;
+the grid of AV1 now ends on CRF 63 (`qc model corpus` adds that point to
+a corpus, then train again).
+
+A build asked not to encode never falls back on probes: with a model
+that has no design for it (one trained by an earlier version), it stops
+and says so.
+
+The digest of an instant ladder is cut **from keyframes**, every segment
+by a process of its own: each starts at the keyframe of the source at or
+before its place, so that nothing is decoded but what is kept (a
+mezzanine with GOPs of up to 7 s otherwise decodes 1.65 s before each 2 s
+kept, on average). Segments closer than 20 s to each other (short titles)
+are cut where they are.
+
+A model whose corpus holds the features gets designs without anchor, one
+for each thing a build can read of a title: everything (what `--instant`
+uses), everything but the quantiser of the source (a source whose decoder
+does not tell it), and the same two without the encodes (`--no-encode`);
+and one anchor plus the features. They are validated like the others, and `--probing model`
 takes the design without anchor by itself the day its validation is
 within `--tolerance`. `--probing predicted` is `--instant` without its
 other choices: the digest of `--digest`, and every rung verified unless
@@ -426,9 +483,9 @@ engine to see what the prediction was worth:
 
 | Title | `--instant` | Rungs right as predicted | The others |
 |---|---|---|---|
-| Cartoon, 10 min 36 s | 11 s | 4 of 6 (measured VMAF within 1.3 of the prediction) | one CRF step off |
-| Drama, 1 min | 12 s | 5 of 8 (within 1.4) | one CRF step off |
-| Reality show, 59 min | 12 to 14 s | 2 of 8, the two top rungs (within 1.2) | CRFs 1.5 to 2 too high |
+| Cartoon, 10 min 36 s | 4 s | 4 of 6 (measured VMAF within 1.3 of the prediction) | one CRF step off |
+| Drama, 1 min | 10 s | 5 of 8 (within 1.4) | one CRF step off |
+| Reality show, 59 min | 4 s | 2 of 8, the two top rungs (within 1.2) | CRFs 1.5 to 2 too high |
 
 ![Five small charts, one per resolution, of VMAF against bitrate for a cartoon the model had never seen: the predicted curve follows the measured encodes within about one VMAF point](assets/model/curves.svg)
 

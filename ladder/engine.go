@@ -133,6 +133,13 @@ type Options struct {
 	// BitrateTolerance is the same criterion on the rung's bitrate at its
 	// quality, as a fraction: a rung within either is known. Default 0.03.
 	BitrateTolerance float64
+	// NoEncode keeps ProbingPredicted from encoding anything at all: the
+	// model reads the frames of the digest and the source's own encode,
+	// not the two fast encodes of the statistics pass nor their scores.
+	// About half the time of the features, for about twice the error (2.2
+	// against 1.2 VMAF on 40 titles): the report tells the error of the
+	// design used.
+	NoEncode bool
 	// MaxProbes caps adaptive probing. Default: the size of the fixed
 	// design, so adaptive never costs more encodes.
 	MaxProbes int

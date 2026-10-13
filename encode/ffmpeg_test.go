@@ -1,6 +1,7 @@
 package encode
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -411,4 +412,122 @@ func TestDigestArgsCountFrames(
 	assert.Contains(t, args,
 		"[0:v:0]trim=end_frame=50,format=yuv420p,setsar=1[v0];[1:v:0]trim=end_frame=50,format=yuv420p,setsar=1[v1];"+
 			"[v0][v1]concat=n=2:v=1:a=0,setpts=N/(25/1*TB)[out]")
+}
+
+func TestDigestArgsWithQuantisers(
+	t *testing.T,
+) {
+	args := digestArgs(DigestSpec{
+		Source: "in.mp4", Destination: "out.nut", Rate: media.Rational{Num: 25, Den: 1}, BitDepth: 8, Frames: 50, Quantisers: "out.qp",
+		Segments: []media.Interval{{Start: media.Seconds(1), End: media.Seconds(3)}, {Start: media.Seconds(9), End: media.Seconds(11)}},
+	})
+
+	// Every input exports the quantisers of its frames, and a second
+	// output takes the pictures codecview paints them into.
+	assert.Equal(t, 2, strings.Count(strings.Join(args, " "), "-export_side_data venc_params"))
+	assert.Contains(t, args,
+		"[0:v:0]trim=end_frame=50,split[a0][b0];[a0]format=yuv420p,setsar=1[v0];[b0]codecview=qp=true,extractplanes=u,scale=8:8:flags=area[q0];"+
+			"[1:v:0]trim=end_frame=50,split[a1][b1];[a1]format=yuv420p,setsar=1[v1];[b1]codecview=qp=true,extractplanes=u,scale=8:8:flags=area[q1];"+
+			"[v0][v1]concat=n=2:v=1:a=0,setpts=N/(25/1*TB)[out];[q0][q1]concat=n=2:v=1:a=0,setpts=N/(25/1*TB)[qout]")
+	assert.Equal(t, []string{"out.nut", "-map", "[qout]", "-r", "25/1", "-f", "rawvideo", "-pix_fmt", "gray", "out.qp"}, args[len(args)-10:])
+}
+
+func TestFastPieceArgs(
+	t *testing.T,
+) {
+	spec := DigestSpec{Destination: "out.nut", Rate: media.Rational{Num: 25, Den: 1}, BitDepth: 8}
+	part := DigestPart{Source: "in.mp4", Origin: media.Seconds(0.5)}
+	seg := media.Interval{Start: media.Seconds(60), End: media.Seconds(62)}
+
+	testCases := []struct {
+		name string
+		qp   string
+		want []string
+	}{
+		{
+			name: "from the keyframe, as many frames as the segment holds",
+			want: []string{
+				"-v", "error", "-nostdin", "-y", "-noaccurate_seek", "-seek_timestamp", "1", "-ss", "60.500000", "-t", "2.500000", "-i", "in.mp4", "-an",
+				"-filter_complex", "[0:v:0]trim=end_frame=50,format=yuv420p,setsar=1,setpts=N/(25/1*TB)[v]",
+				"-map", "[v]", "-r", "25/1", "-c:v", "rawvideo", "-f", "nut", "out.nut.000.nut",
+			},
+		},
+		{
+			name: "with the quantisers of the source",
+			qp:   "out.qp.000",
+			want: []string{
+				"-v", "error", "-nostdin", "-y", "-export_side_data", "venc_params", "-noaccurate_seek", "-seek_timestamp", "1", "-ss", "60.500000",
+				"-t", "2.500000", "-i", "in.mp4", "-an", "-filter_complex",
+				"[0:v:0]trim=end_frame=50,split[a][b];[a]format=yuv420p,setsar=1,setpts=N/(25/1*TB)[v];" +
+					"[b]codecview=qp=true,extractplanes=u,scale=8:8:flags=area,setpts=N/(25/1*TB)[q]",
+				"-map", "[v]", "-r", "25/1", "-c:v", "rawvideo", "-f", "nut", "out.nut.000.nut",
+				"-map", "[q]", "-r", "25/1", "-f", "rawvideo", "-pix_fmt", "gray", "out.qp.000",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, fastPieceArgs(spec, part, seg, "out.nut.000.nut", testCase.qp, 0))
+		})
+	}
+
+	// Under a cap of threads, the decoder of a piece takes one.
+	capped := fastPieceArgs(spec, part, seg, "out.nut.000.nut", "", 1)
+	assert.Equal(t, []string{"-v", "error", "-nostdin", "-y", "-threads", "1", "-noaccurate_seek"}, capped[:7])
+
+	// The pieces are joined without decoding, on one timeline.
+	assert.Equal(t, []string{
+		"-v", "error", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", "out.nut.txt", "-c", "copy",
+		"-bsf:v", "setts=pts=N/(25/1*TB):dts=N/(25/1*TB)", "-f", "nut", "out.nut",
+	}, digestJoinArgs(spec, "out.nut.txt"))
+}
+
+func TestReadQuantisers(
+	t *testing.T,
+) {
+	// Two pictures of 8×8: codecview paints a quantiser as 128/31 of it.
+	data := append(bytes.Repeat([]byte{128}, 64), bytes.Repeat([]byte{62}, 32)...)
+	data = append(data, bytes.Repeat([]byte{66}, 32)...)
+
+	path := filepath.Join(t.TempDir(), "digest.qp")
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+
+	quantisers, err := ReadQuantisers(path)
+	require.NoError(t, err)
+	require.Len(t, quantisers, 2)
+	assert.InDelta(t, 31, quantisers[0], 1e-9)
+	assert.InDelta(t, 15.5, quantisers[1], 1e-9)
+
+	_, err = ReadQuantisers(filepath.Join(t.TempDir(), "missing.qp"))
+	require.Error(t, err)
+}
+
+func TestDigestFast(
+	t *testing.T,
+) {
+	// A keyframe every second: segments asked half a second after one
+	// start on it.
+	source := testutil.Generate(t, testutil.Clip{GOP: 25, Seconds: 8, Name: "fast.mp4"})
+	dir := t.TempDir()
+	spec := DigestSpec{
+		Source: source, Destination: filepath.Join(dir, "digest.nut"), Rate: media.Rational{Num: 25, Den: 1}, BitDepth: 8,
+		Fast: true, Quantisers: filepath.Join(dir, "digest.nut.qp"),
+		Segments: []media.Interval{{Start: media.Seconds(1.5), End: media.Seconds(2.5)}, {Start: media.Seconds(5.5), End: media.Seconds(6.5)}},
+	}
+
+	require.NoError(t, NewFFmpeg("ffmpeg").Digest(t.Context(), spec))
+
+	quantisers, err := ReadQuantisers(spec.Quantisers)
+	require.NoError(t, err)
+	assert.Len(t, quantisers, 50, "a quantiser per frame of the digest")
+
+	for _, qp := range quantisers {
+		assert.Greater(t, qp, 1.0)
+		assert.Less(t, qp, 52.0)
+	}
+
+	left, err := filepath.Glob(filepath.Join(dir, "*"))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{spec.Destination, spec.Quantisers}, left, "the pieces are removed")
 }

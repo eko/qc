@@ -116,6 +116,7 @@ qc ladder source.mov -c av1 --encode-ladder renditions/    # + the renditions, c
 qc ladder ep1.mov ep2.mov ep3.mov -c h264,av1             # one ladder per codec for a programme, read video by video
 qc sample ep1.mov ep2.mov ep3.mov --to sample.mkv --scenes top   # a minute of their most complex scenes, copied
 qc model corpus films/*.mov --to corpus.jsonl && qc model train corpus.jsonl --to h264.json   # a ladder model of your content
+qc model report corpus.jsonl --model h264.json --to model.html   # what the model is worth and what its corpus holds, on one page
 qc ladder source.mov --ladder-model h264.json             # a few probes measured, the rest predicted, every rung verified
 qc ladder source.mov --ladder-model h264.json --instant   # no encode: the ladder predicted from the analysis, in seconds
 ```

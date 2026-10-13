@@ -327,12 +327,12 @@ def chart_time():
         ("Fixed probing, every rung verified", 436, "7 min 16 s", "30 probes", False),
         ("Model with 4 anchors, every rung verified", 167, "2 min 47 s", "4 probes", False),
         ("Predicted, every rung verified", 129, "2 min 09 s", "no probe", False),
-        ("Instant", 12, "12 s", "no probe, no verification", True),
+        ("Instant", 4, "4 s", "no probe, no verification", True),
     ]
     svg = SVG(900, 250, "The time of a ladder",
               "An hour-long 1080p title, x264 fast, Apple M2 Max; the model had never seen the title.",
               "Horizontal bars of the time of a ladder: 7 minutes 16 seconds with fixed probing, 2 minutes 47 with a "
-              "model of 4 anchors, 2 minutes 9 predicted and verified, 12 seconds instant.")
+              "model of 4 anchors, 2 minutes 9 predicted and verified, 4 seconds instant.")
     x0, top, step, scale = 330, 88, 34, 0.86
     for sec, label in ((0, "0"), (120, "2 min"), (240, "4 min"), (360, "6 min"), (480, "8 min")):
         svg.line(x0 + sec * scale, top - 8, x0 + sec * scale, top + len(rows) * step, "grid" if sec else "axis")

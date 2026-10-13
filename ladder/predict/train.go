@@ -168,6 +168,12 @@ type TrainOptions struct {
 	// NoFeatures leaves the designs reading features out, even when every
 	// title has them.
 	NoFeatures bool
+	// FeatureSets are the sets of features a design without anchor is
+	// fitted on, each for what a build can read of a title (everything,
+	// or what needs no encode); of each, the features every title has are
+	// kept. By default one set: all the features of the corpus. The design
+	// of one anchor and features reads the first.
+	FeatureSets [][]string
 	// Clips is the number of digests drawn from each title left out by the
 	// validation, each of ClipSegments segments. Defaults 40 and 20.
 	Clips        int
@@ -379,12 +385,16 @@ func Train(
 		plans = append(plans, plan{anchors: anchors, penalty: opts.Penalty, segments: opts.FitSegments})
 	}
 
-	if names := commonFeatures(titles); len(names) > 0 && !opts.NoFeatures {
+	if !opts.NoFeatures {
 		// From the analysis alone, and with the one anchor that tells the
 		// most: the top resolution, as the smallest set of anchors has it.
-		plans = append(plans,
-			plan{features: names, penalty: opts.FeaturePenalty, segments: 1},
-			plan{anchors: anchorSets[len(anchorSets)-1][:1], features: names, penalty: opts.FeaturePenalty, segments: 1})
+		for i, names := range featureSets(commonFeatures(titles), opts.FeatureSets) {
+			plans = append(plans, plan{features: names, penalty: opts.FeaturePenalty, segments: 1})
+
+			if i == 0 {
+				plans = append(plans, plan{anchors: anchorSets[len(anchorSets)-1][:1], features: names, penalty: opts.FeaturePenalty, segments: 1})
+			}
+		}
 	}
 
 	for _, pl := range plans {
@@ -406,6 +416,40 @@ type plan struct {
 	features []string
 	penalty  float64
 	segments int
+}
+
+// featureSets returns the sets of features to fit designs on: of each of
+// sets, the features common holds, without the sets left empty nor those
+// already there; common itself when no set is asked.
+func featureSets(
+	common []string,
+	sets [][]string,
+) [][]string {
+	if len(common) == 0 {
+		return nil
+	}
+
+	if len(sets) == 0 {
+		return [][]string{common}
+	}
+
+	var out [][]string
+
+	for _, set := range sets {
+		kept := make([]string, 0, len(set))
+
+		for _, name := range common {
+			if slices.Contains(set, name) {
+				kept = append(kept, name)
+			}
+		}
+
+		if len(kept) > 0 && !slices.ContainsFunc(out, func(o []string) bool { return slices.Equal(o, kept) }) {
+			out = append(out, kept)
+		}
+	}
+
+	return out
 }
 
 // commonFeatures returns the names of the features every title has, for
@@ -699,6 +743,7 @@ func validate(
 		// The same draws at every training: a validation must not move
 		// with the run.
 		rng := rand.New(rand.NewPCG(uint64(held)+1, uint64(t.segments()))) //nolint:gosec // reproducible draws, nothing secret
+		first := len(inRange)
 
 		for _, segs := range clips(t.segments(), opts, rng) {
 			predicted, err := m.Predict(d, t.input(pl.anchors, pl.features, segs))
@@ -720,6 +765,8 @@ func validate(
 				}
 			}
 		}
+
+		v.Titles = append(v.Titles, TitleValidation{Name: t.Name, VMAFError: mean(inRange[first:]), BitrateError: mean(inRangeRate[first:])})
 	}
 
 	for i := range points {

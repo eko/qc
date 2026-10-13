@@ -359,7 +359,7 @@ func TestGridCRFs(
 	}{
 		{codec: "h264", want: []float64{13, 16.5, 20, 23.5, 27, 30.5, 34, 37.5, 41, 44.5, 48}},
 		{codec: "hevc", want: []float64{15, 18.5, 22, 25.5, 29, 32.5, 36, 39.5, 43, 46.5, 50}},
-		{codec: "av1", want: []float64{16, 22, 28, 34, 40, 46, 52, 58}},
+		{codec: "av1", want: []float64{16, 22, 28, 34, 40, 46, 52, 58, 63}},
 	}
 
 	for _, testCase := range testCases {
@@ -476,7 +476,7 @@ func TestSpreadCRFs(
 		{name: "twice the default keeps its CRFs", codec: "h264", count: 21, want: []float64{
 			13, 15, 16.5, 18.5, 20, 22, 23.5, 25.5, 27, 29, 30.5, 32.5, 34, 36, 37.5, 39.5, 41, 43, 44.5, 46.5, 48,
 		}},
-		{name: "whole CRFs for SVT-AV1", codec: "av1", count: 5, want: []float64{16, 27, 37, 48, 58}},
+		{name: "whole CRFs for SVT-AV1, up to its highest", codec: "av1", count: 5, want: []float64{16, 28, 40, 51, 63}},
 		{name: "more than the encoder has", codec: "av1", count: 100, want: nil},
 		{name: "one CRF", codec: "h264", count: 1, wantErr: true},
 		{name: "none", codec: "h264", count: -3, wantErr: true},
@@ -498,7 +498,7 @@ func TestSpreadCRFs(
 
 			if testCase.want == nil {
 				// Every whole CRF of the span, each once.
-				assert.Len(t, got, 43)
+				assert.Len(t, got, 48)
 				assert.IsIncreasing(t, got)
 
 				return

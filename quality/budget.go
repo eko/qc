@@ -23,6 +23,14 @@ type Sample struct {
 	Share float64 `json:"share,omitempty"`
 	// PerScene is the number of clips scored in every scene.
 	PerScene int `json:"perScene,omitempty"`
+	// Even spreads the clips of a scene evenly in it (the k-th of n in the
+	// middle of the k-th n-th of the scene) instead of drawing them: for a
+	// mean over scenes of one length whose quality drifts along each, as
+	// the GOPs of an encode do. The mean of a few evenly spread frames
+	// then follows that of every frame closer than a draw of as many (see
+	// package ladder/features); the interval reported is that of a draw,
+	// and too wide.
+	Even bool `json:"even,omitempty"`
 }
 
 // Spellings of a budget (see ParseSample).
@@ -82,6 +90,8 @@ func (s Sample) Validate() error {
 		return fmt.Errorf("%w: %d clips per scene", ErrInvalidSample, s.PerScene)
 	case s.Share > 0 && s.PerScene > 0:
 		return fmt.Errorf("%w: a share of frames and clips per scene are exclusive", ErrInvalidSample)
+	case s.Even && s.PerScene == 0:
+		return fmt.Errorf("%w: clips are spread evenly per scene only", ErrInvalidSample)
 	}
 
 	return nil
@@ -166,7 +176,7 @@ func planBudget(
 	var strata []*stratum
 	if opts.Sample.PerScene > 0 {
 		strata = sceneStrata(n, pts, bounds, opts.ClipFrames)
-		report.Clamped = drawPerScene(strata, opts.Sample.PerScene, picker)
+		report.Clamped = drawPerScene(strata, opts.Sample, picker)
 	} else {
 		strata, report.Clamped = drawShare(n, pts, bounds, opts, picker)
 	}
@@ -214,13 +224,16 @@ func drawShare(
 // drawPerScene draws perScene clips in every stratum (every clip of a scene
 // too short for them). A single clip per scene needs at least two scenes
 // with a sampling error to pair them: otherwise two clips per scene are
-// drawn. It returns why the budget was clamped, if it was.
+// drawn. With Sample.Even the clips are spread evenly in each scene. It
+// returns why the budget was clamped, if it was.
 func drawPerScene(
 	strata []*stratum,
-	perScene int,
+	sample Sample,
 	picker *slotPicker,
 ) string {
 	var notes []string
+
+	perScene := sample.PerScene
 
 	if perScene == 1 && varyingStrata(strata) < 2 {
 		perScene = pilotClips
@@ -234,7 +247,16 @@ func drawPerScene(
 			short++
 		}
 
-		for range min(perScene, len(s.slots)) {
+		count := min(perScene, len(s.slots))
+
+		for k := range count {
+			if sample.Even {
+				// The slot in the middle of the k-th part of the scene.
+				s.sampled = append(s.sampled, (2*k+1)*len(s.slots)/(2*count))
+
+				continue
+			}
+
 			s.sampled = append(s.sampled, picker.next(s))
 		}
 	}

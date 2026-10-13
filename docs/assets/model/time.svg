@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" width="900" height="250" role="img">
 <title>The time of a ladder</title>
-<desc>Horizontal bars of the time of a ladder: 7 minutes 16 seconds with fixed probing, 2 minutes 47 with a model of 4 anchors, 2 minutes 9 predicted and verified, 12 seconds instant.</desc>
+<desc>Horizontal bars of the time of a ladder: 7 minutes 16 seconds with fixed probing, 2 minutes 47 with a model of 4 anchors, 2 minutes 9 predicted and verified, 4 seconds instant.</desc>
 <style>
 :root{--surface:#fcfcfb;--border:#e1e0d9;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--quiet:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--q1:#cde2fb;--q2:#9ec5f4;--q3:#6da7ec;--q4:#3987e5;--q5:#1c5cab;--q6:#0d366b;}
 @media (prefers-color-scheme: dark){:root{--surface:#1a1a19;--border:#2c2c2a;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--quiet:#52514e;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--q1:#0d366b;--q2:#184f95;--q3:#256abf;--q4:#3987e5;--q5:#6da7ec;--q6:#b7d3f6;}}
@@ -40,7 +40,7 @@ text{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;fi
 <text x="448.9" y="172.0" text-anchor="start" class="val">2 min 09 s</text>
 <text x="524.9" y="172.0" text-anchor="start" class="note">no probe</text>
 <text x="318.0" y="206.0" text-anchor="end" class="val">Instant</text>
-<path d="M330.0,194.0 h6.3 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-6.3 z" fill="var(--s1)"/>
-<text x="348.3" y="206.0" text-anchor="start" class="val">12 s</text>
-<text x="382.3" y="206.0" text-anchor="start" class="note">no probe, no verification</text>
+<path d="M330.0,194.0 h4.0 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 h-4.0 z" fill="var(--s1)"/>
+<text x="346.0" y="206.0" text-anchor="start" class="val">4 s</text>
+<text x="373.0" y="206.0" text-anchor="start" class="note">no probe, no verification</text>
 </svg>

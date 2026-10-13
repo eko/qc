@@ -150,8 +150,10 @@ func TestExtract(
 	// One frame in ten is kept for the scale loss: with segments of four
 	// frames, the lab's two frames fall in the first segment only; segments
 	// of ten frames give one each.
+	// The scale loss is read for the models trained with it, which name it.
 	s := spec()
 	s.Frames = 10
+	s.Names = []string{"scale_720", "scale_360", "x264_23_vmaf"}
 	l.frames = &analysis.FrameSeries{SI: make([]float64, 20), TI: make([]float64, 20)}
 
 	set, err := NewExtractor(l, l).Extract(t.Context(), s)
@@ -159,6 +161,7 @@ func TestExtract(
 	assert.Equal(t, 2, set.Segments)
 	assert.Equal(t, []float64{40, 60}, set.Values["scale_720"], "a trip that loses nothing is capped")
 	assert.Equal(t, []float64{39, 60}, set.Values["scale_360"])
+	assert.Equal(t, []string{"scale_360", "scale_720", "x264_23_vmaf"}, set.Names(), "the features named, no other")
 
 	require.Len(t, l.scaling, 1)
 	assert.Equal(t, encode.ScaleLossSpec{Source: "digest.nut", Width: 1920, Height: 1080, Heights: []int{720, 360}, Step: 10, WorkDir: "work"}, l.scaling[0])
@@ -182,7 +185,7 @@ func TestExtractScoresTheStatisticsPass(
 		// with every frame, the mean of the scored frames otherwise.
 		wantSecond float64
 	}{
-		{name: "a ladder build scores clips of each segment", want: quality.Options{Sample: quality.Sample{PerScene: 3}}, wantSecond: 85},
+		{name: "a ladder build scores frames spread in each segment", want: quality.Options{Sample: quality.Sample{PerScene: 3, Even: true}, ClipFrames: 1}, wantSecond: 85},
 		{name: "a corpus scores every frame", precise: true, want: quality.Options{Exact: true}, wantSecond: 60},
 	}
 
@@ -264,8 +267,10 @@ func TestExtractErrors(
 		{name: "statistics of fewer GOPs", change: func(l *lab, _ *Spec) { l.gops = 1 }, want: ErrFrames},
 		{name: "scoring fails", change: func(l *lab, _ *Spec) { l.failOn = "compare" }, want: errLab},
 		{name: "no frame scored", change: func(l *lab, _ *Spec) { l.unscored = true }, want: ErrFrames},
-		{name: "scale loss fails", change: func(l *lab, _ *Spec) { l.failOn = "scale" }, want: errLab},
-		{name: "scale loss misses a segment", change: func(_ *lab, _ *Spec) {}, want: ErrFrames},
+		{name: "scale loss fails", change: func(l *lab, s *Spec) { l.failOn, s.Names = "scale", []string{"scale_720"} }, want: errLab},
+		{name: "scale loss misses a segment", change: func(_ *lab, s *Spec) { s.Names = []string{"scale_720"} }, want: ErrFrames},
+		{name: "quantisers of fewer frames", change: func(_ *lab, s *Spec) { s.Heights, s.Quantisers = nil, []float64{20, 22} }, want: ErrFrames},
+		{name: "quantisers asked and unknown", change: func(_ *lab, s *Spec) { s.Heights, s.Names = nil, []string{SourceQP} }, want: ErrFrames},
 	}
 
 	for _, testCase := range testCases {
@@ -275,6 +280,92 @@ func TestExtractErrors(
 
 			_, err := NewExtractor(l, l).Extract(t.Context(), s)
 			require.ErrorIs(t, err, testCase.want)
+		})
+	}
+}
+
+func TestExtractWithoutEncode(
+	t *testing.T,
+) {
+	l := newLab()
+	s := spec()
+	s.Names = []string{"si", "ti_log", SourceQP}
+	// Two segments of four frames.
+	s.Quantisers = []float64{20, 22, 24, 26, 30, 30, 30, 30, 99}
+
+	set, err := NewExtractor(l, l).Extract(t.Context(), s)
+	require.NoError(t, err)
+
+	assert.Empty(t, l.stats, "no statistics pass: nothing is encoded")
+	assert.Empty(t, l.compared, "nothing is scored")
+	assert.Empty(t, l.scaling)
+	assert.Equal(t, []string{"si", SourceQP, "ti_log"}, set.Names())
+	assert.Equal(t, []float64{23, 30}, set.Values[SourceQP], "the mean quantiser of the frames of each segment")
+}
+
+func TestExtractStatisticsWithoutScores(
+	t *testing.T,
+) {
+	l := newLab()
+	s := spec()
+	s.Names = []string{"x264_23_bits"}
+
+	_, err := NewExtractor(l, l).Extract(t.Context(), s)
+	require.NoError(t, err)
+
+	require.Len(t, l.stats, 1)
+	assert.False(t, l.stats[0].Keep, "encodes nobody scores are not kept")
+	assert.Empty(t, l.compared)
+}
+
+func TestExtractQuantisersWhenKnown(
+	t *testing.T,
+) {
+	l := newLab()
+	s := spec()
+	s.Heights = []int{1080}
+	s.Quantisers = []float64{20, 20, 20, 20, 40, 40, 40, 40}
+
+	set, err := NewExtractor(l, l).Extract(t.Context(), s)
+	require.NoError(t, err)
+	assert.Equal(t, []float64{20, 40}, set.Values[SourceQP])
+	assert.Len(t, set.Names(), 9+12+2+1)
+}
+
+func TestSets(
+	t *testing.T,
+) {
+	names := []string{"scale_720", "si", SourceQP, "ti", "x264_23_bits", "x264_23_vmaf"}
+
+	assert.Equal(t, [][]string{
+		{"si", SourceQP, "ti", "x264_23_bits", "x264_23_vmaf"},
+		{"si", "ti", "x264_23_bits", "x264_23_vmaf"},
+		{"si", SourceQP, "ti"},
+		{"si", "ti"},
+	}, Sets(names), "everything, without the source's encode, without an encode, without either; never the retired scale loss")
+
+	testCases := []struct {
+		name                string
+		encodes, quantisers bool
+		want                []string
+	}{
+		{name: "everything", encodes: true, quantisers: true, want: names},
+		{name: "no encode", quantisers: true, want: []string{"scale_720", "si", SourceQP, "ti"}},
+		{name: "quantisers unknown", encodes: true, want: []string{"scale_720", "si", "ti", "x264_23_bits", "x264_23_vmaf"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			usable := Usable(testCase.encodes, testCase.quantisers)
+
+			var got []string
+			for _, name := range names {
+				if usable(name) {
+					got = append(got, name)
+				}
+			}
+
+			assert.Equal(t, testCase.want, got)
 		})
 	}
 }

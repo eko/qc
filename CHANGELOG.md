@@ -11,6 +11,20 @@ The release notes of each GitHub release are taken from its section here
 
 ### Added
 
+- **`qc model report`** (`qc model report corpus.jsonl --model model.json
+  --to model.html`): an HTML page showing what a ladder model is worth and
+  what its corpus holds, of either alone or of both. Findings tell whether
+  the model predicts without a probe and without any encode and how far
+  from a measured ladder, a model older than its corpus, unfinished
+  titles, and a grid that stops before the low rungs of its titles. Then
+  the error of each design, the error of each resolution and CRF of the
+  grid, the titles the model reads worst (the kinds of content to add),
+  the VMAF and the bitrate of the corpus as two surfaces in perspective
+  (drag to turn them, point at a corner, pick a title or play them all
+  against the mean), the mean rate-quality curve of each resolution, and
+  where the titles sit on each feature. `qc model train` now keeps the
+  validation error of each title in the model
+  (`predict.Validation.Titles`).
 - **Ladder models** (`qc model corpus`, `qc model train`, `qc ladder
   --ladder-model`): a model trained on titles measured on a whole grid of
   resolutions and CRFs completes the probes of a ladder. A build then
@@ -36,7 +50,7 @@ The release notes of each GitHub release are taken from its section here
   `ladder.Options.Curves`, `Probe.Predicted`, `Result.ProbeEncodes`.
 - **Instant ladders** (`qc ladder --ladder-model model.json --instant`): a
   ladder predicted from the analysis of the video, without any probe nor
-  verification, in about 12 s for titles of 1 minute to 1 hour. `qc model
+  verification, in about 4 s for titles of 10 minutes to 1 hour. `qc model
   corpus` now also describes every segment (spatial and temporal
   information, luma, camera motion, what x264 ultrafast spends on it at
   360p and the VMAF of those two encodes, what scaling loses at each
@@ -66,9 +80,47 @@ The release notes of each GitHub release are taken from its section here
 - **`--tolerance`** (`ladder`, `run`): the VMAF error the curves may have
   between probes, for adaptive probing and for ladder models (it was a
   library option only).
+- **`--no-encode`** (`ladder`, `run`, with `--instant` or `--probing
+  predicted`): the digest is described without encoding anything, from
+  its frames and from the source's own encode, leaving out the two very
+  fast encodes a prediction otherwise scores. About 2 s instead of 4 for
+  an hour-long title, for about twice the error: 2.2 VMAF and 9.3% of the
+  bitrate on 40 titles never seen, against 1.2 and 6.4%. It never falls
+  back on probes: without a model that can, the build fails and says why
+  (`ladder.ErrNoEncode`). A model now
+  holds a design for each thing a build can read (`qc model train`
+  lists them); one trained before must be trained again for this mode.
+  Library: `ladder.Options.NoEncode`, `features.Sets`, `features.Usable`,
+  `predict.TrainOptions.FeatureSets`.
 
 ### Changed
 
+- **Instant ladders are faster (12 s → 4 s for an hour-long title) and
+  read the source's own encode.** Their digest is 20 s long, ten
+  segments, unless `--digest-duration` says another (twenty segments:
+  7.5 s, for about a tenth less error: 1.0 against 1.1 VMAF and 8.8%
+  against 9.8% of bitrate on four titles). The
+  digest is cut from keyframes, a process per segment (nothing is decoded
+  before a segment; `encode.DigestSpec.Fast`); the two fast encodes are
+  scored on three frames spread evenly in each segment instead of three
+  clips of four drawn in it (half the frames, and no longer a draw;
+  `quality.Sample.Even`);
+  and the mean quantiser of the source, read while the digest is cut
+  (8-bit H.264, `encode.DigestSpec.Quantisers`), joins the features: 7.5%
+  → 6.4% of bitrate error on 40 titles. The scale loss, which added
+  nothing, is no longer described (models trained with it still get it).
+  Corpora are described again by `qc model corpus` (features version 7,
+  the encodes of the grid are kept) and models trained again to read the
+  quantiser. `predict.Model.Design` and `Instant` take what tells the
+  features a build can read.
+- **An instant ladder never encodes.** It measured challenger probes
+  where its rungs needed CRFs past the grid of its model (six encodes and
+  44 s on an hour-long title in AV1, whose low rungs need CRF 60 to 62
+  when the grid stopped at 58); it now places those rungs on what the
+  model knows. The corpus grid of AV1 ends on CRF 63, the highest of
+  SVT-AV1, whose scale falls too fast at its end to be read from the
+  points before it: run `qc model corpus` again on an AV1 corpus (five
+  encodes a title) and train again.
 - A ladder no longer inspects its source twice (`qc ladder`, `qc run`):
   1.5 s less for an hour of video. Library:
   `ladder.Engine.PrepareInspected`, `analysis.Options.SkipBitstream`.

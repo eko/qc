@@ -433,6 +433,31 @@ a.ts:hover { background: var(--accent-2); border-color: var(--accent-2); color: 
 .chart-svg .mark { fill: var(--accent-2); opacity: 0.1; }
 .chart-svg .mark-edge { stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 4 3; }
 
+/* ---------- figures read without script: bars, heatmaps, strips, surfaces ---------- */
+
+.figure { margin: var(--sp-5) 0 0; }
+.figure-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 0 var(--sp-5); }
+.chart-svg .bar-label { fill: var(--ink-2); font-size: 12px; }
+.chart-svg .bar-value { fill: var(--ink); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.chart-svg .cell { fill: var(--ink); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; stroke-linejoin: round; }
+.chart-svg .strip-dot { fill: var(--s1); fill-opacity: 0.55; stroke: var(--surface); stroke-width: 1.5; }
+.chart-svg .strip-dot:hover { fill-opacity: 1; }
+.chart-svg .face { stroke: var(--surface); stroke-width: 1; stroke-linejoin: round; }
+.chart-svg .floor { fill: none; stroke: var(--axis); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-svg .spread { stroke: var(--ink-2); stroke-width: 1; opacity: 0.45; }
+.chart-svg .ghost { fill: none; stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.55; }
+.chart-svg .panel-title { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+.chart-svg .axis.name { font-weight: 600; fill: var(--ink-2); }
+.ramp { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.ramp i { width: 96px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, color-mix(in oklab, var(--c) 16%, var(--surface-3)), var(--c)); }
+.surface-tools select {
+  height: 28px; max-width: 240px; padding: 0 8px; font: inherit; font-size: 13px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+}
+.surface-caption { position: absolute; left: 0; bottom: 0; font-size: 12.5px; font-weight: 600; color: var(--ink-2); pointer-events: none; }
+.js .plot[data-turns] { cursor: grab; touch-action: none; }
+.js .plot[data-turns]:active { cursor: grabbing; }
+
 .tip {
   position: absolute; z-index: 10; pointer-events: none; min-width: 180px; max-width: min(340px, 90vw);
   background: color-mix(in srgb, var(--surface) 94%, transparent); color: var(--ink);

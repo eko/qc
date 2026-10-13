@@ -2,9 +2,11 @@ package ladder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
+	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder/features"
 	"github.com/eko/qc/ladder/predict"
 )
@@ -35,6 +37,10 @@ const ProbingModel Probing = "model"
 // engine without a Featurer, leaves fixed probing.
 const ProbingPredicted Probing = "predicted"
 
+// ErrNoEncode is returned by a build asked to predict without an encode
+// (Options.NoEncode) when no model can: it does not fall back on probes.
+var ErrNoEncode = errors.New("cannot predict without an encode")
+
 // ModelProbing reports how a model completed the probes.
 type ModelProbing struct {
 	// Anchors are the encodes measured; the other probes are predicted.
@@ -60,15 +66,19 @@ func (b *build) probeModel(
 	ctx context.Context,
 ) ([]Probe, error) {
 	model, reason := b.coveringModel()
-	if model == nil {
-		probes, err := b.probeFixed(ctx)
-		b.probing.Model = &ModelProbing{Fallback: reason}
 
-		return probes, err
+	var design predict.Design
+	if model != nil {
+		design, reason = b.design(model)
 	}
 
-	design, reason := b.design(model)
 	if reason != "" {
+		// Asked not to encode, a build does not answer with the encodes
+		// of fixed probing, which take minutes: it says what is missing.
+		if b.opts.NoEncode {
+			return nil, fmt.Errorf("ladder: %w: %s", ErrNoEncode, reason)
+		}
+
 		probes, err := b.probeFixed(ctx)
 		b.probing.Model = &ModelProbing{Fallback: reason}
 
@@ -88,6 +98,7 @@ func (b *build) probeModel(
 		set, err := b.engine.featurer.Extract(ctx, features.Spec{
 			Path: b.digest, Width: b.video.Width, Height: b.video.Height, Rate: b.video.AvgFrameRate.Float(),
 			Frames: b.gop(), Heights: b.heights(), Inspection: b.digestReport, WorkDir: b.workDir,
+			Names: design.Features, Quantisers: b.quantisers(),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("ladder: %w", err)
@@ -119,22 +130,48 @@ func (b *build) probeModel(
 func (b *build) design(
 	model *predict.Model,
 ) (predict.Design, string) {
-	canDescribe := b.engine.featurer != nil
+	if b.engine.featurer == nil {
+		if b.opts.Probing == ProbingPredicted {
+			return predict.Design{}, "this engine cannot extract the features the model reads"
+		}
+
+		return model.Design(b.opts.Tolerance, nil), ""
+	}
+
+	quantisers := b.quantisers() != nil
 
 	if b.opts.Probing != ProbingPredicted {
-		return model.Design(b.opts.Tolerance, canDescribe), ""
+		return model.Design(b.opts.Tolerance, features.Usable(true, quantisers)), ""
 	}
 
-	design, ok := model.Instant()
+	design, ok := model.Instant(features.Usable(!b.opts.NoEncode, quantisers))
 
 	switch {
-	case !ok:
-		return predict.Design{}, "the model cannot predict from the analysis alone: its corpus holds no features"
-	case !canDescribe:
-		return predict.Design{}, "this engine cannot extract the features the model reads"
+	case ok:
+		return design, ""
+	case b.opts.NoEncode:
+		if _, any := model.Instant(nil); any {
+			return predict.Design{}, "the model has no design predicting without an encode: train it again with this version of qc"
+		}
 	}
 
-	return design, ""
+	return predict.Design{}, "the model cannot predict from the analysis alone: its corpus holds no features"
+}
+
+// quantisers returns the quantisers of the source's own encode, one per
+// frame of the digest, when the digest came with them (see
+// sourceQuantisers); nil otherwise.
+func (b *build) quantisers() []float64 {
+	if b.digest == "" {
+		return nil
+	}
+
+	quantisers, err := encode.ReadQuantisers(b.digest + quantisersSuffix)
+	if err != nil || len(quantisers) == 0 {
+		return nil
+	}
+
+	return quantisers
 }
 
 // coveringModel returns the first model of Options.Curves that can

@@ -126,6 +126,21 @@ type Validation struct {
 	MeanBitrateError float64 `json:"meanBitrateError"`
 	// WorstVMAFError is the largest error on those points.
 	WorstVMAFError float64 `json:"worstVmafError"`
+	// Titles are the mean errors of each title on those points, in the
+	// order of the corpus: which kinds of content the design reads well.
+	// Nil in models trained before it was kept.
+	Titles []TitleValidation `json:"titles,omitempty"`
+}
+
+// TitleValidation is the validation of a design on one title, predicted
+// by a model trained on the others.
+type TitleValidation struct {
+	Name string `json:"name"`
+	// VMAFError and BitrateError average the absolute errors over the
+	// points whose VMAF a ladder uses (VMAF points, fraction of the
+	// bitrate).
+	VMAFError    float64 `json:"vmafError"`
+	BitrateError float64 `json:"bitrateError"`
 }
 
 // Load reads the model at path.
@@ -209,12 +224,12 @@ func (d Design) regressors() int {
 // stayed within tolerance VMAF on average (MeanVMAFError), the best
 // validated of them when several have as few. When none did, or with a
 // tolerance of zero, it returns the design whose validation was the best,
-// and the design with the most anchors when none was validated. Designs
-// reading features are left out unless features is set: they need the
-// features of the title.
+// and the design with the most anchors when none was validated. A design
+// reading features is left out unless usable accepts every one of them:
+// it needs those features of the title (nil accepts none).
 func (m *Model) Design(
 	tolerance float64,
-	features bool,
+	usable func(feature string) bool,
 ) Design {
 	var (
 		best   Design
@@ -245,7 +260,7 @@ func (m *Model) Design(
 	}
 
 	for _, d := range m.Designs {
-		if len(d.Features) > 0 && !features {
+		if !d.reads(usable) {
 			continue
 		}
 
@@ -258,16 +273,47 @@ func (m *Model) Design(
 	return best
 }
 
-// Instant returns the design predicting from the features of the title
-// alone, without any anchor, when the model has one.
-func (m *Model) Instant() (Design, bool) {
+// reads tells whether the design can be fed: it reads no feature, or
+// features usable accepts, all of them.
+func (d Design) reads(
+	usable func(feature string) bool,
+) bool {
+	if len(d.Features) == 0 {
+		return true
+	}
+
+	return usable != nil && !slices.ContainsFunc(d.Features, func(name string) bool { return !usable(name) })
+}
+
+// Instant returns the design predicting from features of the title alone,
+// without any anchor: of those reading only features usable accepts (nil
+// accepts them all), the one reading the most. A model holds several,
+// each for what can be read of a title (see TrainOptions.FeatureSets), and
+// a build reads all it can: which design it takes does not depend on how
+// the validation of a small corpus happened to fall.
+func (m *Model) Instant(
+	usable func(feature string) bool,
+) (Design, bool) {
+	if usable == nil {
+		usable = func(string) bool { return true }
+	}
+
+	var (
+		best  Design
+		found bool
+	)
+
 	for _, d := range m.Designs {
-		if len(d.Anchors) == 0 && len(d.Features) > 0 {
-			return d, true
+		if len(d.Anchors) > 0 || len(d.Features) == 0 || !d.reads(usable) {
+			continue
+		}
+
+		if !found || len(d.Features) > len(best.Features) {
+			best, found = d, true
 		}
 	}
 
-	return Design{}, false
+	return best, found
 }
 
 // Points returns the points of the grid, heights then CRFs: the order of

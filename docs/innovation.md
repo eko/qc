@@ -65,7 +65,7 @@ decisions than the "top 95 / step 6" heuristic**.
 | 7 | Grain-aware AV1 | Done, opt-in: `--film-grain auto` | Synthetic grain: top rung 104.6 → 5.8 Mb/s at equal fidelity; no real grainy title validated yet |
 | 8–10 | Second opinions and AI | Deferred | |
 | 11 | Content-aware digest | Done, default: `--digest balanced`; `--digest top` for the most complex scenes | Digest bitrate error about halved on a 10-minute title (4.7% against 8.9%; 2.6% against 12.1% at the default 40 s); VMAF level unchanged |
-| 12 | Probes completed by a model | Done, opt-in: `--ladder-model` (`qc model corpus`, `qc model train`) | Title never seen by the model: 4 to 10 probes instead of 30, same rung resolutions with 10, build 7 min 16 s → 2 min 47 s to 3 min 28 s; three titles only so far. `--instant` predicts from the analysis alone in ~12 s: with three titles, VMAF within 1.2 and bitrate within 8% on average of a title never seen (most rungs right on two titles, CRFs 2 steps high under the two top rungs of the third); a larger corpus is what it needs |
+| 12 | Probes completed by a model | Done, opt-in: `--ladder-model` (`qc model corpus`, `qc model train`) | Title never seen by the model: 4 to 10 probes instead of 30, same rung resolutions with 10, build 7 min 16 s → 2 min 47 s to 3 min 28 s; three titles only so far. `--instant` predicts from the analysis alone in ~4 s (~2 s with `--no-encode`, for twice the error): with three titles, VMAF within 1.2 and bitrate within 8% on average of a title never seen (most rungs right on two titles, CRFs 2 steps high under the two top rungs of the third); a larger corpus is what it needs |
 
 ### Quick wins (low effort, no new dependency)
 

@@ -123,11 +123,12 @@ func addLadderFlags(
 	flags.Bool("commands", false, "print the ffmpeg command of each rung")
 	flags.Int("parallel", 2, "probe encodes run concurrently")
 	flags.Int("encode-bit-depth", 8, "bit depth of the ladder encodes: 8 or 10 (Main10, best for HEVC/AV1)")
-	flags.Float64("digest-duration", 0, "length of the digest in seconds (0: 40 s); a ladder costs in proportion to it")
+	flags.Float64("digest-duration", 0, "length of the digest in seconds (0: 40 s, or 20 s with --instant); a ladder costs in proportion to it")
 	flags.String("digest", "balanced", "segments of the digest the ladder is estimated on: balanced (moved until the digest has the SI and TI of the title), top (the most complex scenes: a ladder for the demanding parts) or uniform (evenly spaced); balanced and top analyse the title first")
 	flags.String("probing", "fixed", "probe placement: fixed (3 CRFs per resolution), adaptive (uncertainty-driven), model (a few encodes, the curves completed by --ladder-model) or predicted (no encode: --ladder-model predicts from the analysis of the digest)")
 	flags.Float64("tolerance", 0, "VMAF error the curves may have between probes (0: 0.5): adaptive probing adds probes until its curves are within it, and a ladder model measures the fewest encodes whose mean error on unseen titles was within it")
-	flags.Bool("instant", false, "predict the ladder from the analysis of the video, without any encode: a digest taken evenly (--digest uniform), its analysis, the prediction of --ladder-model, no verification; a few seconds, for the accuracy the model's validation reports")
+	flags.Bool("instant", false, "predict the ladder from the analysis of the video, without any probe: a digest taken evenly (--digest uniform), its analysis, the prediction of --ladder-model, no verification; a few seconds, for the accuracy the model's validation reports")
+	flags.Bool("no-encode", false, "with --instant or --probing predicted: describe the digest without encoding anything, from its frames and from the source's own encode, leaving out the two very fast encodes a prediction otherwise scores; faster, for about twice the error (reported with the ladder)")
 	flags.StringSlice("ladder-model", nil, "ladder models (qc model train) completing the probes: implies --probing model; a model is for one codec and preset, give one per codec")
 	flags.Bool("per-shot", false, "add a per-shot version of every rung: one CRF per shot at equal rate-quality slope")
 	flags.Bool("per-shot-resolution", false, "experimental: per-shot rungs whose shots also pick their resolution among neighbouring rungs' (implies --per-shot)")
@@ -304,8 +305,9 @@ func ladderOptions(
 		Probing:        probing,
 		Curves:         curves,
 		Tolerance:      l.Tolerance,
+		NoEncode:       l.NoEncode,
 		DigestSampling: digestSampling(l),
-		DigestDuration: media.Seconds(l.DigestDuration),
+		DigestDuration: digestDuration(l),
 		PerShot:        l.PerShot,
 		// PerShotResolution implies PerShot in the ladder options.
 		PerShotResolution: l.PerShotResolution,
@@ -318,6 +320,30 @@ func ladderOptions(
 // ErrNoLadderModel is returned for a probing by model without
 // --ladder-model.
 var ErrNoLadderModel = errors.New("--probing model, --probing predicted and --instant need --ladder-model")
+
+// ErrNoEncodeProbing is returned for --no-encode without a predicted
+// ladder: every other probing encodes.
+var ErrNoEncodeProbing = errors.New("--no-encode needs --instant or --probing predicted")
+
+// instantDigest is the length of the digest of an instant ladder, in
+// seconds, unless --digest-duration says another: ten segments, which an
+// hour-long 1080p title is cut into and described from in five seconds on
+// twelve cores. Twenty take eight seconds for a tenth less error (1.0
+// against 1.1 VMAF and 8.8% against 9.8% of bitrate on four titles
+// predicted from that many of their segments).
+const instantDigest = 20
+
+// digestDuration is --digest-duration, or instantDigest for --instant
+// without one.
+func digestDuration(
+	l LadderConfig,
+) media.Duration {
+	if l.Instant && l.DigestDuration == 0 {
+		return media.Seconds(instantDigest)
+	}
+
+	return media.Seconds(l.DigestDuration)
+}
 
 // digestSampling is --digest, or uniform with --instant: a digest placed
 // on the content needs the frame analysis of the whole title, which an
@@ -341,6 +367,10 @@ func ladderModels(
 	probing := ladder.Probing(l.Probing)
 	if l.Instant {
 		probing = ladder.ProbingPredicted
+	}
+
+	if l.NoEncode && probing != ladder.ProbingPredicted {
+		return "", nil, ErrNoEncodeProbing
 	}
 
 	if len(l.LadderModel) == 0 {

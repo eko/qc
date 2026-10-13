@@ -2,7 +2,9 @@ package ladder
 
 import (
 	"context"
+	"maps"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +13,7 @@ import (
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder/features"
 	"github.com/eko/qc/ladder/predict"
+	"github.com/eko/qc/media"
 )
 
 // kneeFeaturer is a Featurer that sees the difficulty of the fake lab's
@@ -27,10 +30,19 @@ func (f *kneeFeaturer) Extract(
 ) (features.Set, error) {
 	f.specs = append(f.specs, spec)
 
-	return features.Set{Segments: 2, Values: map[string][]float64{
-		"knee": {f.knee, f.knee}, "knee_log": {math.Log(f.knee), math.Log(f.knee)},
-	}}, f.err
+	values := map[string][]float64{
+		"knee": {f.knee, f.knee}, "knee_log": {math.Log(f.knee), math.Log(f.knee)}, encodedKnee: {f.knee, f.knee},
+	}
+	if spec.Names != nil {
+		maps.DeleteFunc(values, func(name string, _ []float64) bool { return !slices.Contains(spec.Names, name) })
+	}
+
+	return features.Set{Segments: 2, Values: values}, f.err
 }
+
+// encodedKnee is a feature the fake featurer reads from an encode, as
+// those of the statistics pass are.
+const encodedKnee = "x264_23_knee"
 
 // labModel trains a ladder model on titles the fake lab's rate model
 // would give at several difficulties (knees), on the grid of heights and
@@ -42,6 +54,17 @@ func labModel(
 ) *predict.Model {
 	t.Helper()
 
+	model, err := predict.Train(labTitles(preset, heights), predict.TrainOptions{})
+	require.NoError(t, err)
+
+	return model
+}
+
+// labTitles are the titles of labModel.
+func labTitles(
+	preset string,
+	heights []int,
+) []predict.Title {
 	crfs := []float64{13, 16.5, 20, 23.5, 27, 30.5, 34, 37.5}
 
 	var titles []predict.Title
@@ -69,10 +92,7 @@ func labModel(
 		titles = append(titles, title)
 	}
 
-	model, err := predict.Train(titles, predict.TrainOptions{})
-	require.NoError(t, err)
-
-	return model
+	return titles
 }
 
 func TestBuildWithModel(
@@ -356,4 +376,131 @@ func TestBuildWithModelUsesFeaturesOnlyWithinTolerance(
 	require.NoError(t, err)
 	assert.Empty(t, res.Probing.Model.Anchors)
 	assert.Len(t, featurer.specs, 1)
+}
+
+func TestBuildPredictedWithoutEncode(
+	t *testing.T,
+) {
+	heights := DefaultHeights()[2:]
+
+	// A corpus described with a feature read from an encode, and a model
+	// with a design for each thing a build can read (features.Sets).
+	titles := labTitles("fast", heights)
+	for i := range titles {
+		titles[i].Features[encodedKnee] = titles[i].Features["knee"]
+	}
+
+	model, err := predict.Train(titles, predict.TrainOptions{FeatureSets: features.Sets([]string{"knee", "knee_log", encodedKnee})})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		noEncode bool
+		want     []string
+	}{
+		{name: "a build reads all it can", want: []string{"knee", "knee_log", encodedKnee}},
+		{name: "asked not to encode, the frames alone", noEncode: true, want: []string{"knee", "knee_log"}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			lab := newFakeLab(rateModel{knee: 0.55}, sourceReport(1920, 1080, 8, 25, 600))
+			featurer := &kneeFeaturer{knee: 0.55}
+
+			res, err := NewEngine(lab, lab, lab, WithFeatures(featurer)).Build(t.Context(), sourcePath, Options{
+				Codec: "h264", Probing: ProbingPredicted, Curves: []*predict.Model{model}, SkipVerify: true, NoEncode: testCase.noEncode,
+			})
+			require.NoError(t, err)
+
+			require.Len(t, featurer.specs, 1)
+			assert.ElementsMatch(t, testCase.want, featurer.specs[0].Names, "only the features of the design are asked")
+			assert.Empty(t, res.Probing.Model.Fallback)
+			assert.Equal(t, len(testCase.want), res.Probing.Model.Features)
+			assert.Zero(t, res.ProbeEncodes())
+		})
+	}
+
+	// A model trained before it had such a design says so.
+	old := labModel(t, "fast", heights)
+	for i := range old.Designs {
+		if len(old.Designs[i].Features) > 0 {
+			old.Designs[i].Features = append(old.Designs[i].Features, encodedKnee)
+		}
+	}
+
+	lab := newFakeLab(rateModel{knee: 0.55}, sourceReport(1920, 1080, 8, 25, 600))
+
+	// It does not fall back on the encodes of fixed probing: nothing was
+	// to be encoded.
+	_, err = NewEngine(lab, lab, lab, WithFeatures(&kneeFeaturer{knee: 0.55})).Build(t.Context(), sourcePath, Options{
+		Codec: "h264", Probing: ProbingPredicted, Curves: []*predict.Model{old}, SkipVerify: true, NoEncode: true,
+	})
+	require.ErrorIs(t, err, ErrNoEncode)
+	require.ErrorContains(t, err, "the model has no design predicting without an encode: train it again with this version of qc")
+	assert.Empty(t, lab.params, "nothing was encoded")
+
+	// Nor when the model does not cover the build.
+	_, err = NewEngine(lab, lab, lab, WithFeatures(&kneeFeaturer{knee: 0.55})).Build(t.Context(), sourcePath, Options{
+		Codec: "h264", Probing: ProbingPredicted, Curves: []*predict.Model{labModel(t, "slow", heights)}, SkipVerify: true, NoEncode: true,
+	})
+	require.ErrorIs(t, err, ErrNoEncode)
+	require.ErrorContains(t, err, "the model is for h264 slow")
+}
+
+func TestApart(
+	t *testing.T,
+) {
+	at := func(starts ...float64) []media.Interval {
+		out := make([]media.Interval, len(starts))
+		for i, s := range starts {
+			out[i] = media.Interval{Start: media.Seconds(s), End: media.Seconds(s + 2)}
+		}
+
+		return out
+	}
+
+	testCases := []struct {
+		name     string
+		segments []media.Interval
+		want     bool
+	}{
+		{name: "an hour sampled every three minutes", segments: at(87, 265, 443), want: true},
+		{name: "a short title, segments side by side", segments: at(0, 2, 4)},
+		{name: "one pair closer than a GOP may be long", segments: at(10, 60, 75)},
+		{name: "a single segment", segments: at(5), want: true},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, apart(testCase.segments, fastSpacing))
+		})
+	}
+}
+
+func TestMeasuresNothing(
+	t *testing.T,
+) {
+	used, fellBack := &ModelProbing{Titles: 3}, &ModelProbing{Fallback: "no ladder model was given"}
+
+	testCases := []struct {
+		name  string
+		opts  Options
+		model *ModelProbing
+		want  bool
+	}{
+		{name: "an instant ladder", opts: Options{Probing: ProbingPredicted, SkipVerify: true}, model: used, want: true},
+		{name: "asked not to encode", opts: Options{Probing: ProbingPredicted, NoEncode: true}, model: used, want: true},
+		{name: "predicted and verified", opts: Options{Probing: ProbingPredicted}, model: used},
+		{name: "fixed probing in place of the model", opts: Options{Probing: ProbingPredicted, SkipVerify: true}, model: fellBack},
+		{name: "anchors measured", opts: Options{Probing: ProbingModel, SkipVerify: true}, model: used},
+		{name: "fixed probing", opts: Options{Probing: ProbingFixed, SkipVerify: true}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			b := &build{opts: testCase.opts, probing: ProbingReport{Model: testCase.model}}
+
+			assert.Equal(t, testCase.want, b.measuresNothing())
+		})
+	}
 }

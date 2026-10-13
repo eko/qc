@@ -125,6 +125,12 @@ func NewBuilder(
 // extend their curves, to two beyond its worst, which the low rungs of
 // content that compresses well reach (a reality show needed 1080p at CRF
 // 45 and more with x264).
+//
+// The grid of AV1 ends on the highest CRF of SVT-AV1 as well: the low
+// rungs of a ladder are there (1080p at CRF 60 to 62 on that reality show),
+// and the scale falls too fast at its end to be read from the points
+// before it: from CRF 52 and 58, a curve drawn on to 63 gave 550 kb/s and
+// VMAF 74 where the encode measured 310 kb/s and 65.
 func GridCRFs(
 	codec encode.Codec,
 ) []float64 {
@@ -139,8 +145,15 @@ func GridCRFs(
 		}
 	}
 
+	if codec.Name == steepCodec && len(crfs) > 0 && crfs[len(crfs)-1] < codec.MaxCRF {
+		crfs = append(crfs, codec.MaxCRF)
+	}
+
 	return crfs
 }
+
+// steepCodec is the codec whose grid takes its highest CRF (see GridCRFs).
+const steepCodec = "av1"
 
 // ErrCRFCount is returned for a grid of fewer than two CRFs.
 var ErrCRFCount = errors.New("a grid needs at least two CRFs")
@@ -384,6 +397,9 @@ type excerpt struct {
 	segments, frames int
 	rate             float64
 	bitDepth         int
+	// quantisers are those of the source's own encode, one per frame of
+	// the excerpt; nil when its decoder does not tell them.
+	quantisers []float64
 }
 
 // layout is how the excerpt of a title is cut: its segments, each of
@@ -448,8 +464,23 @@ func (b *Builder) cut(
 		Source: source, Destination: ex.path, Segments: placed, Rate: steady,
 		Origin: origin, BitDepth: ex.bitDepth, Frames: frames,
 	}
+
+	// The quantisers of the source, where its decoder exports them: a
+	// feature of its segments (features.SourceQP).
+	if video.Codec == quantisedCodec && ex.bitDepth == 8 && b.featurer != nil {
+		spec.Quantisers = ex.path + ".qp"
+		defer os.Remove(spec.Quantisers)
+	}
+
 	if err := b.digester.Digest(ctx, spec); err != nil {
 		return nil, fmt.Errorf("corpus: cut the excerpt of %s: %w", source, err)
+	}
+
+	if spec.Quantisers != "" {
+		// Without them the title is described by its other features.
+		if quantisers, err := encode.ReadQuantisers(spec.Quantisers); err == nil && len(quantisers) >= len(placed)*frames {
+			ex.quantisers = quantisers
+		}
 	}
 
 	report, err := b.inspector.Analyze(ctx, ex.path, analysis.Options{SkipVideo: true})
@@ -473,6 +504,7 @@ func (b *Builder) describe(
 	set, err := b.featurer.Extract(ctx, features.Spec{
 		Path: ex.path, Width: video.Width, Height: video.Height, Rate: ex.rate,
 		Frames: ex.frames, Heights: heights, Inspection: ex.report, Precise: true, WorkDir: dir,
+		Quantisers: ex.quantisers,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("corpus: %w", err)
@@ -484,6 +516,9 @@ func (b *Builder) describe(
 
 	return set.Values, nil
 }
+
+// quantisedCodec is the codec of the sources whose quantisers are read.
+const quantisedCodec = "h264"
 
 // spareShare is the share of a segment left unused at the end of a title
 // (a fifth: ten frames of a 2 s segment at 25 fps).

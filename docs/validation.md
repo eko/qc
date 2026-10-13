@@ -551,6 +551,46 @@ same way (bias of the bitrate, means → segment by segment): reality show
 on that corpus, 1.22 → 1.06 VMAF. The 14% that did not fall as titles
 were added was this bias.
 
+**What a model can read without an encode.** A corpus of 40 titles of
+30 s (samples of average scenes, 1080p25 mezzanines at 25 Mb/s, x264
+fast), each title predicted by a model of the others:
+
+| The design without anchor reads… | VMAF error, mean | Bitrate error, mean |
+|---|---|---|
+| frame analysis, the two fast encodes and their VMAF (27 features, with the scale loss) | 1.19 | 7.3% |
+| the same without the scale loss | 1.20 | 7.5% |
+| the same with the mean quantiser of the source (kept: `--instant`) | 1.20 | 6.4% |
+| the same, the fast encodes scored with VMAF v0.6.1 instead of v1 | 1.48 | 7.0% |
+| the same, scored at 360p instead of against the 1080p source | 1.73 | 7.2% |
+| the fast encodes without any score | 1.96 | 7.7% |
+| frame analysis and the quantiser of the source (kept: `--no-encode`) | 2.18 | 9.3% |
+| frame analysis alone | 2.25 | 12.2% |
+| the source's frame sizes by type (I, P, B and their ratios) alone | 3.16 | 27.7% |
+
+The score that tells a model what VMAF makes of a title has to be the
+metric the ladder targets, measured as it is delivered: a cheaper one
+loses most of what it brings. The source's own bitstream tells the
+bitrate (its quantiser alone does as well as its quantisers by frame
+type, its bits and its motion vectors together), not the quality; its
+frame sizes alone tell nothing, the mezzanines being close to constant
+bitrate. The scale loss added nothing and is no longer described. What
+is published without an encode stands at 2.4 to 3.3 VMAF and about 11%
+of the bitrate (MCBE, JASLA, TQPM, DQ-Ladder, each on its own corpus);
+the results under 1 VMAF all score at least one encode.
+
+The same two designs on whole titles outside that corpus, against
+encodes of their digests (mean absolute VMAF error of the predicted
+points): 0.86 and 3.83 on the reality
+show, 0.99 and 3.74 on the cartoon, 0.45 and 1.00 on the drama, with and
+without the encodes (1.07 and 1.82 on the dialogue). Without them the top
+rung of the reality show came out at 5.2 Mb/s for 7.0 measured, and its
+lower resolutions 3 to 6 VMAF too high. Three of those digests are cut
+from keyframes, the encodes they are compared with from the planned
+segments: predicted on the same segments, the errors with the encodes
+are 1.15, 0.73 and 1.01 (0.96, 0.68 and 0.58 before these changes, which
+read three drawn clips and the scale loss: the cartoon is where four
+frames read its scores too high).
+
 **The scores of a ladder build.** A corpus scores the two ultrafast
 encodes on every frame; a ladder build scored one clip of four frames in
 each segment. The frames scored are right (the same score as in an exact
@@ -585,7 +625,92 @@ errors of a title left out do not follow how calm it is (correlation
 −0.3 at 1080p); whether calmer titles in the corpus remove the tilt was
 not tested.
 
-Where the 12 s go, on the hour-long title: inspection 1.6 s (it was made
+Frames spread **evenly** in each segment do better than clips drawn in
+it, for less: the same feature from the frames in the middle of each n-th
+of a segment (worst and mean error over the two encodes of the three
+digests):
+
+| Frames scored per segment | Worst | Mean | Frames fed to VMAF, with their neighbours |
+|---|---|---|---|
+| 3 clips of 4, drawn (before) | 1.4 | | 18 |
+| 3 clips of 4, spread | 0.58 | 0.23 | 18 |
+| 2 single frames | 1.12 | 0.38 | 6 |
+| 3 single frames | 0.79 | 0.28 | 9 |
+| 4 single frames (kept) | 0.34 | 0.12 | 12 |
+| 4 clips of 2 | 0.16 | 0.10 | 16 |
+
+Those are read on the scores of an exact run. In real builds, four single
+frames against every frame (CRF 23 / 35): dialogue +0.1 / −0.1, reality
+show −0.1 / 0.0, cartoon +0.5 / +1.1, where three drawn clips gave
++0.8 / +1.4, +0.1 / +0.2 and −0.1 / +0.2: as close at worst, for a third
+fewer frames, and no longer a draw. Four clips of two frames did no
+better on the cartoon (+0.4 / +1.0).
+
+The digest of an instant ladder is cut from keyframes, one process per
+segment. Decoding alone the twenty segments of the hour-long title, whose
+GOPs reach 7 s (1.65 s decoded before each segment on average, 5.5 s at
+most): 5.9 s one after the other, 2.7 s at once, 1.8 s at once from the
+keyframe before each. The instant ladder of that title, 12 to 13 s before
+these changes (digest 5.0 to 5.7 s, description 6.8 to 7.6 s), took 8.1
+to 8.2 s on the same twenty segments with four frames scored in each
+(digest 3.0 s, description 4.8 to 5.0 s), and 4.0 to 4.2 s with
+`--no-encode`.
+
+**No challenger probe either.** The instant AV1 ladder of the hour-long
+title (model of 15 titles, SVT-AV1 preset 8) took 44 s: its low rungs need
+CRFs past the grid of that model, which stopped at CRF 58, and the build
+measured six challenger probes (1080p at CRF 62 and 63, 720p and 540p at
+CRF 60 and 63) and a level encode. An instant ladder no longer measures
+them: 4.3 s, nothing encoded. Its three top rungs are the same; the low
+ones, placed on what the model knows, fall to lower resolutions:
+
+| Rung | With the challenger probes (44 s) | Without (4.3 s), grid ending at CRF 58 |
+|---|---|---|
+| about 600 kb/s | 1080p CRF 60, VMAF 75 | 720p CRF 55, VMAF 74 |
+| about 400 kb/s | 1080p CRF 62, VMAF 69 | 540p CRF 55, VMAF 65 |
+| about 270 kb/s | 720p CRF 61, VMAF 61 | 360p CRF 53, VMAF 51 |
+
+The VMAF of the second column are predictions, those of the first
+measured on the digest. So the grid of AV1 now ends on CRF 63, the highest
+of SVT-AV1. Drawing the curves on from CRF 52 and 58 instead of measuring
+that point was rejected: at 1080p and CRF 63 it gave 550 kb/s and VMAF 74
+where the encode measured 310 kb/s and 65. An instant AV1 ladder from a
+model trained on the completed grid has not been measured yet.
+
+**Five seconds for an hour.** An instant ladder now reads ten segments
+and scores three frames of each: 4.1 to 4.3 s on the hour-long title
+(digest 1.6 s, description 2.4 s), 4.1 s on the dialogue, 4.0 s on the
+cartoon; 2.1 to 2.3 s with `--no-encode`; 7.3 to 7.5 s with
+`--digest-duration 40`. What the number of segments is worth was read on
+the four titles measured on 30 to 90 segments: every segment predicted by
+the model of the 40-title corpus, then n of them averaged (one drawn in
+each n-th of the title, 300 draws) against the measured mean of them all.
+Errors of the model and of the digest together, mean over the titles
+(VMAF, bitrate, bitrate of the top rung at VMAF 93):
+
+| Segments | With the fast encodes | Without (`--no-encode`) |
+|---|---|---|
+| 5 | 1.40 / 14.8% / 16% | 2.72 / 14.5% / 41% |
+| 8 | 1.25 / 11.6% / 14% | 2.65 / 11.9% / 40% |
+| 10 | 1.13 / 9.8% / 13% | 2.64 / 11.0% / 40% |
+| 15 | 1.01 / 8.4% / 11% | 2.62 / 9.6% / 41% |
+| 20 | 1.00 / 8.8% / 11% | 2.62 / 8.8% / 40% |
+
+Ten segments with the encodes are better than any number without them:
+the error of `--no-encode` is that of its model, which more segments do
+not touch. Balancing the digest on a signal read over the whole title was
+simulated on the same titles and not built: on the quantisers of its
+keyframes (30 s of processor time for an hour), 20 segments went from
+9.6% to 5.6% of bitrate error on the reality show and from 7.7% to 6.2%
+on the cartoon, which 30 to 40 plain segments also reach for that time;
+on the frame analysis of the whole title (what `--digest balanced` reads,
+a minute for an hour), from 9.5% to 4.9% and from 8.0% to 3.7%.
+Under `--cpus 2 --memory 4096m` the segments are cut two at a time, a
+thread each: 18 to 19 s and 9.8 to 9.9 s on the hour-long title (digest
+8.2 s; the builds spend 57 s and 20 s of processor time in all, and the
+description still runs on more than two processors at times).
+
+Where the 12 s went before that, on the hour-long title: inspection 1.6 s (it was made
 twice, and reads every packet; an instant ladder now reads the container
 alone, and no ladder inspects its source twice), digest 5.2 s, features
 6.7 s (frame analysis, statistics pass then its two scores, scale loss,

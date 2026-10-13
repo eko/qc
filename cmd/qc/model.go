@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,7 @@ import (
 	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/ladder/corpus"
+	"github.com/eko/qc/ladder/features"
 	"github.com/eko/qc/ladder/predict"
 )
 
@@ -46,7 +48,7 @@ func newModelCommand(
 		},
 	}
 
-	cmd.AddCommand(newModelCorpusCommand(env), newModelTrainCommand())
+	cmd.AddCommand(newModelCorpusCommand(env), newModelTrainCommand(), newModelReportCommand())
 
 	return cmd
 }
@@ -182,7 +184,7 @@ func newModelCorpusCommand(
 	flags.String("preset", "", "encoder preset of the encodes (default: the codec's ladder preset)")
 	flags.Int("segments", corpus.DefaultSegments, "segments of 2 s measured in each title, taken evenly across it")
 	flags.IntSlice("heights", ladder.DefaultHeights(), "resolutions of the grid (heights above the source are dropped)")
-	flags.Int("crf-count", 0, "number of CRFs of the grid, spread evenly over the codec's range (default 0: the codec's grid, 11 CRFs from 13 to 48 for H.264); fewer measure faster, more read finer between them; keep one count for a whole corpus")
+	flags.Int("crf-count", 0, "number of CRFs of the grid, spread evenly over the codec's range (default 0: the codec's grid, 11 CRFs from 13 to 48 for H.264, 9 from 16 to 63 for AV1); fewer measure faster, more read finer between them; keep one count for a whole corpus")
 	flags.Float64Slice("crfs", nil, "CRFs of the grid, listed (in place of --crf-count)")
 	flags.String("to", "", "the corpus file the measurements are added to")
 	addGPUFlags(cmd, gpuDecode)
@@ -459,7 +461,10 @@ func runModelTrain(
 	// model is trained on the others.
 	titles, partial := predict.Complete(titles)
 
-	model, err := predict.Train(titles, predict.TrainOptions{LowCRF: anchorCRFs[0], HighCRF: anchorCRFs[1], FarCRF: anchorCRFs[2]})
+	model, err := predict.Train(titles, predict.TrainOptions{
+		LowCRF: anchorCRFs[0], HighCRF: anchorCRFs[1], FarCRF: anchorCRFs[2],
+		FeatureSets: features.Sets(slices.Sorted(maps.Keys(titles[0].Features))),
+	})
 	if err != nil {
 		return err
 	}
@@ -499,6 +504,24 @@ func anchorCRFsOf(
 	}
 }
 
+// instantLabel names a design without anchor by what it reads of a title:
+// the two fast encodes of the analysis or not, the source's own encode or
+// not.
+func instantLabel(
+	d predict.Design,
+) string {
+	label := "the analysis alone (--instant)"
+	if !slices.ContainsFunc(d.Features, features.NeedsEncode) {
+		label = "the frames alone (--instant --no-encode)"
+	}
+
+	if !slices.Contains(d.Features, features.SourceQP) {
+		label += ", source quantisers unknown"
+	}
+
+	return label
+}
+
 // renderModel prints what a model was trained on and how each of its
 // designs did on the titles left out of its training.
 func renderModel(
@@ -522,7 +545,7 @@ func renderModel(
 
 		switch {
 		case len(d.Features) > 0 && len(d.Anchors) == 0:
-			at = "the analysis alone (--instant)"
+			at = instantLabel(d)
 		case len(d.Features) > 0:
 			at += " + the analysis"
 		}
@@ -543,8 +566,8 @@ func renderModel(
 	} else {
 		fmt.Fprintln(w, "\nErrors on digests of titles left out of the training, over the qualities a ladder uses.")
 
-		if instant, ok := model.Instant(); ok && instant.Validation != nil {
-			fmt.Fprintf(w, "From the analysis alone, without any encode: VMAF within %.1f on average of a title the model has not seen.\n",
+		if instant, ok := model.Instant(nil); ok && instant.Validation != nil {
+			fmt.Fprintf(w, "From the analysis alone, without any probe: VMAF within %.1f on average of a title the model has not seen.\n",
 				instant.Validation.MeanVMAFError)
 		} else if !ok {
 			fmt.Fprintln(w, "No design from the analysis alone: the corpus holds no features of some title (qc model corpus adds them).")

@@ -70,6 +70,8 @@ func TestSampleValidate(
 		{name: "NaN share", sample: Sample{Share: math.NaN()}, wantErr: true},
 		{name: "negative clips", sample: Sample{PerScene: -1}, wantErr: true},
 		{name: "both budgets", sample: Sample{Share: 0.1, PerScene: 1}, wantErr: true},
+		{name: "clips spread evenly", sample: Sample{PerScene: 4, Even: true}},
+		{name: "a share spread evenly", sample: Sample{Share: 0.1, Even: true}, wantErr: true},
 	}
 
 	for _, testCase := range testCases {
@@ -756,4 +758,35 @@ func TestMeasureInvalidSample(
 	_, err := NewMeter(nil, nil).Measure(t.Context(), Input{}, Input{}, Options{Sample: Sample{Share: 2}})
 
 	require.ErrorIs(t, err, ErrInvalidSample)
+}
+
+func TestPlanBudgetSpreadsClipsEvenly(
+	t *testing.T,
+) {
+	// Two GOPs of 50 frames, four clips of one frame in each.
+	keys := []media.Duration{0, media.Seconds(2)}
+	opts := Options{Sample: Sample{PerScene: 4, Even: true}, ClipFrames: 1}.withDefaults()
+
+	strata, report := planBudget(100, framesPTS(100), keys, opts)
+	require.Len(t, strata, 2)
+	assert.Empty(t, report.Clamped)
+
+	for i, s := range strata {
+		var frames []int
+		for _, slot := range s.sampled {
+			frames = append(frames, s.slots[slot][0]-i*50)
+		}
+
+		assert.Equal(t, []int{6, 18, 31, 43}, frames, "the middle of each quarter of the GOP")
+	}
+
+	// Whatever the seed: nothing is drawn.
+	opts.Seed = 99
+	again, _ := planBudget(100, framesPTS(100), keys, opts)
+	assert.Equal(t, strata[1].sampled, again[1].sampled)
+
+	// A scene shorter than the clips asked gives all of its own.
+	short, _ := planBudget(3, framesPTS(3), nil, opts)
+	require.Len(t, short, 1)
+	assert.Equal(t, []int{0, 1, 2}, short[0].sampled)
 }
