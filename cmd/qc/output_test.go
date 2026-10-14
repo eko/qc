@@ -16,6 +16,7 @@ import (
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/internal/testutil"
+	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/media"
 	"github.com/eko/qc/pipeline"
@@ -190,7 +191,7 @@ func TestRenderRunError(
 	report, err := svc.analyzer.Analyze(t.Context(), clip, analysis.Options{SkipVideo: true})
 	require.NoError(t, err)
 
-	err = renderRun(failingWriter{}, &pipeline.Report{Analysis: report}, defaultWidth, false)
+	err = renderRun(failingWriter{}, &pipeline.Report{Analysis: report}, tui.ReportOptions{Width: defaultWidth})
 	require.Error(t, err)
 }
 
@@ -211,13 +212,13 @@ func TestRenderRunComparesCodecs(
 	var out strings.Builder
 
 	run := &pipeline.Report{Ladders: []*ladder.Result{compared("h264", 8_000_000), compared("av1", 5_600_000)}}
-	require.NoError(t, renderRun(&out, run, defaultWidth, false))
+	require.NoError(t, renderRun(&out, run, tui.ReportOptions{Width: defaultWidth}))
 	assert.Contains(t, out.String(), "av1 needs 30% less bitrate than h264 at VMAF 93.0")
 
 	// The ladders of several codecs, without what a run says of its source.
 	run.Analysis = run.Ladders[0].Source
 	out.Reset()
-	require.NoError(t, renderLadders(&out, run, defaultWidth, false))
+	require.NoError(t, renderLadders(&out, run, tui.ReportOptions{Width: defaultWidth}))
 	assert.Contains(t, out.String(), "av1 needs 30% less bitrate than h264 at VMAF 93.0")
 	assert.Equal(t, 3, strings.Count(out.String(), "◆ qc"), "the two ladders and their comparison, nothing of the source")
 
@@ -225,7 +226,7 @@ func TestRenderRunComparesCodecs(
 	out.Reset()
 
 	run.Ladders = run.Ladders[:1]
-	require.NoError(t, renderRun(&out, run, defaultWidth, false))
+	require.NoError(t, renderRun(&out, run, tui.ReportOptions{Width: defaultWidth}))
 	assert.NotContains(t, out.String(), "codecs at equal quality")
 }
 

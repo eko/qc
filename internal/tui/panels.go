@@ -13,13 +13,25 @@ const (
 	// minGaugeWidth keeps the live VMAF gauge readable on narrow panels.
 	minGaugeWidth = 20
 	// probePlotHeight is the height of the live rate-quality plot.
-	probePlotHeight = 9
+	probePlotHeight = 10
 )
 
 // Panel is the live view of the running stage.
 type Panel interface {
 	// View renders the panel width columns wide.
 	View(width int) string
+}
+
+// Pictured is a panel that can also draw itself as a picture, for
+// terminals that show pictures in place.
+type Pictured interface {
+	Panel
+	// Picture draws the panel cols columns wide and rows high on a dark
+	// or light terminal, with the line of text over it; false when the
+	// panel has no picture at its stage.
+	Picture(cols, rows int, dark bool) (head string, png []byte, ok bool)
+	// PictureKey changes whenever the picture would.
+	PictureKey() string
 }
 
 // VMAFPanel shows a converging VMAF measurement.
@@ -86,12 +98,29 @@ func (p LadderPanel) View(
 		return Subtle.Render("encoding the first probes…")
 	}
 
-	series, legend, lowest := probeSeries(p.Probes)
-	last := p.Probes[len(p.Probes)-1]
-	head := Bold.Render("probe encodes") + Subtle.Render(fmt.Sprintf("  last: %dp crf %.0f → %s, VMAF %.1f   ",
-		last.Height, last.CRF, Bitrate(float64(last.Bitrate)), last.VMAF)) + strings.Join(legend, " ")
+	// The chart of the report, while it composes: the same frame as the
+	// picture, the curves bold on their envelope, the last probe encoded
+	// ringed, the rungs numbered once placed.
+	plot := Plot{Width: width, Height: probePlotHeight, XLog: true, YHi: maxVMAF, YStep: vmafStep, YLabel: vmafLabel, XLabel: tickBitrate}
+	plot.XLo, plot.XHi, plot.YLo = p.frame()
+	plot.Series = envelopeSeries(p.Probes, plot.XLo, plot.XHi, 2*(width-gutter))
 
-	return head + "\n" + strings.Join(XYPlot(series, width, probePlotHeight, true, vmafFloor(lowest), 100, vmafLabel), "\n")
+	if last, ok := lastEncoded(p.Probes); ok && len(p.Rungs) == 0 {
+		plot.Marks = append(plot.Marks, Mark{X: float64(last.Bitrate), Y: last.VMAF, Glyph: '◉', Style: Accent})
+	}
+
+	for i, r := range p.Rungs {
+		x, y := float64(r.Bitrate), r.PredictedVMAF
+		if r.Measured != nil {
+			x, y = float64(r.Measured.Bitrate), r.Measured.VMAF
+		}
+
+		plot.Marks = append(plot.Marks, Mark{X: x, Y: y, Glyph: rungGlyph(i), Style: Bold.Foreground(contrast)})
+	}
+
+	head := p.pictureHead() + "   " + strings.Join(resolutionLegend(p.Probes), " ")
+
+	return head + "\n" + strings.Join(plot.Lines(), "\n")
 }
 
 // rungsView lists the verified rungs with their gap to the prediction.

@@ -13,17 +13,22 @@ type Series struct {
 	Style  lipgloss.Style
 	// Line joins consecutive points (sorted by x).
 	Line bool
+	// NoDots leaves out the marker of each point: a line drawn through
+	// many samples stays one dot thick.
+	NoDots bool
 }
 
 // braille dot bits, indexed [y][x] inside a 2×4 cell.
 var brailleBits = [4][2]rune{{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}}
 
 // canvas is a braille canvas: every character cell holds 2×4 dots, which
-// draws smooth curves with single-width characters only.
+// draws smooth curves with single-width characters only. A cell may hold
+// a glyph instead, drawn over its dots.
 type canvas struct {
 	cols, rows int
 	dots       [][]rune
 	styles     [][]*lipgloss.Style
+	glyphs     [][]rune
 }
 
 func newCanvas(
@@ -34,10 +39,12 @@ func newCanvas(
 		rows:   rows,
 		dots:   make([][]rune, rows),
 		styles: make([][]*lipgloss.Style, rows),
+		glyphs: make([][]rune, rows),
 	}
 	for r := range rows {
 		c.dots[r] = make([]rune, cols)
 		c.styles[r] = make([]*lipgloss.Style, cols)
+		c.glyphs[r] = make([]rune, cols)
 	}
 
 	return c
@@ -95,14 +102,46 @@ func (c *canvas) point(
 	}
 }
 
-// row renders one character row of the canvas.
+// mark draws glyph in the cell at col, row, over its dots.
+func (c *canvas) mark(
+	col, row int,
+	glyph rune,
+	style *lipgloss.Style,
+) {
+	if col < 0 || row < 0 || col >= c.cols || row >= c.rows {
+		return
+	}
+
+	c.glyphs[row][col] = glyph
+	c.styles[row][col] = style
+}
+
+// guideDot fills one empty cell in guideEvery of a guide row: enough to
+// follow a level across the plot, faint enough to leave the curves first.
+const (
+	guideDot   = '·'
+	guideEvery = 4
+)
+
+// row renders one character row of the canvas; on a guide row, faint
+// dots fill some of the empty cells.
 func (c *canvas) row(
 	r int,
+	guide bool,
 ) string {
 	var b strings.Builder
 
 	for col := range c.cols {
-		if c.dots[r][col] == 0 {
+		switch {
+		case c.glyphs[r][col] != 0:
+			b.WriteString(c.styles[r][col].Render(string(c.glyphs[r][col])))
+
+			continue
+		case c.dots[r][col] == 0 && guide && col%guideEvery == guideEvery-1:
+			b.WriteString(Subtle.Render(string(guideDot)))
+
+			continue
+		case c.dots[r][col] == 0:
 			b.WriteRune(' ')
 
 			continue
@@ -112,69 +151,6 @@ func (c *canvas) row(
 	}
 
 	return b.String()
-}
-
-// XYPlot draws series on a width×height character grid with a y-axis gutter,
-// using braille dots. Later series are drawn over earlier ones. xLog plots x
-// on a log scale.
-func XYPlot(
-	series []Series,
-	width, height int,
-	xLog bool,
-	yLo, yHi float64,
-	yLabel func(float64) string,
-) []string {
-	cols := width - gutter
-
-	xLo, xHi := math.Inf(1), math.Inf(-1)
-	for _, s := range series {
-		for _, p := range s.Points {
-			x := scaleX(p[0], xLog)
-			xLo, xHi = min(xLo, x), max(xHi, x)
-		}
-	}
-
-	if cols <= 0 || math.IsInf(xLo, 1) {
-		return nil
-	}
-
-	if xHi == xLo {
-		xHi = xLo + 1
-	}
-
-	if yHi <= yLo {
-		yHi = yLo + 1
-	}
-
-	c := newCanvas(cols, height)
-	px := func(x float64) int {
-		return int(math.Round((scaleX(x, xLog) - xLo) / (xHi - xLo) * float64(2*cols-2)))
-	}
-	py := func(y float64) int {
-		return int(math.Round((yHi - math.Max(math.Min(y, yHi), yLo)) / (yHi - yLo) * float64(4*height-2)))
-	}
-
-	for i := range series {
-		s := &series[i]
-
-		if s.Line {
-			for j := 1; j < len(s.Points); j++ {
-				a, b := s.Points[j-1], s.Points[j]
-				c.line(px(a[0]), py(a[1]), px(b[0]), py(b[1]), &s.Style)
-			}
-		}
-
-		for _, p := range s.Points {
-			c.point(px(p[0]), py(p[1]), &s.Style)
-		}
-	}
-
-	lines := make([]string, height)
-	for r := range height {
-		lines[r] = yAxis(r, height, yLo, yHi, yLabel) + c.row(r)
-	}
-
-	return lines
 }
 
 // scaleX maps x to the plot's horizontal scale. Log scales clamp at a tiny

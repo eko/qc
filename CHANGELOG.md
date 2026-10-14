@@ -9,6 +9,36 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Changed
+
+- **Clearer rate-quality chart in the terminal report of a ladder**
+  (`qc ladder`, `qc run`). It is framed on the rungs (their bitrates
+  widened by 1.6 on each side, VMAF from under the lowest rung to 100)
+  instead of every probe, which a model spreads from VMAF 0 to 100 and
+  from 28 kb/s to 32 Mb/s. Each curve is one dot thick, drawn as the
+  ladder reads it (VMAF linear in the logarithm of the bitrate), in the
+  colour of its resolution where it is the upper envelope the rungs are
+  placed on and faint under it; only measured probes are dotted. The
+  rungs are numbered as in the ladder table. VMAF is labelled every 10
+  with faint guides, and the bitrate axis has ticks at round values
+  (200k, 500k, 1M…). The chart is 18 rows high instead of 14.
+- With several codecs (`-c h264,av1`), **the codec comparison draws the
+  rungs of each codec on one chart**, under its text.
+- **Charts drawn as pictures in terminals that show them** (Kitty,
+  Ghostty and Warp by the Kitty graphics protocol; iTerm2, WezTerm, VS
+  Code by the iTerm2 one): the two charts above become smooth pictures
+  (anti-aliased lines, the colours of the HTML report, dark or light to
+  match the terminal), the envelope bold and the curves under it thin, the
+  rungs numbered. Other terminals, tmux and redirected output keep the
+  braille charts. `QC_CHARTS=kitty|iterm|text|auto` overrides the
+  detection. Library: packages `internal/chartimg` and `internal/termimg`;
+  `tui.RenderLadder` and `tui.RenderCodecs` take `tui.ReportOptions`.
+- **The ladder's live panel is a picture too** in terminals of the Kitty
+  protocol, redrawn in place as the probes land, then as each rung is
+  verified (numbered, at its measured point). `tui.RunDashboard` takes the
+  picture protocol; panels drawing themselves as pictures implement
+  `tui.Pictured`.
+
 ## [1.3.0] - 2026-10-13
 
 ### Added

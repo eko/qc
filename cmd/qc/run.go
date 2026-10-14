@@ -70,7 +70,7 @@ func runEverything(
 	}
 
 	return emit(cmd.OutOrStdout(), config.Output, report, func(w io.Writer) error {
-		return renderRun(w, report, env.width, config.Ladder.Commands)
+		return renderRun(w, report, env.report(config.Ladder.Commands))
 	}, htmlreport.RenderRun)
 }
 
@@ -106,20 +106,19 @@ func runOptions(
 func renderRun(
 	w io.Writer,
 	report *pipeline.Report,
-	width int,
-	commands bool,
+	opts tui.ReportOptions,
 ) error {
 	var sections []func() error
 
 	if report.Analysis != nil {
-		sections = append(sections, func() error { return tui.RenderReport(w, report.Analysis, width, "") })
+		sections = append(sections, func() error { return tui.RenderReport(w, report.Analysis, opts.Width, "") })
 	}
 
 	if report.Comparison != nil {
-		sections = append(sections, func() error { return tui.RenderComparison(w, report.Comparison, width, "") })
+		sections = append(sections, func() error { return tui.RenderComparison(w, report.Comparison, opts.Width, "") })
 	}
 
-	return renderSections(w, append(sections, ladderSections(w, report, width, commands)...))
+	return renderSections(w, append(sections, ladderSections(w, report, opts)...))
 }
 
 // renderLadders prints the ladders of several codecs as text, and how they
@@ -127,10 +126,9 @@ func renderRun(
 func renderLadders(
 	w io.Writer,
 	report *pipeline.Report,
-	width int,
-	commands bool,
+	opts tui.ReportOptions,
 ) error {
-	return renderSections(w, ladderSections(w, report, width, commands))
+	return renderSections(w, ladderSections(w, report, opts))
 }
 
 // ladderSections print every ladder of a report, then how the codecs
@@ -138,17 +136,16 @@ func renderLadders(
 func ladderSections(
 	w io.Writer,
 	report *pipeline.Report,
-	width int,
-	commands bool,
+	opts tui.ReportOptions,
 ) []func() error {
 	var sections []func() error
 
 	for _, l := range report.Ladders {
-		sections = append(sections, func() error { return tui.RenderLadder(w, l, width, "", commands) })
+		sections = append(sections, func() error { return tui.RenderLadder(w, l, opts) })
 	}
 
 	if len(findings.Codecs(report.Ladders)) > 0 {
-		sections = append(sections, func() error { return tui.RenderCodecs(w, report.Ladders) })
+		sections = append(sections, func() error { return tui.RenderCodecs(w, report.Ladders, opts) })
 	}
 
 	return sections

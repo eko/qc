@@ -35,14 +35,19 @@ homebrew: ## Point the Homebrew formula at the latest tag (or RELEASE=vX.Y.Z), c
 install: ## Install qc into $GOBIN
 	go install -trimpath -ldflags "$(LDFLAGS)" ./cmd/qc
 
+# TEST_TIMEOUT bounds a test binary: the commands of cmd/qc encode real
+# clips and take 6 to 9 minutes under the race detector on a CI runner,
+# against the 10 minutes go test allows by default.
+TEST_TIMEOUT ?= 30m
+
 test: ## Run the tests
-	go test ./...
+	go test -timeout $(TEST_TIMEOUT) ./...
 
 race: ## Run the tests with the race detector
-	go test -race ./...
+	go test -race -timeout $(TEST_TIMEOUT) ./...
 
 cover: ## Run the tests with coverage and print the per-function summary
-	go test -race -coverprofile=$(COVERAGE) -covermode=atomic ./...
+	go test -race -timeout $(TEST_TIMEOUT) -coverprofile=$(COVERAGE) -covermode=atomic ./...
 	go tool cover -func=$(COVERAGE) | tail -n 1
 
 cover-html: cover ## Open the coverage report in a browser

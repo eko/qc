@@ -114,7 +114,7 @@ func TestLadderPanel(
 		{
 			name:  "probes",
 			panel: LadderPanel{Stage: ladder.StageProbe, Probes: sampleProbes()},
-			want:  []string{"probe encodes  last: 360p crf 20 → 800 kb/s, VMAF 76.5", "━━ 1080p", "━━ 720p", "━━ 360p"},
+			want:  []string{"probe encodes  8 landed · last: 360p crf 20 → 800 kb/s, VMAF 76.5", "◉", "━━ 1080p", "━━ 720p", "━━ 360p"},
 			plot:  true,
 		},
 		{
@@ -148,7 +148,7 @@ func TestLadderPanel(
 				assert.NotContains(t, out, unwanted)
 			}
 
-			plot := linesWith(plainLines(view), "┤")
+			plot := append(linesWith(plainLines(view), "┤"), linesWith(plainLines(view), "│")...)
 			if !testCase.plot {
 				assert.Empty(t, plot)
 
@@ -161,8 +161,10 @@ func TestLadderPanel(
 				assert.Equal(t, 80, w)
 			}
 
-			assert.Contains(t, plot[len(plot)-1], "60 ┤", "the floor is below the lowest probe")
-			assert.True(t, strings.HasPrefix(strings.TrimSpace(plot[0]), "100 ┤"))
+			labelled := linesWith(plainLines(view), "┤")
+			assert.Contains(t, labelled[len(labelled)-1], "50 ┤", "the floor is under the lowest probe (64.1)")
+			assert.True(t, strings.HasPrefix(strings.TrimSpace(labelled[0]), "100 ┤"))
+			assert.Len(t, linesWith(plainLines(view), "└"), 1, "an axis of bitrates")
 		})
 	}
 }

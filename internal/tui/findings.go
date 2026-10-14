@@ -4,9 +4,12 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/internal/findings"
@@ -392,6 +395,7 @@ func ladderLine(
 func RenderCodecs(
 	w io.Writer,
 	ladders []*ladder.Result,
+	opts ReportOptions,
 ) error {
 	list := findings.Codecs(ladders)
 	if len(list) == 0 {
@@ -415,7 +419,65 @@ func RenderCodecs(
 		lines = append(lines, findingLine(f.Level, "%s", text))
 	}
 
-	return writeBlocks(w, []string{strings.Join(lines, "\n")})
+	chart := codecChart(ladders, opts.Width)
+	if picture, err := codecPicture(ladders, opts.Width, opts.Pictures); err == nil && picture != "" {
+		chart = picture
+	}
+
+	return writeBlocks(w, []string{strings.Join(lines, "\n"), chart})
+}
+
+// codecChart plots the rungs of the ladders of each codec on one chart:
+// the gap between their lines is the bitrate one codec saves on the other
+// at equal quality.
+func codecChart(
+	ladders []*ladder.Result,
+	width int,
+) string {
+	width = clampWidth(width, minLadderWidth)
+	plot := Plot{Width: width, Height: rqChartHeight, XLog: true, YHi: maxVMAF, YStep: vmafStep, YLabel: vmafLabel, XLabel: tickBitrate}
+	low, high, worst := math.Inf(1), 0.0, float64(maxVMAF)
+
+	var legend []string
+
+	for i, l := range ladders {
+		style := codecStyles[i%len(codecStyles)]
+		s := Series{Style: style, Line: true}
+
+		for _, r := range l.Rungs {
+			bitrate, vmaf := float64(rungBitrate(r)), rungVMAF(r)
+			s.Points = append(s.Points, [2]float64{bitrate, vmaf})
+			low, high, worst = min(low, bitrate), max(high, bitrate), min(worst, vmaf)
+		}
+
+		slices.SortFunc(s.Points, func(a, b [2]float64) int { return cmp.Compare(a[0], b[0]) })
+		plot.Series = append(plot.Series, s)
+		legend = append(legend, style.Render("━━")+Subtle.Render(" "+l.Codec.Name))
+	}
+
+	if math.IsInf(low, 1) {
+		return ""
+	}
+
+	plot.XLo, plot.XHi, plot.YLo = low/rungMargin, high*rungMargin, vmafFloor(worst-vmafMargin)
+	head := section.Render("Rungs of each codec") + Subtle.Render("  (VMAF vs bitrate, log scale)   ") + strings.Join(legend, "  ")
+
+	return strings.Join(append([]string{head}, plot.Lines()...), "\n")
+}
+
+// codecStyles colour the codecs of a comparison, in the order of the run.
+var codecStyles = []lipgloss.Style{Cyan, Accent, Green, Magenta}
+
+// rungVMAF is the VMAF of rung r: measured when it was verified,
+// predicted otherwise.
+func rungVMAF(
+	r ladder.Rung,
+) float64 {
+	if r.Measured != nil {
+		return r.Measured.VMAF
+	}
+
+	return r.PredictedVMAF
 }
 
 // rateShare words a bitrate gap: "12% less", "7% more".

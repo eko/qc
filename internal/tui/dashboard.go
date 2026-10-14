@@ -13,6 +13,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/eko/qc/internal/termimg"
 )
 
 type stageState int
@@ -107,7 +109,23 @@ type dashboard struct {
 	err       error
 	cancel    context.CancelFunc
 	canceling bool
+
+	// pictures draws pictured panels as pictures when it is Kitty, on a
+	// dark or light terminal; picture caches the last one drawn.
+	pictures termimg.Protocol
+	dark     bool
+	picture  livePicture
 }
+
+// livePicture is the picture of a panel last drawn: its key, the line
+// over it and its escape; shown while it is on screen.
+type livePicture struct {
+	key, head, escape string
+	shown             bool
+}
+
+// liveImage is the id of the picture of the dashboard's panel.
+const liveImage = 0x71c
 
 func newDashboard(
 	title, subject string,
@@ -258,16 +276,29 @@ func (d *dashboard) View() string {
 	}
 
 	if d.finished {
-		return b.String()
+		return d.clearPicture(false) + b.String()
 	}
 
+	pictured := false
+
 	for _, s := range d.stages {
-		if s.state == stateRunning && s.panel != nil {
-			if panel := d.panelBox(s.panel); panel != "" {
-				b.WriteString("\n" + panel + "\n")
-			}
+		if s.state != stateRunning || s.panel == nil {
+			continue
+		}
+
+		panel, ok := d.pictureBox(s.panel)
+		if ok {
+			pictured = true
+		} else {
+			panel = d.panelBox(s.panel)
+		}
+
+		if panel != "" {
+			b.WriteString("\n" + panel + "\n")
 		}
 	}
+
+	b.WriteString(d.clearPicture(pictured))
 
 	// Key hints as in the wizard: the key, then what it does, dimmer.
 	hint := Bold.Render("q") + Subtle.Render(" quit")
@@ -288,6 +319,52 @@ func (d *dashboard) header() string {
 	gap := max(1, d.width-1-lipgloss.Width(head)-lipgloss.Width(clock))
 
 	return head + strings.Repeat(" ", gap) + clock
+}
+
+// pictureBox frames panel p drawn as a picture, when the terminal shows
+// pictures in place and p draws one at its stage: the line over it, then
+// the picture's escape on the first of its rows, all of them left blank
+// for it. The picture is drawn again only when its key changes.
+func (d *dashboard) pictureBox(
+	p Panel,
+) (string, bool) {
+	pp, ok := p.(Pictured)
+	if !ok || d.pictures != termimg.Kitty {
+		return "", false
+	}
+
+	cols := d.width - 2*panelInset
+	key := fmt.Sprintf("%s/%d", pp.PictureKey(), cols)
+
+	if key != d.picture.key {
+		head, png, ok := pp.Picture(cols, panelPictureRows, d.dark)
+		if !ok {
+			return "", false
+		}
+
+		d.picture = livePicture{key: key, head: head, escape: termimg.Place(png, cols, panelPictureRows, liveImage)}
+	}
+
+	d.picture.shown = true
+	view := d.picture.head + "\n" + d.picture.escape + strings.Repeat("\n", panelPictureRows-1)
+
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(subtle).
+		Padding(0, 1).Margin(0, 1).Width(d.width - 4).Render(view), true
+}
+
+// clearPicture returns the escape removing the picture of the panel when
+// it was on screen and this view does not draw it (kept false): text
+// written over a picture does not erase it.
+func (d *dashboard) clearPicture(
+	kept bool,
+) string {
+	if kept || !d.picture.shown {
+		return ""
+	}
+
+	d.picture = livePicture{}
+
+	return termimg.Delete(liveImage)
 }
 
 // panelBox frames a live panel across the dashboard width.
@@ -493,10 +570,14 @@ func (e *Emitter) emit(
 // out (a terminal). Pressing q cancels the job's context; the dashboard then
 // waits for the job to return. When interactive is false the job runs
 // without any drawing.
+//
+// With pictures Kitty, the panels that can draw themselves as pictures do
+// (Pictured), redrawn in place as they change.
 func RunDashboard(
 	ctx context.Context,
 	out io.Writer,
 	interactive bool,
+	pictures termimg.Protocol,
 	name, subject string,
 	labels []string,
 	job func(ctx context.Context, e *Emitter) error,
@@ -505,7 +586,13 @@ func RunDashboard(
 		return job(ctx, &Emitter{})
 	}
 
-	return runDashboard(ctx, name, subject, labels, job, tea.WithOutput(out))
+	d := newDashboard(name, subject, labels, nil)
+	if pictures == termimg.Kitty {
+		// Asked once, before the program reads the terminal's input.
+		d.pictures, d.dark = pictures, lipgloss.HasDarkBackground()
+	}
+
+	return runModel(ctx, d, job, tea.WithOutput(out))
 }
 
 // runDashboard runs job under a dashboard program built with opts (tests
@@ -517,12 +604,24 @@ func runDashboard(
 	job func(ctx context.Context, e *Emitter) error,
 	opts ...tea.ProgramOption,
 ) error {
+	return runModel(ctx, newDashboard(name, subject, labels, nil), job, opts...)
+}
+
+// runModel runs job under the dashboard d.
+func runModel(
+	ctx context.Context,
+	d *dashboard,
+	job func(ctx context.Context, e *Emitter) error,
+	opts ...tea.ProgramOption,
+) error {
 	jobCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	d.cancel = cancel
+
 	// The program follows the caller's context, not the job's: after q it
 	// keeps drawing until the job has actually stopped.
-	program := tea.NewProgram(newDashboard(name, subject, labels, cancel), append(opts, tea.WithContext(ctx))...)
+	program := tea.NewProgram(d, append(opts, tea.WithContext(ctx))...)
 	jobDone := make(chan error, 1)
 
 	go func() {

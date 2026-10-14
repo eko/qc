@@ -365,7 +365,7 @@ func TestRenderErrors(
 	}{
 		{name: "report", render: func() error { return RenderReport(failingWriter{}, sampleReport(), 80, "") }},
 		{name: "comparison", render: func() error { return RenderComparison(failingWriter{}, sampleComparison("exact"), 80, "") }},
-		{name: "ladder", render: func() error { return RenderLadder(failingWriter{}, sampleLadder(t), 80, "", false) }},
+		{name: "ladder", render: func() error { return RenderLadder(failingWriter{}, sampleLadder(t), ReportOptions{Width: 80}) }},
 		{name: "written", render: func() error { return RenderWritten(failingWriter{}, "a.json", "") }},
 	}
 

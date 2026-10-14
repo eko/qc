@@ -345,7 +345,7 @@ func TestFill(
 	}
 }
 
-func TestXYPlot(
+func TestPlotLines(
 	t *testing.T,
 ) {
 	curve := []Series{{Points: [][2]float64{{100_000, 40}, {1_000_000, 80}, {10_000_000, 99}}, Style: Cyan, Line: true}}
@@ -365,7 +365,7 @@ func TestXYPlot(
 		{name: "single point", series: []Series{{Points: [][2]float64{{1, 50}}, Style: Red}}, width: 30, height: 3, yLo: 0, yHi: 100},
 		{name: "steep line", series: []Series{{Points: [][2]float64{{0, 0}, {1, 100}, {2, 0}}, Style: Red, Line: true}}, width: 20, height: 8, yLo: 0, yHi: 100},
 		{name: "empty y range", series: curve, width: 40, height: 4, yLo: 50, yHi: 50},
-		{name: "points out of range are clamped", series: []Series{{Points: [][2]float64{{0, -20}, {1, 150}}, Style: Red, Line: true}}, width: 30, height: 4, yLo: 0, yHi: 100},
+		{name: "a line crossing the range", series: []Series{{Points: [][2]float64{{0, -20}, {1, 150}}, Style: Red, Line: true}}, width: 30, height: 4, yLo: 0, yHi: 100},
 		{name: "no series", series: nil, width: 60, height: 6, empty: true},
 		{name: "no points", series: []Series{{}}, width: 60, height: 6, empty: true},
 		{name: "no room after the gutter", series: curve, width: gutter, height: 6, empty: true},
@@ -373,7 +373,7 @@ func TestXYPlot(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			lines := XYPlot(testCase.series, testCase.width, testCase.height, testCase.xLog, testCase.yLo, testCase.yHi, vmafLabel)
+			lines := Plot{Series: testCase.series, Width: testCase.width, Height: testCase.height, XLog: testCase.xLog, YLo: testCase.yLo, YHi: testCase.yHi, YLabel: vmafLabel}.Lines()
 			if testCase.empty {
 				assert.Nil(t, lines)
 
@@ -398,12 +398,12 @@ func TestXYPlot(
 	}
 }
 
-func TestXYPlotLogScaleSpreadsDecades(
+func TestPlotLogScaleSpreadsDecades(
 	t *testing.T,
 ) {
 	points := [][2]float64{{1_000, 50}, {10_000, 50}, {100_000, 50}}
 	plot := func(xLog bool) []rune {
-		lines := XYPlot([]Series{{Points: points, Style: Cyan}}, gutter+21, 1, xLog, 0, 100, vmafLabel)
+		lines := Plot{Series: []Series{{Points: points, Style: Cyan}}, Width: gutter + 21, Height: 1, XLog: xLog, YHi: 100, YLabel: vmafLabel}.Lines()
 
 		return []rune(plain(lines[0]))[gutter:]
 	}
@@ -432,7 +432,7 @@ func TestCanvas(
 		t.Run(testCase.name, func(t *testing.T) {
 			c := newCanvas(2, 1)
 			testCase.draw(c)
-			assert.Equal(t, testCase.want, plain(c.row(0)))
+			assert.Equal(t, testCase.want, plain(c.row(0, false)))
 		})
 	}
 }

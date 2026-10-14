@@ -6,6 +6,8 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/eko/qc/internal/termimg"
+	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/nvidia"
 )
 
@@ -22,6 +24,12 @@ type environment struct {
 	wizard bool
 	// width is the width of the text reports.
 	width int
+	// pictures is how the text reports draw their charts as pictures: by
+	// the protocol of the terminal stdout is, none when it is not one.
+	pictures termimg.Protocol
+	// livePictures is how the dashboard draws its panels as pictures, on
+	// stderr.
+	livePictures termimg.Protocol
 	// askWizard runs the interactive wizard form (see wizardContext).
 	askWizard func(ctx wizardContext) (wizardAnswers, error)
 	// gpuAvailable reports whether the ffmpeg binary can use an NVIDIA GPU
@@ -41,7 +49,22 @@ func detectEnvironment() environment {
 
 	stderr := term.IsTerminal(int(os.Stderr.Fd()))
 
+	// Pictures go to a terminal, or wherever QC_CHARTS asks for them; a
+	// QC_CHARTS naming no protocol leaves the charts as text.
+	detected, _ := termimg.Detect(os.Getenv)
+
+	pictures, live := detected, detected
+	if !term.IsTerminal(int(os.Stdout.Fd())) && os.Getenv(termimg.ChartsVariable) == "" {
+		pictures = termimg.None
+	}
+
+	if !stderr {
+		live = termimg.None
+	}
+
 	return environment{
+		pictures:     pictures,
+		livePictures: live,
 		dashboard:    stderr && inForeground(int(os.Stderr.Fd())),
 		wizard:       stderr && term.IsTerminal(int(os.Stdin.Fd())),
 		width:        width,
@@ -49,6 +72,13 @@ func detectEnvironment() environment {
 		gpuAvailable: nvidia.Available,
 		animate:      stderr && motionAllowed(os.Getenv),
 	}
+}
+
+// report are the options of a text report in this environment.
+func (e environment) report(
+	commands bool,
+) tui.ReportOptions {
+	return tui.ReportOptions{Width: e.width, Commands: commands, Pictures: e.pictures}
 }
 
 // foreground reports whether the terminal's foreground process group

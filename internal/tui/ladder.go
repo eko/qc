@@ -4,13 +4,16 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/eko/qc/internal/termimg"
 	"github.com/eko/qc/ladder"
 )
 
@@ -18,22 +21,38 @@ const (
 	// minLadderWidth leaves room for the ladder table.
 	minLadderWidth = 70
 	// rqChartHeight is the height of the rate-quality plot of the report.
-	rqChartHeight = 14
+	rqChartHeight = 18
 )
+
+// ReportOptions shape the text report of a ladder.
+type ReportOptions struct {
+	// Width is the width of the terminal, in columns.
+	Width int
+	// JSONPath is where the JSON report was written, if it was.
+	JSONPath string
+	// Commands lists the encoding commands of the rungs.
+	Commands bool
+	// Pictures draws the charts as pictures by this protocol; as text
+	// with termimg.None.
+	Pictures termimg.Protocol
+}
 
 // RenderLadder writes a human-friendly ladder report.
 func RenderLadder(
 	w io.Writer,
 	res *ladder.Result,
-	width int,
-	jsonPath string,
-	commands bool,
+	opts ReportOptions,
 ) error {
-	width = clampWidth(width, minLadderWidth)
+	width := clampWidth(opts.Width, minLadderWidth)
+
+	chart := rqChart(res, width)
+	if picture, err := rqPicture(res, width, opts.Pictures); err == nil && picture != "" {
+		chart = picture
+	}
 
 	blocks := []string{
 		ladderHeader(res),
-		rqChart(res, width),
+		chart,
 		ladderTable(res.Rungs),
 	}
 
@@ -59,11 +78,11 @@ func RenderLadder(
 
 	blocks = append(blocks, findingsBlock(ladderFindings(res)))
 
-	if commands {
+	if opts.Commands {
 		blocks = append(blocks, ladderCommands(res.Rungs))
 	}
 
-	blocks = append(blocks, ladderFooter(res, jsonPath))
+	blocks = append(blocks, ladderFooter(res, opts.JSONPath))
 
 	return writeBlocks(w, blocks)
 }
@@ -393,80 +412,300 @@ func shapeLabel(
 	return fmt.Sprintf("automatic: from VMAF %.0f down by %.0f points, bitrate ratios %.1f–%.1f", c.TopVMAF, c.Step, c.MinRatio, c.MaxRatio)
 }
 
-// probeSeries groups probes per resolution, highest first, into plot series
-// joined by lines, with their legend entries and the lowest probed VMAF.
-func probeSeries(
+// resolutionLegend names the resolutions of the probes, highest first,
+// each in the colour of its curve.
+func resolutionLegend(
 	probes []ladder.Probe,
-) ([]Series, []string, float64) {
-	byHeight := map[int][][2]float64{}
-	lowest := 100.0
-
-	for _, p := range probes {
-		byHeight[p.Height] = append(byHeight[p.Height], [2]float64{float64(p.Bitrate), p.VMAF})
-		lowest = min(lowest, p.VMAF)
-	}
-
-	heights := make([]int, 0, len(byHeight))
-	for h := range byHeight {
-		heights = append(heights, h)
-	}
-
-	slices.Sort(heights)
-	slices.Reverse(heights)
-
-	series := make([]Series, 0, len(heights))
-	legend := make([]string, 0, len(heights))
+) []string {
+	_, heights := probeCurves(probes)
+	legend := make([]string, len(heights))
 
 	for i, h := range heights {
-		pts := byHeight[h]
-		slices.SortFunc(pts, func(a, b [2]float64) int { return cmp.Compare(a[0], b[0]) })
-
-		style := seriesStyles[i%len(seriesStyles)]
-		series = append(series, Series{Points: pts, Style: style, Line: true})
-		legend = append(legend, style.Render("━━")+Subtle.Render(fmt.Sprintf(" %dp", h)))
+		legend[i] = seriesStyles[i%len(seriesStyles)].Render("━━") + Subtle.Render(fmt.Sprintf(" %dp", h))
 	}
 
-	return series, legend, lowest
+	return legend
 }
 
-// rqChart plots every probe per resolution and the rungs.
+// rqChart plots every probe per resolution and the rungs, numbered as in
+// the ladder table, on the range the rungs span: the probes far above the
+// top rung or under the lowest one tell nothing of the ladder.
 func rqChart(
 	res *ladder.Result,
 	width int,
 ) string {
-	series, legend, lowest := probeSeries(res.Probes)
+	legend := resolutionLegend(res.Probes)
+	plot := Plot{Width: width, Height: rqChartHeight, XLog: true, YHi: maxVMAF, YStep: vmafStep, YLabel: vmafLabel, XLabel: tickBitrate}
+	plot.XLo, plot.XHi, plot.YLo = rqFrame(res)
 
-	rungs := Series{Style: lipgloss.NewStyle().Foreground(contrast)}
-	for _, r := range res.Rungs {
-		rungs.Points = append(rungs.Points, [2]float64{float64(r.Bitrate), r.PredictedVMAF})
+	if len(res.Rungs) > 0 {
+		marker := Bold.Foreground(contrast)
+
+		for i, r := range res.Rungs {
+			plot.Marks = append(plot.Marks, Mark{X: float64(r.Bitrate), Y: r.PredictedVMAF, Glyph: rungGlyph(i), Style: marker})
+		}
+
+		legend = append(legend, marker.Render(string(rungGlyph(0))+"…"+string(rungGlyph(len(res.Rungs)-1)))+Subtle.Render(" rungs"))
 	}
 
-	series = append(series, rungs)
-	legend = append(legend, Bold.Render("⣿")+Subtle.Render(" rungs"))
-
+	plot.Series = envelopeSeries(res.Probes, plot.XLo, plot.XHi, 2*(width-gutter))
+	legend = append(legend, Subtle.Render("── under the envelope"))
 	lines := []string{section.Render("Rate / quality") + Subtle.Render("  (VMAF vs bitrate, log scale)   ") + strings.Join(legend, "  ")}
-	lines = append(lines, XYPlot(series, width, rqChartHeight, true, vmafFloor(lowest), 100, vmafLabel)...)
-	lines = append(lines, bitrateAxis(res.Probes, width))
 
-	return strings.Join(lines, "\n")
+	return strings.Join(append(lines, plot.Lines()...), "\n")
 }
 
-// bitrateAxis labels the log-scale bitrate axis of the probes: the middle
-// label is the geometric mean.
-func bitrateAxis(
+// envelopeSeries draws the curve of each resolution as the ladder reads
+// it (see envelopeLines): in the colour of its resolution where it is the
+// upper envelope, the curve the rungs are placed on, and faint under it.
+// Measured probes are dotted; predicted ones are only the line through
+// them.
+func envelopeSeries(
 	probes []ladder.Probe,
-	width int,
-) string {
-	if len(probes) == 0 {
-		return ""
+	lo, hi float64,
+	samples int,
+) []Series {
+	lines := envelopeLines(probes, lo, hi, samples)
+	if len(lines) == 0 {
+		return nil
 	}
 
-	lo, hi := math.Inf(1), 0.0
+	series := make([]Series, len(lines))
+
+	for i, l := range lines {
+		style := seriesStyles[l.curve%len(seriesStyles)]
+
+		switch {
+		case l.probes:
+			series[i] = Series{Points: l.points, Style: style}
+		case l.onTop:
+			series[i] = Series{Points: l.points, Line: true, NoDots: true, Style: style}
+		default:
+			series[i] = Series{Points: l.points, Line: true, NoDots: true, Style: Subtle}
+		}
+	}
+
+	return series
+}
+
+// envelopeLine is a stretch of the curve of a resolution, on or under the
+// envelope, or the measured probes of that resolution.
+type envelopeLine struct {
+	// curve is the index of the resolution, highest first.
+	curve  int
+	points [][2]float64
+	onTop  bool
+	probes bool
+}
+
+// envelopeLines cuts the curve of each resolution, VMAF linear in the
+// logarithm of the bitrate between probes as the ladder reads it, sampled
+// samples times from lo to hi (the range of the probes when hi is not
+// above lo), into stretches on the upper envelope and under it: those
+// under first, then those on it, then the measured probes, the order they
+// are drawn in.
+func envelopeLines(
+	probes []ladder.Probe,
+	lo, hi float64,
+	samples int,
+) []envelopeLine {
+	curves, heights := probeCurves(probes)
+	if len(curves) == 0 || samples < 2 {
+		return nil
+	}
+
+	if hi <= lo {
+		lo, hi = math.Inf(1), 0
+		for _, p := range probes {
+			lo, hi = min(lo, float64(p.Bitrate)), max(hi, float64(p.Bitrate))
+		}
+	}
+
+	xs := make([]float64, samples)
+	for i := range xs {
+		xs[i] = math.Log(lo) + (math.Log(hi)-math.Log(lo))*float64(i)/float64(samples-1)
+	}
+
+	top := make([]float64, samples)
+	for i, x := range xs {
+		top[i] = math.Inf(-1)
+		for _, c := range curves {
+			if v, ok := curveAt(c, x); ok {
+				top[i] = max(top[i], v)
+			}
+		}
+	}
+
+	var under, on, dots []envelopeLine
+
+	for k, c := range curves {
+		for _, r := range curveRuns(c, xs, top) {
+			if r.onTop {
+				on = append(on, envelopeLine{curve: k, points: r.points, onTop: true})
+			} else {
+				under = append(under, envelopeLine{curve: k, points: r.points})
+			}
+		}
+
+		var measured [][2]float64
+
+		for _, p := range probes {
+			if p.Height == heights[k] && !p.Predicted {
+				measured = append(measured, [2]float64{float64(p.Bitrate), p.VMAF})
+			}
+		}
+
+		if len(measured) > 0 {
+			dots = append(dots, envelopeLine{curve: k, points: measured, probes: true})
+		}
+	}
+
+	return slices.Concat(under, on, dots)
+}
+
+// envelopeSlack is how far under the envelope, in VMAF, a curve still
+// draws it: two curves crossing share it.
+const envelopeSlack = 0.05
+
+// run is a stretch of a curve on or under the envelope.
+type run struct {
+	points [][2]float64
+	onTop  bool
+}
+
+// curveRuns cuts curve c, sampled at the log bitrates xs, into stretches
+// on the envelope top and under it. Consecutive stretches share their
+// boundary sample: the line does not break where it changes colour.
+func curveRuns(
+	c [][2]float64,
+	xs, top []float64,
+) []run {
+	var (
+		runs []run
+		last [2]float64
+		have bool
+	)
+
+	for i, x := range xs {
+		v, ok := curveAt(c, x)
+		if !ok {
+			have = false
+
+			continue
+		}
+
+		pt := [2]float64{math.Exp(x), v}
+		onTop := v >= top[i]-envelopeSlack
+
+		switch n := len(runs); {
+		case !have:
+			runs = append(runs, run{points: [][2]float64{pt}, onTop: onTop})
+		case runs[n-1].onTop != onTop:
+			runs = append(runs, run{points: [][2]float64{last, pt}, onTop: onTop})
+		default:
+			runs[n-1].points = append(runs[n-1].points, pt)
+		}
+
+		last, have = pt, true
+	}
+
+	return runs
+}
+
+// probeCurves are the curves of the probes, one per resolution, highest
+// first: log bitrate and VMAF, by growing bitrate.
+func probeCurves(
+	probes []ladder.Probe,
+) ([][][2]float64, []int) {
+	byHeight := map[int][][2]float64{}
+
 	for _, p := range probes {
-		lo, hi = min(lo, float64(p.Bitrate)), max(hi, float64(p.Bitrate))
+		if p.Bitrate > 0 {
+			byHeight[p.Height] = append(byHeight[p.Height], [2]float64{math.Log(float64(p.Bitrate)), p.VMAF})
+		}
 	}
 
-	return axisLine(compactBitrate(lo), compactBitrate(math.Sqrt(lo*hi)), compactBitrate(hi), width)
+	heights := slices.Sorted(maps.Keys(byHeight))
+	slices.Reverse(heights)
+
+	curves := make([][][2]float64, len(heights))
+	for i, h := range heights {
+		curves[i] = byHeight[h]
+		slices.SortFunc(curves[i], func(a, b [2]float64) int { return cmp.Compare(a[0], b[0]) })
+	}
+
+	return curves, heights
+}
+
+// curveAt reads curve c at log bitrate x, linearly between its points;
+// false outside them.
+func curveAt(
+	c [][2]float64,
+	x float64,
+) (float64, bool) {
+	if len(c) == 0 || x < c[0][0] || x > c[len(c)-1][0] {
+		return 0, false
+	}
+
+	i := max(sort.Search(len(c), func(i int) bool { return c[i][0] >= x }), 1)
+	if i >= len(c) {
+		return c[len(c)-1][1], true
+	}
+
+	a, b := c[i-1], c[i]
+	if b[0] == a[0] {
+		return max(a[1], b[1]), true
+	}
+
+	return a[1] + (b[1]-a[1])*(x-a[0])/(b[0]-a[0]), true
+}
+
+// rqFrame is the range a rate-quality chart of res shows: the bitrates
+// its rungs span, widened on each side, and VMAF from under the lowest
+// rung; without rungs, every probe (lo and hi both zero).
+func rqFrame(
+	res *ladder.Result,
+) (lo, hi, floor float64) {
+	worst := float64(maxVMAF)
+	for _, p := range res.Probes {
+		worst = min(worst, p.VMAF)
+	}
+
+	if len(res.Rungs) == 0 {
+		return 0, 0, vmafFloor(worst)
+	}
+
+	lo, hi, worst = math.Inf(1), 0, maxVMAF
+
+	for _, r := range res.Rungs {
+		lo, hi, worst = min(lo, float64(r.Bitrate)), max(hi, float64(r.Bitrate)), min(worst, r.PredictedVMAF)
+	}
+
+	return lo / rungMargin, hi * rungMargin, vmafFloor(worst - vmafMargin)
+}
+
+const (
+	// maxVMAF is the top of a VMAF axis, and vmafStep the step of its
+	// labels.
+	maxVMAF  = 100
+	vmafStep = 10
+	// rungMargin widens the bitrates the rungs span, on each side, and
+	// vmafMargin lowers the VMAF of the lowest: the curves are seen
+	// around the rungs.
+	rungMargin = 1.6
+	vmafMargin = 5
+)
+
+// rungGlyphs number the rungs of a plot as the ladder table does.
+const rungGlyphs = "123456789abcdefghijklmnopqrstuvwxyz"
+
+// rungGlyph is the mark of rung i (from 0).
+func rungGlyph(
+	i int,
+) rune {
+	glyphs := []rune(rungGlyphs)
+
+	return glyphs[min(i, len(glyphs)-1)]
 }
 
 // Ladder table columns widths.

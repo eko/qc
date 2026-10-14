@@ -82,13 +82,13 @@ func runLadder(
 	// Several codecs are reported together, as a run reports them.
 	if len(report.Ladders) > 1 {
 		return emit(cmd.OutOrStdout(), config.Output, report, func(w io.Writer) error {
-			return renderLadders(w, report, env.width, config.Ladder.Commands)
+			return renderLadders(w, report, env.report(config.Ladder.Commands))
 		}, htmlreport.RenderRun)
 	}
 
 	res := report.Ladders[0]
 
 	return emit(cmd.OutOrStdout(), config.Output, res, func(w io.Writer) error {
-		return tui.RenderLadder(w, res, env.width, "", config.Ladder.Commands)
+		return tui.RenderLadder(w, res, env.report(config.Ladder.Commands))
 	}, htmlreport.RenderLadder)
 }

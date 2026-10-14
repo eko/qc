@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eko/qc/analysis"
+	"github.com/eko/qc/internal/termimg"
 	"github.com/eko/qc/internal/tui"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/overlay"
@@ -59,12 +60,12 @@ func runDashboard(
 	switch {
 	case config.Tools.Quiet:
 		// Nothing drawn, nothing printed: the report alone.
-		return tui.RunDashboard(ctx, cmd.ErrOrStderr(), false, name, subject, labels, run)
+		return tui.RunDashboard(ctx, cmd.ErrOrStderr(), false, termimg.None, name, subject, labels, run)
 	case config.Tools.Plain:
 		return tui.RunPlain(ctx, cmd.ErrOrStderr(), gpuTitle(name, gpuSettingsOf(config)), subject, labels, run)
 	}
 
-	return tui.RunDashboard(ctx, cmd.ErrOrStderr(), env.dashboard, gpuTitle(name, gpuSettingsOf(config)), subject, labels, run)
+	return tui.RunDashboard(ctx, cmd.ErrOrStderr(), env.dashboard, env.livePictures, gpuTitle(name, gpuSettingsOf(config)), subject, labels, run)
 }
 
 // envFlag tells whether the environment variable name is set to a true

@@ -160,7 +160,7 @@ func TestRenderLadderHDR(
 	res.HDR = &ladder.HDRLadder{Signal: encode.Signal{Color: media.Color{Transfer: media.TransferHLG}}, BitDepthUpgraded: true}
 
 	var buf bytes.Buffer
-	require.NoError(t, RenderLadder(&buf, res, 120, "", false))
+	require.NoError(t, RenderLadder(&buf, res, ReportOptions{Width: 120}))
 
 	out := plain(buf.String())
 	assert.Contains(t, out, "HDR rungs: every encode carries the HLG colour description")

@@ -83,6 +83,33 @@ stderr stays empty unless the command fails.
 Charts use braille characters (2×4 dots per cell) and bars use `━`: both are
 single-width, so layouts stay aligned in every terminal.
 
+**Charts as pictures.** In a terminal that draws pictures, the
+rate-quality chart of a ladder report and the chart comparing codecs are
+drawn as pictures instead: smooth lines, sharp text, the colours of the
+HTML report, on the terminal's own background (dark or light). Each
+resolution is bold in its colour where it is the upper envelope the rungs
+are placed on, thin and faint under it; the rungs are numbered as in the
+table. qc finds the protocol from the terminal:
+
+| Terminal | Protocol |
+|---|---|
+| Kitty, Ghostty, Warp | Kitty graphics |
+| iTerm2, WezTerm, VS Code, Tabby, Hyper, Rio | iTerm2 inline images |
+| any other, inside tmux or screen, or stdout not a terminal | none: the braille charts |
+
+`QC_CHARTS` decides instead: `kitty` or `iterm` (even when stdout is not a
+terminal, for `less -R` or a recording), `text` for the braille charts,
+`auto` (the default) to detect.
+
+**Live.** In a terminal of the Kitty protocol (Kitty, Ghostty, Warp), the
+dashboard of a ladder draws its panel as a picture too, redrawn in place
+as the probes land: each probe encoded appears on the plane (the last one
+ringed in orange), the curves a model predicts join them, then the rungs
+appear numbered and move to their measured point as each is verified.
+The picture leaves the screen with the panel. Terminals of the iTerm2
+protocol keep the braille panel: their pictures cannot be redrawn in
+place.
+
 ## Wizard
 
 `qc` without arguments, in a terminal, opens a full-screen wizard:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/internal/termimg"
 	"github.com/eko/qc/ladder"
 	"github.com/eko/qc/quality"
 )
@@ -484,7 +486,7 @@ func TestRunDashboardWithoutTerminal(
 		t.Run(testCase.name, func(t *testing.T) {
 			called := false
 
-			err := RunDashboard(context.Background(), nil, false, "run", "x", []string{"a"}, func(_ context.Context, e *Emitter) error {
+			err := RunDashboard(context.Background(), nil, false, termimg.None, "run", "x", []string{"a"}, func(_ context.Context, e *Emitter) error {
 				e.Start(0)
 				e.Progress(0, 1, 2, "")
 				e.Done(0, "ok")
@@ -634,4 +636,60 @@ func TestRunDashboardInteractive(
 			}
 		})
 	}
+}
+
+func TestDashboardLivePicture(
+	t *testing.T,
+) {
+	d := newDashboard("ladder", "clip.mp4", []string{"Ladder · h264"}, func() {})
+	d.pictures, d.dark = termimg.Kitty, true
+	d.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	d.Update(startMsg{i: 0})
+
+	probes := sampleProbes()
+	d.Update(panelMsg{i: 0, panel: LadderPanel{Stage: ladder.StageProbe, Probes: probes[:3]}})
+
+	first := d.View()
+	require.Equal(t, 1, strings.Count(first, "\x1b_Ga=T"), "the probes are a picture")
+	assert.Contains(t, plain(first), "probe encodes  3 landed")
+	lines := strings.Split(first, "\n")
+	head := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "probe encodes") })
+	bottom := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "╰") })
+	assert.Equal(t, panelPictureRows, bottom-head-1, "the rows of the picture are kept for it")
+
+	// The clock ticks: the picture is not drawn again.
+	key := d.picture.key
+	assert.Equal(t, first, d.View())
+	assert.Equal(t, key, d.picture.key)
+
+	// A probe lands: drawn again, in place.
+	d.Update(panelMsg{i: 0, panel: LadderPanel{Stage: ladder.StageProbe, Probes: probes}})
+	again := d.View()
+	assert.NotEqual(t, key, d.picture.key)
+	assert.Contains(t, again, "i=1820,p=1")
+	assert.NotContains(t, again, termimg.Delete(liveImage))
+
+	// A stage without picture: the picture leaves the screen.
+	d.Update(panelMsg{i: 0, panel: LadderPanel{Stage: ladder.StageDigest}})
+	assert.Contains(t, d.View(), termimg.Delete(liveImage))
+	assert.NotContains(t, d.View(), termimg.Delete(liveImage), "deleted once")
+
+	// The job ends while a picture is shown: the final view removes it.
+	d.Update(panelMsg{i: 0, panel: LadderPanel{Stage: ladder.StageProbe, Probes: probes}})
+	require.Contains(t, d.View(), "\x1b_Ga=T")
+	d.Update(finishMsg{})
+	assert.Contains(t, d.View(), termimg.Delete(liveImage))
+}
+
+func TestDashboardWithoutPictures(
+	t *testing.T,
+) {
+	d := newDashboard("ladder", "clip.mp4", []string{"Ladder · h264"}, func() {})
+	d.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	d.Update(startMsg{i: 0})
+	d.Update(panelMsg{i: 0, panel: LadderPanel{Stage: ladder.StageProbe, Probes: sampleProbes()}})
+
+	view := d.View()
+	assert.NotContains(t, view, "\x1b_G")
+	assert.Contains(t, view, "┤", "the chart of characters")
 }

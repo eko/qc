@@ -23,7 +23,7 @@ func renderLadder(
 	t.Helper()
 
 	var buf bytes.Buffer
-	require.NoError(t, RenderLadder(&buf, res, width, jsonPath, commands))
+	require.NoError(t, RenderLadder(&buf, res, ReportOptions{Width: width, JSONPath: jsonPath, Commands: commands}))
 
 	return plain(buf.String())
 }
@@ -46,7 +46,7 @@ func TestRenderLadder(
 				"            h264 · 1920×1080 · 25.000 fps · 1:00.000",
 				"target      h264 (libx264, preset fast)",
 				"digest      2 segment(s) · 0:04.000 · 6.7% of the title · 8 probe encodes",
-				"Rate / quality  (VMAF vs bitrate, log scale)", "━━ 1080p", "━━ 720p", "━━ 360p", "⣿ rungs",
+				"Rate / quality  (VMAF vs bitrate, log scale)", "━━ 1080p", "━━ 720p", "━━ 360p", "1…3 rungs",
 				"Ladder", "measured VMAF",
 				"⚡ digest 1.2s · probe 40s · verify 12s · total 53.4s",
 			},
@@ -85,23 +85,38 @@ func TestRenderLadderLayout(
 		name  string
 		width int
 		want  int
+		ticks []string
 	}{
-		{name: "regular", width: 100, want: 100},
-		{name: "clamped to the table width", width: 20, want: minLadderWidth},
+		{name: "regular", width: 100, want: 100, ticks: []string{"500k", "1M", "2M"}},
+		{name: "clamped to the table width", width: 20, want: minLadderWidth, ticks: []string{"500k", "1M", "2M"}},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			lines := strings.Split(renderLadder(t, sampleLadder(t), testCase.width, "", false), "\n")
 
-			plot := linesWith(lines, "┤")
+			// Every row of the plot, labelled every 10 VMAF from under the
+			// lowest rung (64.1) to 100.
+			plot := append(linesWith(lines, "┤"), linesWith(lines, "│")...)
 			require.Len(t, plot, rqChartHeight)
 
-			axis := linesStarting(lines, "360k ")
-			require.Len(t, axis, 1)
-			assert.Equal(t, []string{"360k", "1.4M", "5.6M"}, strings.Fields(axis[0]), "the middle label is the geometric mean")
+			labels := make([]string, 0, len(plot))
+			for _, line := range linesWith(lines, "┤") {
+				labels = append(labels, strings.Fields(plain(line))[0])
+			}
 
-			for _, w := range widths(append(plot, axis...)) {
+			assert.Equal(t, []string{"100", "90", "80", "70", "60", "50"}, labels)
+
+			// The bitrates the rungs span (360 kb/s to 3.1 Mb/s), widened,
+			// ticked at round values.
+			axis := linesWith(lines, "└")
+			require.Len(t, axis, 1)
+
+			ticks := linesStarting(lines, "500k ")
+			require.Len(t, ticks, 1)
+			assert.Equal(t, testCase.ticks, strings.Fields(ticks[0]))
+
+			for _, w := range widths(append(plot, append(axis, ticks...)...)) {
 				assert.Equal(t, testCase.want, w)
 			}
 		})
@@ -272,32 +287,19 @@ func TestRenderLadderWithoutProbes(
 
 	out := renderLadder(t, res, 80, "", false)
 
-	assert.Contains(t, out, "⣿ rungs", "rungs are still plotted")
+	assert.Contains(t, out, "1…3 rungs", "rungs are still plotted")
 	assert.Contains(t, out, "⚡ total 53.4s")
 }
 
-func TestProbeSeries(
+func TestResolutionLegend(
 	t *testing.T,
 ) {
-	series, legend, lowest := probeSeries(sampleProbes())
-
-	require.Len(t, series, 3)
-	assert.InDelta(t, 64.1, lowest, 1e-9)
-
 	var got []string
-	for _, l := range legend {
+	for _, l := range resolutionLegend(sampleProbes()) {
 		got = append(got, plain(l))
 	}
 
 	assert.Equal(t, []string{"━━ 1080p", "━━ 720p", "━━ 360p"}, got, "highest resolution first")
-
-	for _, s := range series {
-		assert.True(t, s.Line)
-
-		for i := 1; i < len(s.Points); i++ {
-			assert.Less(t, s.Points[i-1][0], s.Points[i][0], "points are sorted by bitrate")
-		}
-	}
 }
 
 func TestVMAFFloor(
@@ -450,6 +452,7 @@ func TestRenderCodecs(
 			want: []string{
 				"codecs at equal quality",
 				"ℹ av1 needs 30% less bitrate than h264 at VMAF 93.0, the highest quality both ladders reach (30% less on average from VMAF 81)",
+				"Rungs of each codec", "━━ h264  ━━ av1", "1M", "5M",
 			},
 		},
 		{
@@ -466,7 +469,7 @@ func TestRenderCodecs(
 		t.Run(testCase.name, func(t *testing.T) {
 			var out strings.Builder
 
-			require.NoError(t, RenderCodecs(&out, testCase.ladders))
+			require.NoError(t, RenderCodecs(&out, testCase.ladders, ReportOptions{Width: 100}))
 
 			text := plain(out.String())
 			if len(testCase.want) == 0 {
@@ -479,7 +482,7 @@ func TestRenderCodecs(
 		})
 	}
 
-	require.Error(t, RenderCodecs(failingWriter{}, testCases[1].ladders))
+	require.Error(t, RenderCodecs(failingWriter{}, testCases[1].ladders, ReportOptions{Width: 100}))
 }
 
 func TestLadderLinePerShotRejected(
@@ -577,7 +580,7 @@ func TestRenderLadderRenditions(
 	}
 
 	var out strings.Builder
-	require.NoError(t, RenderLadder(&out, res, 120, "", false))
+	require.NoError(t, RenderLadder(&out, res, ReportOptions{Width: 120}))
 
 	text := plain(out.String())
 	for _, want := range []string{
