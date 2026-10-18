@@ -82,6 +82,18 @@ Temporal features (motion) need real neighbours. Each clip is decoded with
 them, clip scores are identical to an exact run (0.000 difference measured).
 Without the trailing frame, errors reach 1.9 VMAF points.
 
+**Warm-up frames cost their motion only.** Of the four features of the VMAF
+v1 models, motion is the only temporal one, and the cheapest: CAMBI and
+chroma are most of the 61 ms a 1080p frame costs on one core. With a v1
+model read from its file on the CPU, a measurement extracts motion from
+every frame in a libvmaf context of its own and imports it into the
+context of the model, which extracts CAMBI, chroma and ADM from the scored
+frames alone. Scores are bit-identical (the mean VMAF of a 32 s 1080p
+encode, 69.0421586758 both ways); CPU time fell from 168 to 119 s on that
+encode (−29%), and libvmaf's from 11.1 to 4.7 s in an instant ladder,
+which scores single frames each with two warm-up ones. Other models, and
+CUDA, extract every feature from every frame as before.
+
 ### Strata: shots for free
 
 The timeline is split into **strata**, so that each stratum is sampled

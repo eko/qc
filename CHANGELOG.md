@@ -11,6 +11,22 @@ The release notes of each GitHub release are taken from its section here
 
 ### Changed
 
+- **`--cpus` holds in the description of a ladder's digest** (`qc ladder`,
+  `qc run`, and a container's CPU quota, which Go follows): under 6 CPUs
+  its frame analysis, its two fast encodes and their VMAF scores run one
+  after the other, each on all of them, and the two encodes one after the
+  other too. They ran side by side, each sized for every CPU: an instant
+  ladder took 2.8 cores on average under `--cpus 2`, 6.5 at its peak, and
+  its 8.8 s were 13 s on two real cores.
+- **VMAF measurements cost up to a third less CPU**, scores unchanged to
+  the bit: with a VMAF v1 model on the CPU, the warm-up frames of a clip
+  are given to motion alone, the only temporal feature, instead of to the
+  whole model (CAMBI and chroma are most of its cost). −29% of CPU on an
+  exact measurement of a 32 s 1080p encode, libvmaf 11.1 → 4.7 s in an
+  instant ladder, which on two cores now takes 10 s instead of 13 (`qc
+  vmaf`, the probes and the verification of a ladder benefit as well).
+  Library: `vmaf.WarmScorer`, implemented by `libvmaf.Scorer`.
+
 - **Clearer rate-quality chart in the terminal report of a ladder**
   (`qc ladder`, `qc run`). It is framed on the rungs (their bitrates
   widened by 1.6 on each side, VMAF from under the lowest rung to 100)

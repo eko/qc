@@ -362,6 +362,12 @@ func TestCommands(
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			// The commands encode real clips: most of the time of the
+			// package. Those setting no environment run side by side.
+			if len(testCase.env) == 0 {
+				t.Parallel()
+			}
+
 			for key, value := range testCase.env {
 				t.Setenv(key, value)
 			}

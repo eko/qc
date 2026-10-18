@@ -20,6 +20,8 @@ import (
 func TestModelCommands(
 	t *testing.T,
 ) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	corpusPath, modelPath := filepath.Join(dir, "corpus.jsonl"), filepath.Join(dir, "model.json")
 

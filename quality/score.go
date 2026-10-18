@@ -214,9 +214,18 @@ func (r *run) push(
 	meter.reset()
 
 	pairs := 0
+	warm, split := scorer.(vmaf.WarmScorer)
 
 	for p := range job.pairs {
-		err := scorer.Push(p.ref, p.dist)
+		var err error
+
+		// A warm-up pair only gives its neighbours their motion.
+		if split && !job.scores(p.ref.Index) {
+			err = warm.PushWarm(p.ref, p.dist)
+		} else {
+			err = scorer.Push(p.ref, p.dist)
+		}
+
 		if err == nil {
 			// A clip starting mid-video primes XPSNR with its warm-up frame.
 			meter.measure(p, pairs == 0 && job.warmFrom > 0)

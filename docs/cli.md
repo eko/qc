@@ -199,7 +199,7 @@ the dashboard.
 | `--log-level` | debug, info, warn, error |
 | `--quiet` | no progress at all, neither dashboard nor lines: the report alone. With `-f json`, stdout holds the JSON and stderr nothing, unless the command fails; `QC_QUIET=1` does the same |
 | `--plain` | no live dashboard nor wizard: progress as plain lines on stderr ([details](#plain-progress---plain)); `QC_PLAIN=1` does the same |
-| `--cpus N` | CPUs used by qc and the ffmpeg processes it starts: worker counts, libvmaf threads, decoder and encoder threads (default 0: all those of the machine, or of the container's CPU quota) |
+| `--cpus N` | CPUs used by qc and the ffmpeg processes it starts: worker counts, libvmaf threads, decoder and encoder threads (default 0: all those of the machine, or of the container's CPU quota). Under 6 CPUs, the steps a ladder would run side by side (the analysis of its digest, its two fast encodes and their scores) run one after the other, each on all of them: an instant ladder of an hour-long title then uses 1.7 cores on average under `--cpus 2`, and takes about 10 s there |
 | `--memory 4g` | memory qc and its ffmpeg processes may use (`4g`, `512m`, bytes): fewer clips are scored and fewer probes encoded at once to fit, the results do not change (default: the container's memory limit, if any) — see [resource limits](install.md#resource-limits) |
 | `--config file` | [configuration file](#configuration-file) (YAML, TOML or JSON; also `QC_CONFIG`) |
 

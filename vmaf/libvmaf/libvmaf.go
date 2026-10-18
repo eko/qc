@@ -184,6 +184,38 @@ func libvmafError(
 	return fmt.Errorf("error %d", rc)
 }
 
+// The static helpers of the preamble above, for the other files of the
+// package.
+
+func initContext(
+	ctx **C.VmafContext,
+	threads int,
+) C.int {
+	return C.qc_init(ctx, C.uint(threads))
+}
+
+func readPictures(
+	ctx *C.VmafContext,
+	ref, dist *C.VmafPicture,
+	index int,
+) C.int {
+	return C.qc_read(ctx, ref, dist, C.uint(index))
+}
+
+func flushContext(
+	ctx *C.VmafContext,
+) C.int {
+	return C.qc_flush(ctx)
+}
+
+func useCAMBI(
+	ctx *C.VmafContext,
+	enc vmaf.Encoded,
+	source int,
+) C.int {
+	return C.qc_use_cambi(ctx, C.uint(enc.Width), C.uint(enc.Height), C.uint(enc.BitDepth), C.int(source))
+}
+
 // Version returns the libvmaf version string.
 func Version() string {
 	return C.GoString(C.vmaf_version())
@@ -192,6 +224,9 @@ func Version() string {
 // Model is a loaded VMAF model. It must be closed.
 type Model struct {
 	c *C.VmafModel
+	// features are the features of a model loaded from a file whose
+	// temporal and spatial features can be extracted apart; nil otherwise.
+	features []modelFeature
 }
 
 // LoadModel loads the model of spec: a JSON file (spec.FromPath) or a
@@ -217,6 +252,10 @@ func LoadModel(
 
 	if rc := C.qc_load_model(&m.c, cs, cname, flag); rc != 0 {
 		return nil, fmt.Errorf("libvmaf: load model %q: %w", spec.Source, libvmafError(int(rc)))
+	}
+
+	if spec.FromPath {
+		m.features = splitFeatures(spec.Source)
 	}
 
 	return &m, nil
@@ -317,9 +356,20 @@ type Scorer struct {
 	// locked is set when New locked the goroutine to its OS thread (CUDA):
 	// Close unlocks it.
 	locked bool
+
+	// motion is the context of the temporal features when they are
+	// extracted apart (see split.go), nil otherwise; motionFeatures are
+	// their names. mainIndex is, for each pushed pair, its index in the
+	// scorer's context, -1 for a warm-up pair; cambiSource tells whether
+	// CAMBI reads the reference too.
+	motion         *C.VmafContext
+	motionFeatures []string
+	mainIndex      []int
+	mainPushed     int
+	cambiSource    int
 }
 
-var _ vmaf.Scorer = (*Scorer)(nil)
+var _ vmaf.WarmScorer = (*Scorer)(nil)
 
 // New returns a Scorer measuring models and cfg. The models are scored on
 // every pair, in this order, and must outlive the scorer; features shared by
@@ -345,22 +395,37 @@ func New(
 		return nil, err
 	}
 
-	for _, model := range models {
-		enc, source := s.encoded, C.int(0)
-		if slices.Contains(cfg.Extractors, vmaf.ExtractorCAMBISource) {
-			source = 1
-		}
+	if slices.Contains(cfg.Extractors, vmaf.ExtractorCAMBISource) {
+		s.cambiSource = 1
+	}
 
-		if rc := C.qc_model_cambi(model.c, C.uint(enc.Width), C.uint(enc.Height), C.uint(enc.BitDepth), source); rc != 0 {
+	split := cfg.Backend == vmaf.BackendCPU && !slices.ContainsFunc(models, func(m *Model) bool { return m.features == nil })
+
+	for _, model := range models {
+		enc := s.encoded
+
+		if rc := C.qc_model_cambi(model.c, C.uint(enc.Width), C.uint(enc.Height), C.uint(enc.BitDepth), C.int(s.cambiSource)); rc != 0 {
 			s.Close()
 
 			return nil, fmt.Errorf("libvmaf: set cambi up: %w", libvmafError(int(rc)))
+		}
+
+		if split {
+			continue
 		}
 
 		if rc := C.vmaf_use_features_from_model(s.ctx, model.c); rc != 0 {
 			s.Close()
 
 			return nil, s.modelError(cfg.Backend, libvmafError(int(rc)))
+		}
+	}
+
+	if split {
+		if err := s.useSplit(); err != nil {
+			s.Close()
+
+			return nil, err
 		}
 	}
 
@@ -450,6 +515,22 @@ func (s *Scorer) use(
 func (s *Scorer) Push(
 	ref, dist *frame.Frame,
 ) error {
+	if s.motion != nil {
+		if err := s.pushTo(s.motion, ref, dist, s.pushed); err != nil {
+			return err
+		}
+
+		if err := s.pushTo(s.ctx, ref, dist, s.mainPushed); err != nil {
+			return err
+		}
+
+		s.mainIndex = append(s.mainIndex, s.mainPushed)
+		s.mainPushed++
+		s.pushed++
+
+		return nil
+	}
+
 	if err := s.check(ref); err != nil {
 		return err
 	}
@@ -498,10 +579,20 @@ func (s *Scorer) Collect() (vmaf.Scores, error) {
 		return vmaf.Scores{}, fmt.Errorf("libvmaf: flush: %w", libvmafError(int(rc)))
 	}
 
+	scored := s.pushed
+
+	if s.motion != nil {
+		if err := s.importMotion(); err != nil {
+			return vmaf.Scores{}, err
+		}
+
+		scored = s.mainPushed
+	}
+
 	out := vmaf.Scores{VMAF: make([][]float64, len(s.models)), Features: make(map[string][]float64, len(s.features))}
 
 	for m, model := range s.models {
-		scores := make([]float64, s.pushed)
+		scores := make([]float64, scored)
 
 		for i := range scores {
 			var score C.double
@@ -516,12 +607,22 @@ func (s *Scorer) Collect() (vmaf.Scores, error) {
 	}
 
 	for _, f := range s.features {
-		values, err := s.feature(f.libvmaf)
+		values, err := s.feature(f.libvmaf, scored)
 		if err != nil {
 			return vmaf.Scores{}, err
 		}
 
 		out.Features[f.name] = values
+	}
+
+	if s.motion != nil {
+		for m := range out.VMAF {
+			out.VMAF[m] = s.spread(out.VMAF[m])
+		}
+
+		for name, values := range out.Features {
+			out.Features[name] = s.spread(values)
+		}
 	}
 
 	return out, nil
@@ -530,11 +631,12 @@ func (s *Scorer) Collect() (vmaf.Scores, error) {
 // feature reads the per-frame values of a feature.
 func (s *Scorer) feature(
 	name string,
+	n int,
 ) ([]float64, error) {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
 
-	values := make([]float64, s.pushed)
+	values := make([]float64, n)
 
 	for i := range values {
 		var value C.double
@@ -554,6 +656,11 @@ func (s *Scorer) Close() {
 	if s.ctx != nil {
 		C.vmaf_close(s.ctx)
 		s.ctx = nil
+	}
+
+	if s.motion != nil {
+		C.vmaf_close(s.motion)
+		s.motion = nil
 	}
 
 	if s.locked {

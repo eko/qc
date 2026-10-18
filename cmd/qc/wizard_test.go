@@ -252,6 +252,8 @@ func TestValidators(
 func TestRunWizard(
 	t *testing.T,
 ) {
+	t.Parallel()
+
 	source := testutil.Generate(t, testutil.Clip{Name: "source.mp4"})
 	episode := testutil.Generate(t, testutil.Clip{Name: "episode.mp4"})
 	sampleFile := filepath.Join(t.TempDir(), "sample.mkv")

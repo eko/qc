@@ -44,6 +44,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -392,6 +393,7 @@ func (e *Extractor) read(
 	var out sources
 
 	group, gctx := errgroup.WithContext(ctx)
+	group.SetLimit(concurrency())
 
 	group.Go(func() (err error) {
 		out.report, err = e.inspector.Analyze(gctx, spec.Path, analysis.Options{Audio: analysis.AudioOptions{Skip: true}})
@@ -422,6 +424,21 @@ func (e *Extractor) read(
 	}
 
 	return out, group.Wait()
+}
+
+// sharedBelow is the number of CPUs under which the sources of the
+// features are read one after the other, each with all of them: run
+// together, each sized for every CPU, they took 3 to 6.5 cores under a cap
+// of 2 (--cpus, or a container's quota, which GOMAXPROCS follows).
+const sharedBelow = 6
+
+// concurrency is how many sources of the features are read at once.
+func concurrency() int {
+	if runtime.GOMAXPROCS(0) < sharedBelow {
+		return 1
+	}
+
+	return -1
 }
 
 // segmentFrames is the number of frames of each segment a ladder build
@@ -463,6 +480,7 @@ func (e *Extractor) scorePass(
 
 	out := make([][]scored, len(pass.CRFs))
 	group, gctx := errgroup.WithContext(ctx)
+	group.SetLimit(concurrency())
 
 	for i := range pass.CRFs {
 		group.Go(func() error {

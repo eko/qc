@@ -116,6 +116,16 @@ under `--memory 4g`, 1.7 GB under `3g` and 1.3 GB under `2g`, with the same
 rungs. Memory grows with the resolution (count four times as much for
 2160p) and the ladder's work directory (`/tmp` of the container) held 3 GB.
 
+On an hour-long 1080p title (H.264 at 25 Mb/s), under `--cpus 2 --memory
+4g`, nothing was killed. The memory of the processes peaked at 1.33 GB for
+a full ladder (28 min) and for one with `--ladder-model` (22 min), 0.4 GB
+for an instant one (12 s); the container's own count reached its 4 GB
+limit with the page cache of the source and of the work directory, which
+the kernel reclaims before it kills. On two CPUs most of a ladder that is
+not instant is the frame analysis of the whole title (12 to 14 min):
+decoding an hour of 25 Mb/s H.264 at about 14 ms a frame on one core.
+`--digest uniform` skips it.
+
 A process the kernel kills for lack of memory cannot say so: `docker run`
 then ends with exit code 137 and no message. Give the container more
 memory, or lower `--cpus` or `--parallel`.

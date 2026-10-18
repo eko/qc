@@ -123,7 +123,7 @@ linters:
           - funlen
           - gocognit
       # cgo-generated code trips gocritic's duplicate sub-expression check.
-      - path: vmaf/libvmaf/(libvmaf|cuda)\.go
+      - path: vmaf/libvmaf/(libvmaf|cuda|split)\.go
         text: dupSubExpr
         linters:
           - gocritic

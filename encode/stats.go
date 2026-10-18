@@ -84,6 +84,12 @@ func (f *FFmpeg) Stats(
 	out := make([][]GOPStats, len(spec.CRFs))
 	group, gctx := errgroup.WithContext(ctx)
 
+	// Under a cap of threads, the passes run one after the other, each on
+	// all the threads: together, each on the cap, they took three times it.
+	if spec.Threads > 0 {
+		group.SetLimit(1)
+	}
+
 	for i := range spec.CRFs {
 		group.Go(func() (err error) {
 			out[i], err = f.statsAt(gctx, spec, i)

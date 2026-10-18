@@ -123,3 +123,15 @@ type Scorer interface {
 	// Close releases the scorer.
 	Close()
 }
+
+// WarmScorer is a Scorer that takes a pair for the temporal features of its
+// neighbours alone: a warm-up frame of a clip, whose own values are not
+// read (they are NaN). Its spatial features, most of the cost of a frame,
+// are not extracted.
+type WarmScorer interface {
+	Scorer
+	// PushWarm pushes the next pair as a warm-up pair.
+	PushWarm(
+		ref, dist *frame.Frame,
+	) error
+}
