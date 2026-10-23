@@ -9,6 +9,8 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-23
+
 ### Added
 
 - **Energy in the ladder reports** (`qc ladder`, `qc run`; terminal, HTML,
@@ -22,11 +24,6 @@ The release notes of each GitHub release are taken from its section here
   wizard asks both when the ladder is customised.
   Library: `ladder.Energy`, `Rung.Encode`, `ladder.WithDecoder`
   (implemented by `encode.FFmpeg.Decode`).
-
-### Fixed
-
-- `golangci-lint` 2.15 (`wrapcheck`): the libvmaf binding wraps the errno
-  of a failed call.
 
 ### Changed
 
@@ -45,7 +42,6 @@ The release notes of each GitHub release are taken from its section here
   instant ladder, which on two cores now takes 10 s instead of 13 (`qc
   vmaf`, the probes and the verification of a ladder benefit as well).
   Library: `vmaf.WarmScorer`, implemented by `libvmaf.Scorer`.
-
 - **Clearer rate-quality chart in the terminal report of a ladder**
   (`qc ladder`, `qc run`). It is framed on the rungs (their bitrates
   widened by 1.6 on each side, VMAF from under the lowest rung to 100)
@@ -73,6 +69,11 @@ The release notes of each GitHub release are taken from its section here
   verified (numbered, at its measured point). `tui.RunDashboard` takes the
   picture protocol; panels drawing themselves as pictures implement
   `tui.Pictured`.
+
+### Fixed
+
+- `golangci-lint` 2.15 (`wrapcheck`): the libvmaf binding wraps the errno
+  of a failed call.
 
 ## [1.3.0] - 2026-10-13
 
@@ -701,7 +702,8 @@ The packages of the first release, for Go programs that embed qc:
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before
   a long run (`nvidia.Check`, `nvidia.Available`).
 
-[Unreleased]: https://github.com/eko/qc/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/eko/qc/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/eko/qc/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/eko/qc/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/eko/qc/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/eko/qc/compare/v1.1.0...v1.2.0
