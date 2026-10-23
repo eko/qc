@@ -317,8 +317,8 @@ func (a *wizardAnswers) encodingLabel() string {
 	return strings.Join(append(parts, preset, a.BitDepth+"-bit"), ", ")
 }
 
-// rungsLabel describes the verification, the probes and the per-shot
-// rungs.
+// rungsLabel describes the verification, the probes, the per-shot rungs
+// and the energy answers.
 func (a *wizardAnswers) rungsLabel() string {
 	parts := []string{"verified"}
 	if a.SkipVerify {
@@ -328,6 +328,14 @@ func (a *wizardAnswers) rungsLabel() string {
 	parts = append(parts, a.Probing+" probes")
 	if a.perShot() {
 		parts = append(parts, "per-shot")
+	}
+
+	if changed(a.EnergyTolerance, "0") {
+		parts = append(parts, "energy tolerance "+strings.TrimSpace(a.EnergyTolerance)+" VMAF")
+	}
+
+	if changed(a.CoreWatts, "0") {
+		parts = append(parts, strings.TrimSpace(a.CoreWatts)+" W per core")
 	}
 
 	return strings.Join(parts, ", ")

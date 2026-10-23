@@ -9,6 +9,25 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+### Added
+
+- **Energy in the ladder reports** (`qc ladder`, `qc run`; terminal, HTML,
+  JSON `energy`): what encoding each rung on the whole title costs, in CPU
+  time measured on its verification encode and scaled to the title, plus
+  the decode of the source, measured apart. Within 4% of the whole-title
+  encodes of a 59 min 1080p title (1080p and 360p rungs). `--core-watts`
+  turns it into Wh or kWh. `--energy-tolerance X` moves each rung, at the
+  same bitrate, to the lowest resolution within X VMAF of the best, and
+  reports the CPU saved — see [energy](docs/ladder.md#13-energy). The
+  wizard asks both when the ladder is customised.
+  Library: `ladder.Energy`, `Rung.Encode`, `ladder.WithDecoder`
+  (implemented by `encode.FFmpeg.Decode`).
+
+### Fixed
+
+- `golangci-lint` 2.15 (`wrapcheck`): the libvmaf binding wraps the errno
+  of a failed call.
+
 ### Changed
 
 - **`--cpus` holds in the description of a ladder's digest** (`qc ladder`,

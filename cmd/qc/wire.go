@@ -37,7 +37,7 @@ import (
 //	gpuSettings ─┼─ newDecoder       → decode.Source ─────────┼─ analysis.New → *Analyzer, ladder.Inspector, pipeline.Analyzer
 //	             │   libvmaf.NewEngine → quality.Engine       │
 //	             │   quality.NewMeter  → analysis.Meter ──────┘
-//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.GrainLab, ladder.RenditionEncoder, overlay.Burner, sample.Cutter
+//	             └─ newEncoder → ladder.Encoder, ladder.Digester, ladder.Decoder, ladder.GrainLab, ladder.RenditionEncoder, overlay.Burner, sample.Cutter
 //	                newLadderEngine → pipeline.LadderBuilder, pipeline.LadderEncoder
 //	                overlay.NewRenderer → pipeline.Overlayer
 //	                newRunner → *pipeline.Runner
@@ -63,7 +63,7 @@ func module(
 			fx.Annotate(analysis.New,
 				fx.As(fx.Self()), fx.As(new(ladder.Inspector)), fx.As(new(pipeline.Analyzer)), fx.As(new(sample.Inspector))),
 			fx.Annotate(newEncoder,
-				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.GrainLab)),
+				fx.As(new(ladder.Encoder)), fx.As(new(ladder.Digester)), fx.As(new(ladder.Decoder)), fx.As(new(ladder.GrainLab)),
 				fx.As(new(ladder.RenditionEncoder)), fx.As(new(overlay.Burner)), fx.As(new(burnChecker)),
 				fx.As(new(sample.Cutter)), fx.As(new(features.Encoder))),
 			fx.Annotate(newFeaturer, fx.As(new(ladder.Featurer))),
@@ -158,18 +158,21 @@ func newEncoder(
 }
 
 // newLadderEngine gives the ladder engine a grain lab, so that AV1 film
-// grain synthesis is available, and a rendition encoder, so that ladders
-// can be encoded on the whole title.
+// grain synthesis is available, a rendition encoder, so that ladders can be
+// encoded on the whole title, and a decoder, so that their energy counts
+// decoding the source.
 func newLadderEngine(
 	inspector ladder.Inspector,
 	encoder ladder.Encoder,
 	digester ladder.Digester,
+	decoder ladder.Decoder,
 	lab ladder.GrainLab,
 	renditions ladder.RenditionEncoder,
 	featurer ladder.Featurer,
 ) *ladder.Engine {
 	return ladder.NewEngine(inspector, encoder, digester,
-		ladder.WithGrainLab(lab), ladder.WithRenditionEncoder(renditions), ladder.WithFeatures(featurer))
+		ladder.WithGrainLab(lab), ladder.WithRenditionEncoder(renditions), ladder.WithFeatures(featurer),
+		ladder.WithDecoder(decoder))
 }
 
 // newFeaturer extracts the features ladder models read: the frame

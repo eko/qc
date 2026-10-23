@@ -96,6 +96,7 @@ func TestReviewSections(
 				Source: "source.mp4", Reference: "ref.mov", Actions: []string{actionVMAF, actionLadder}, VMAFMode: vmafExact,
 				Codecs: []string{"h264"}, Advanced: true, Shape: shapeCount, RungCount: "5", TopVMAF: "95", MinVMAF: "30",
 				BitDepth: "8", Probing: "fixed", Digest: "balanced", PerShot: true, HDRMetric: "tonemap",
+				EnergyTolerance: "1", CoreWatts: "10",
 			},
 			want: map[section][]string{
 				sectionSource:   {"Video: source.mp4"},
@@ -105,7 +106,7 @@ func TestReviewSections(
 				},
 				sectionLadder: {
 					"Codecs: H.264", "Digest: balanced on the title", "Shape: 5 rungs", "Quality: VMAF 30 to 95",
-					"Encoding: no bitrate cap, default preset, 8-bit", "Rungs: verified, fixed probes, per-shot",
+					"Encoding: no bitrate cap, default preset, 8-bit", "Rungs: verified, fixed probes, per-shot, energy tolerance 1 VMAF, 10 W per core",
 				},
 				sectionOutputs: {"Report: terminal", "Annotated: none", "Renditions: none", "Hardware: NVIDIA GPU (NVDEC, NVENC, CUDA VMAF)"},
 			},

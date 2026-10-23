@@ -236,6 +236,28 @@ func (f *FFmpeg) Digest(
 	return nil
 }
 
+// Decode decodes length of the video of source from start, on as many
+// threads as an encode, and drops the frames.
+func (f *FFmpeg) Decode(
+	ctx context.Context,
+	source string,
+	start, length media.Duration,
+) error {
+	args := []string{"-v", "error", "-nostdin"}
+	if f.threads > 0 {
+		args = append(args, "-threads", strconv.Itoa(f.threads))
+	}
+
+	args = append(args, seekArgs(start)...)
+	args = append(args, "-t", seconds(length), "-i", source, "-map", "0:v:0", "-f", "null", "-")
+
+	if err := ffexec.Stream(ctx, f.bin, args, discard); err != nil {
+		return fmt.Errorf("decode %s: %w", source, err)
+	}
+
+	return nil
+}
+
 // quantiserChain is the filter chain turning the frames of a decoder that
 // exports its quantisers into pictures holding them: codecview paints the
 // quantiser of every block into the chroma, of which the U plane is kept,

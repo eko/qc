@@ -62,6 +62,20 @@ func TestWizardAdvancedArgs(
 			want: []string{"in.mp4", "--codecs=av1", "--probing", "adaptive", "--film-grain", "auto", "--skip-analysis"},
 		},
 		{
+			name: "energy tolerance and power per core",
+			mutate: func(a *wizardAnswers) {
+				a.Advanced, a.EnergyTolerance, a.CoreWatts = true, " 1.5 ", "8"
+			},
+			want: []string{"in.mp4", "--codecs=av1", "--energy-tolerance", "1.5", "--core-watts", "8", "--skip-analysis"},
+		},
+		{
+			name: "energy answers at zero produce no flag",
+			mutate: func(a *wizardAnswers) {
+				a.Advanced, a.EnergyTolerance, a.CoreWatts = true, "0", ""
+			},
+			want: []string{"in.mp4", "--codecs=av1", "--skip-analysis"},
+		},
+		{
 			name: "per-shot rungs exclude film grain",
 			mutate: func(a *wizardAnswers) {
 				a.Advanced, a.PerShot, a.FilmGrain = true, true, "auto"
@@ -255,6 +269,7 @@ func TestWizardAdvancedArgsParse(
 		Source: "in.mp4", Actions: []string{actionLadder}, Codecs: []string{"h264"},
 		Advanced: true, Shape: shapeResolutions, Resolutions: "1080,720",
 		TopVMAF: "92", MaxBitrate: "4500", BitDepth: "10", SkipVerify: true,
+		EnergyTolerance: "1", CoreWatts: "10",
 	}
 
 	root := newRootCommand(testEnv)
@@ -273,6 +288,8 @@ func TestWizardAdvancedArgsParse(
 	assert.Equal(t, int64(4_500_000), opts.Constraints.MaxBitrate)
 	assert.Equal(t, 10, opts.BitDepth)
 	assert.True(t, opts.SkipVerify)
+	assert.InDelta(t, 1, opts.Constraints.EnergyTolerance, 1e-9)
+	assert.InDelta(t, 10, opts.CoreWatts, 1e-9)
 }
 
 func TestWizardVMAFModeArgsParse(

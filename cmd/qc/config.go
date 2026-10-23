@@ -139,6 +139,8 @@ type LadderConfig struct {
 	Rungs             string   `mapstructure:"rungs"`
 	MinBitrate        int64    `mapstructure:"min-bitrate"`
 	MaxBitrate        int64    `mapstructure:"max-bitrate"`
+	EnergyTolerance   float64  `mapstructure:"energy-tolerance"`
+	CoreWatts         float64  `mapstructure:"core-watts"`
 	Heights           []int    `mapstructure:"heights"`
 	NoVerify          bool     `mapstructure:"no-verify"`
 	Commands          bool     `mapstructure:"commands"`
@@ -311,6 +313,9 @@ func (c QualityConfig) validateSample() error {
 	return nil
 }
 
+// ErrInvalidCoreWatts is returned for a negative --core-watts.
+var ErrInvalidCoreWatts = errors.New("invalid --core-watts: want the watts of one CPU core, 0 for none")
+
 // ErrInvalidDigestDuration is returned for a negative --digest-duration.
 var ErrInvalidDigestDuration = errors.New("invalid --digest-duration")
 
@@ -331,6 +336,10 @@ func (c LadderConfig) validate() error {
 
 	if c.DigestDuration < 0 {
 		return fmt.Errorf("%w: %g", ErrInvalidDigestDuration, c.DigestDuration)
+	}
+
+	if c.CoreWatts < 0 {
+		return fmt.Errorf("%w: %g", ErrInvalidCoreWatts, c.CoreWatts)
 	}
 
 	_, err := parseFilmGrain(c.FilmGrain)

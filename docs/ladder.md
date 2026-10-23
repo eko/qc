@@ -1068,6 +1068,45 @@ took of each (with its SI and TI next to the video's).
 the other videos of a run's ladders, and `Engine.PrepareProgram` what the
 builds of several codecs share (`Options.Prepared`).
 
+## 13. Energy
+
+Every ladder built with encodes reports what encoding it on the whole title
+costs, in the terminal and HTML reports (section *Energy*) and in the JSON
+(`energy`, and `encode` on each rung):
+
+- **per rung**, the CPU time of its encode in core-seconds, minutes or
+  hours: that of its verification encode of the digest (or, without one,
+  the mean of the probes at its resolution, marked *estimated*), scaled to
+  the title by the share of the title the digest holds;
+- **the decode of the source**, which every encode of the title pays on top
+  of encoding (a 25 Mb/s 1080p source costs as much to decode as a 360p
+  rung costs to encode). The build decodes up to 8 segments of the digest
+  again, each over its first second then whole: the difference leaves out
+  the frames a seek decodes before the segment;
+- **the total**, and with `--core-watts W` its energy in Wh or kWh at W
+  watts per busy core (the CPU time is measured; the watts are yours: about
+  5–15 W per core on a server, depending on the CPU).
+
+`--energy-tolerance X` (in VMAF, below `--step`) trades a little quality for
+energy: each rung keeps its bitrate but takes the lowest resolution whose
+curve is within X VMAF of the best at that bitrate, the rungs staying in
+decreasing resolution. Fewer pixels to encode, and to decode on the players.
+The report lists the rungs it moved, the VMAF each loses, and the CPU time
+saved, estimated in proportion of pixels. On a title of the corpus at
+`--energy-tolerance 1`, the 720p rung went to 540p at the same bitrate for
+0.6 VMAF less, and about 16% of the ladder's encode CPU.
+
+Measured on a 59 min 1080p reality show (H.264, model probing), against
+`/usr/bin/time` on the whole-title encode with each rung's command:
+
+| Rung | Predicted (encode + decode) | Measured | Error |
+|---|---|---|---|
+| 1080p | 7796 core-s (6717 + 1079) | 7517 core-s | +4% |
+| 360p | 1780 core-s (701 + 1079) | 1732 core-s | +3% |
+
+The decode alone measured 1133 core-s on the whole title (1079 predicted).
+Instant ladders encode nothing and report no energy.
+
 ## Cost and accuracy
 
 | Title | Codec | Wall time (M2 Max) | Check |

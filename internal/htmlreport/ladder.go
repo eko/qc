@@ -167,6 +167,10 @@ func ladderExtras(
 		out = append(out, s)
 	}
 
+	if s, ok := energySection(r); ok {
+		out = append(out, s)
+	}
+
 	if g := r.Grain; g != nil {
 		out = append(out, section{
 			Title:    "Film grain",
@@ -690,3 +694,95 @@ func rungLabel(
 ) string {
 	return fmt.Sprintf("%d×%d · VMAF %.1f · CRF %.1f", r.Width, r.Height, r.PredictedVMAF, r.CRF)
 }
+
+// energySection tells what encoding each rung on the whole title costs,
+// and what the energy tolerance moved and saved.
+func energySection(
+	r *ladder.Result,
+) (section, bool) {
+	e := r.Energy
+	if e == nil {
+		return section{}, false
+	}
+
+	s := section{
+		Title:    "Energy",
+		Subtitle: "encoding each rung on the whole title, from the CPU time of its encode of the digest",
+		Table:    &table{Head: []string{"Rung", "Resolution", "Bitrate", "Encode (whole title)", "Basis"}},
+		Method: []string{
+			"qc measures the CPU time of every encode of the digest (user and system time of the encoder process) and scales it to the " +
+				"whole title by the share of the title the digest holds. An encode of the title also decodes its source: what cutting the digest " +
+				"from it took, scaled the same way, counted once (rungs encoded by one ffmpeg share it). Energy is that CPU time at the power of " +
+				"one core given by --core-watts.",
+			"--energy-tolerance moves a rung to a lower resolution when its curve, at the same bitrate, is within that many VMAF of the " +
+				"envelope's: fewer pixels to encode and to decode. The saving is estimated in proportion of the pixels of both resolutions.",
+		},
+	}
+
+	for i, rung := range r.Rungs {
+		if rung.Encode == nil {
+			continue
+		}
+
+		basis := "its verification encode"
+		if rung.Encode.Estimated {
+			basis = "the encodes of its resolution"
+		}
+
+		s.Table.Rows = append(s.Table.Rows, []string{strconv.Itoa(i + 1), fmt.Sprintf("%d×%d", rung.Width, rung.Height),
+			bitrateLabel(float64(rung.Bitrate)), coreHours(rung.Encode.CPUHours), basis})
+	}
+
+	if e.CPUHours > 0 {
+		s.Stats = append(s.Stats, stat{Label: "All rungs", Value: coreHours(e.CPUHours)})
+	}
+
+	if e.DecodeCPUHours > 0 {
+		s.Stats = append(s.Stats, stat{Label: "Decoding the source, once", Value: coreHours(e.DecodeCPUHours)})
+	}
+
+	if e.KWh > 0 {
+		s.Stats = append(s.Stats, stat{Label: fmt.Sprintf("Energy at %g W per core", e.CoreWatts), Value: energyValue(e.KWh)})
+	}
+
+	if e.SavedCPUHours > 0 {
+		s.Stats = append(s.Stats, stat{Label: fmt.Sprintf("Saved by a %g VMAF tolerance", e.Tolerance), Value: coreHours(e.SavedCPUHours)})
+	}
+
+	for _, l := range e.Lowered {
+		s.Notes = append(s.Notes, fmt.Sprintf("Rung %d is encoded at %dp instead of %dp: %.1f VMAF less, at the same bitrate.", l.Rung+1, l.To, l.From, l.VMAFLost))
+	}
+
+	return s, true
+}
+
+// coreHours writes a CPU time in core-hours, core-minutes or core-seconds.
+func coreHours(
+	h float64,
+) string {
+	switch {
+	case h >= 1:
+		return fmt.Sprintf("%.1f core-h", h)
+	case h*minutesPerHour >= 1:
+		return fmt.Sprintf("%.1f core-min", h*minutesPerHour)
+	}
+
+	return fmt.Sprintf("%.0f core-s", h*secondsPerHour)
+}
+
+// energyValue writes an energy in kWh, or Wh under one.
+func energyValue(
+	kWh float64,
+) string {
+	if kWh >= 1 {
+		return fmt.Sprintf("%.2f kWh", kWh)
+	}
+
+	return fmt.Sprintf("%.1f Wh", kWh*wattsPerKilowatt)
+}
+
+const (
+	minutesPerHour   = 60
+	secondsPerHour   = 3600
+	wattsPerKilowatt = 1000
+)

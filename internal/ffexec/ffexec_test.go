@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/internal/cputime"
 	"github.com/eko/qc/internal/testutil"
 )
 
@@ -292,4 +293,24 @@ func TestStreamPairConsumerStoppingEarly(
 	})
 
 	require.ErrorIs(t, err, errConsumer)
+}
+
+func TestStreamCountsCPU(
+	t *testing.T,
+) {
+	testutil.RequireFFmpeg(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	meter := &cputime.Meter{}
+	encode := []string{"-v", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:duration=2", "-c:v", "libx264", "-preset", "medium", "-f", "null", "-"}
+
+	require.NoError(t, Stream(cputime.With(ctx, meter), "ffmpeg", encode, func(r io.Reader) error {
+		_, err := io.Copy(io.Discard, r)
+
+		return err
+	}))
+
+	assert.Positive(t, meter.Seconds(), "the encode's CPU time is counted")
 }

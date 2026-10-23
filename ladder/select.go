@@ -32,6 +32,10 @@ type Constraints struct {
 	// Resolutions forces the height of every rung, top first: one rung per
 	// entry (a height may repeat). Only these resolutions are probed.
 	Resolutions []int `json:"resolutions,omitempty"`
+	// EnergyTolerance is the VMAF a rung may lose to be encoded at a lower
+	// resolution than the envelope's, at the same bitrate: fewer pixels to
+	// encode and decode. 0 keeps the best resolution.
+	EnergyTolerance float64 `json:"energyTolerance,omitempty"`
 }
 
 // WithDefaults fills unset fields.

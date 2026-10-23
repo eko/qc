@@ -78,6 +78,8 @@ func (b *build) makeDigest(
 
 	// An earlier build of the source extracted these segments already:
 	// every codec reads the same file.
+	b.digestParts = []encode.DigestPart{{Source: b.source, Origin: b.origin, Segments: digest.Segments}}
+
 	if path, report, ok := b.prepared.sharedDigest(digest.Segments); ok {
 		b.useDigest(path, report)
 

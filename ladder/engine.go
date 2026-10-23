@@ -161,6 +161,10 @@ type Options struct {
 	SkipVerify bool
 	// Parallel is the number of probes run concurrently. Default 2.
 	Parallel int
+	// CoreWatts is the power of one CPU core of the machine that will
+	// encode the title, in watts: Result.Energy then gives the energy of
+	// encoding the ladder, not only its CPU time. 0 leaves it out.
+	CoreWatts float64
 	// Metrics and Devices are measured next to VMAF on the verification
 	// encodes of the rungs (see quality.Options): the delivered renditions
 	// get XPSNR, banding (CAMBI) or per-device VMAF; probes stay VMAF-only.
@@ -216,6 +220,8 @@ type Engine struct {
 	renditions RenditionEncoder
 	// featurer is optional: only models reading features need it.
 	featurer Featurer
+	// decoder is optional: only the energy of the decode needs it.
+	decoder Decoder
 }
 
 // NewEngine returns an Engine measuring with inspector, encoding with
@@ -560,6 +566,9 @@ func (b *build) stageList(
 
 			return err
 		}},
+		{run: func(ctx context.Context, res *Result) error {
+			return b.energy(ctx, res)
+		}},
 	}
 }
 
@@ -601,6 +610,8 @@ func (b *build) selectRungs(
 	if err != nil {
 		return nil, fmt.Errorf("ladder: %w", err)
 	}
+
+	targets, b.lowered = lowerForEnergy(targets, curves, b.opts.Constraints.EnergyTolerance)
 
 	if len(targets) == 0 {
 		if len(res.Hull) > 0 && b.opts.Constraints.MaxBitrate > 0 && b.opts.Constraints.MaxBitrate < res.Hull[0].Bitrate {

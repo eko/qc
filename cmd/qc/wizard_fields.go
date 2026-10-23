@@ -291,7 +291,7 @@ func (a *wizardAnswers) programFields() []huh.Field {
 func (a *wizardAnswers) customiseField() huh.Field {
 	return newConfirm().
 		Title("Customise the ladder?").
-		Description("Rung count or resolutions, quality range, bitrate cap, preset, bit depth.").
+		Description("Rung count or resolutions, quality range, bitrate cap, preset, bit depth, energy.").
 		Affirmative("Yes").
 		Negative("No, automatic").
 		Value(&a.Advanced)
@@ -343,6 +343,13 @@ func (a *wizardAnswers) resolutionsFields() []huh.Field {
 	}
 }
 
+// Bounds of the energy answers: the tolerance stays below the VMAF step of
+// the rungs (6), which the wizard leaves at its default.
+const (
+	maxEnergyTolerance = 5
+	maxCoreWatts       = 1000
+)
+
 // encodingFields ask for the encoding settings, the verification, the
 // probe placement and, with perShot, the per-shot rungs (of one title: the
 // ladder of several videos has none).
@@ -379,6 +386,16 @@ func (a *wizardAnswers) encodingFields(
 				huh.NewOption("Adaptive · probes where the rungs are uncertain", "adaptive"),
 			).
 			Value(&a.Probing),
+		huh.NewInput().
+			Title("Energy tolerance (VMAF)").
+			Description("VMAF a rung may lose to be encoded at a lower resolution, same bitrate: fewer pixels to encode and decode. Leave empty for the best resolution.").
+			Validate(validateRange(0, maxEnergyTolerance, true)).
+			Value(&a.EnergyTolerance),
+		huh.NewInput().
+			Title("Power of one CPU core (W)").
+			Description("The report then gives the ladder's energy in Wh or kWh, not only its CPU time. Leave empty for CPU time only.").
+			Validate(validateRange(0, maxCoreWatts, true)).
+			Value(&a.CoreWatts),
 	}
 
 	if !perShot {

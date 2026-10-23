@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eko/qc/internal/cputime"
 	"github.com/eko/qc/internal/ffexec"
 	"github.com/eko/qc/internal/testutil"
 	"github.com/eko/qc/media"
@@ -140,6 +141,14 @@ func TestFFmpegErrors(
 			},
 			wantErr: ffexec.ErrNotFound,
 			wantMsg: "digest in.mov",
+		},
+		{
+			name: "decode with a missing binary",
+			run: func(f *FFmpeg) error {
+				return f.Decode(t.Context(), "in.mov", 0, media.Seconds(1))
+			},
+			wantErr: ffexec.ErrNotFound,
+			wantMsg: "decode in.mov",
 		},
 		{
 			name: "digest without segments",
@@ -281,6 +290,16 @@ func TestFFmpegIntegration(
 				assert.Equal(t, testCase.bitDepth, video.BitDepth)
 			})
 		}
+	})
+
+	t.Run("decode counts its CPU time", func(t *testing.T) {
+		meter := &cputime.Meter{}
+		require.NoError(t, ffmpeg.Decode(cputime.With(t.Context(), meter), src, media.Seconds(0.2), media.Seconds(0.6)))
+		assert.Positive(t, meter.Seconds())
+
+		err := ffmpeg.Decode(t.Context(), filepath.Join(t.TempDir(), "missing.mov"), 0, media.Seconds(1))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "decode")
 	})
 
 	t.Run("encode failure carries ffmpeg's message", func(t *testing.T) {

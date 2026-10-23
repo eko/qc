@@ -38,6 +38,9 @@ type Result struct {
 	Probes []Probe     `json:"probes"`
 	Hull   []HullPoint `json:"hull"`
 	Rungs  []Rung      `json:"rungs"`
+	// Energy is what encoding the rungs on the whole title costs (see
+	// EncodeCost), and what Constraints.EnergyTolerance saved.
+	Energy *Energy `json:"energy,omitempty"`
 	// Shots are the shots of the title per-shot rungs allocate (PerShot).
 	Shots []Shot `json:"shots,omitempty"`
 	// ShotProbing is the cost of the per-shot rungs in exact probes.
@@ -64,6 +67,11 @@ type Digest struct {
 	// Complexity compares the digest with its title, when the frame
 	// analysis of the source was read.
 	Complexity *DigestComplexity `json:"complexity,omitempty"`
+	// DecodeCPU is the CPU time decoding the segments of the digest from
+	// the source takes, in seconds, which an encode of the whole title pays
+	// on top of encoding (see decodeCPU). Zero when the build encoded
+	// nothing, or had no Decoder.
+	DecodeCPU float64 `json:"decodeCpu,omitempty"`
 }
 
 // DigestTitle is the part of the digest of a program taken in one video.
@@ -119,6 +127,9 @@ type Rung struct {
 	// version: the shot models were wrong for it, most often where quality
 	// saturates, at the top of the ladder.
 	PerShotRejected *PerShot `json:"perShotRejected,omitempty"`
+	// Encode is what encoding the whole title at the rung costs, when an
+	// encode of the digest at its resolution was measured.
+	Encode *EncodeCost `json:"encode,omitempty"`
 }
 
 // Measurement is a measured encode.
@@ -126,6 +137,8 @@ type Measurement struct {
 	Bitrate   int64   `json:"bitrate"`
 	VMAF      float64 `json:"vmaf"`
 	HalfWidth float64 `json:"vmafHalfWidth"`
+	// EncodeCPU is the CPU time of encoding the digest, in seconds.
+	EncodeCPU float64 `json:"encodeCpu,omitempty"`
 	// Metrics are the means of the extra metric series of a verified rung
 	// (quality.SeriesXPSNRY, quality.SeriesCAMBI...), keyed by series.
 	Metrics map[string]float64 `json:"metrics,omitempty"`

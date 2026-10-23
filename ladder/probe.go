@@ -14,6 +14,7 @@ import (
 
 	"github.com/eko/qc/analysis"
 	"github.com/eko/qc/encode"
+	"github.com/eko/qc/internal/cputime"
 	"github.com/eko/qc/media"
 	"github.com/eko/qc/quality"
 )
@@ -43,8 +44,11 @@ type build struct {
 	prepared     *Prepared
 	digest       string
 	digestReport *analysis.Report
-	workDir      string
-	video        media.VideoStream
+	// digestParts are the stretches of the sources the digest was cut
+	// from, which decodeCPU decodes again.
+	digestParts []encode.DigestPart
+	workDir     string
+	video       media.VideoStream
 	// origin is the presentation time of the source's first frame on its
 	// container's timeline, which seeks in the source start from (see
 	// encode.ChunkSource.Origin).
@@ -77,6 +81,9 @@ type build struct {
 	// mu guards done and serialises Progress calls.
 	mu   sync.Mutex
 	done int
+	// lowered are the rungs Constraints.EnergyTolerance moved to a lower
+	// resolution.
+	lowered []LoweredRung
 }
 
 // geometry returns the frame size at height, keeping the source aspect
@@ -332,7 +339,7 @@ func (b *build) measureAll(
 				return err
 			}
 
-			job.Bitrate, job.VMAF, job.HalfWidth = m.Bitrate, m.VMAF, m.HalfWidth
+			job.Bitrate, job.VMAF, job.HalfWidth, job.EncodeCPU = m.Bitrate, m.VMAF, m.HalfWidth, m.EncodeCPU
 			out[i] = job
 
 			b.tick(Progress{Stage: stage, Total: total, Probe: &job})
@@ -361,7 +368,9 @@ func (b *build) measure(
 	path := filepath.Join(b.workDir, name+".mp4")
 	defer os.Remove(path)
 
-	if err := b.engine.encoder.Encode(ctx, b.codec, b.digest, path, b.params(p, rate)); err != nil {
+	cpu := &cputime.Meter{}
+
+	if err := b.engine.encoder.Encode(cputime.With(ctx, cpu), b.codec, b.digest, path, b.params(p, rate)); err != nil {
 		return Measurement{}, fmt.Errorf("%s: %w", name, err)
 	}
 
@@ -369,6 +378,8 @@ func (b *build) measure(
 	if err != nil {
 		return Measurement{}, fmt.Errorf("%s: measure: %w", name, err)
 	}
+
+	m.EncodeCPU = cpu.Seconds()
 
 	return b.leveled(m, mode), b.inspect(path, name, after)
 }

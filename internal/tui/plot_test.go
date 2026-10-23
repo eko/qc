@@ -287,3 +287,73 @@ func TestLadderPanelPicture(
 	assert.NotEqual(t, verifying.PictureKey(), LadderPanel{Stage: ladder.StageVerify, Probes: verifying.Probes, Rungs: []ladder.Rung{{Bitrate: 3_000_000, PredictedVMAF: 90, Measured: &ladder.Measurement{VMAF: 89}}}}.PictureKey(),
 		"a rung verified draws the picture again")
 }
+
+func TestEnergyBlock(
+	t *testing.T,
+) {
+	res := sampleLadder(t)
+	res.Rungs[0].Encode = &ladder.EncodeCost{CPUHours: 2.5}
+	res.Rungs[1].Encode = &ladder.EncodeCost{CPUHours: 0.5, Estimated: true}
+
+	testCases := []struct {
+		name    string
+		energy  *ladder.Energy
+		want    []string
+		wantNot []string
+	}{
+		{name: "none", wantNot: []string{"Energy"}},
+		{
+			name:   "CPU time alone",
+			energy: &ladder.Energy{CPUHours: 3},
+			want:   []string{"Energy", "2.5 core-h", "30.0 core-min  estimated from the encodes of its resolution", "all rungs  3.0 core-h", "--core-watts gives the energy"},
+		},
+		{
+			name:   "energy at a power per core",
+			energy: &ladder.Energy{CPUHours: 3, CoreWatts: 12, KWh: 0.036},
+			want:   []string{"all rungs  3.0 core-h · 36.0 Wh at 12 W per core"},
+		},
+		{
+			name: "a rung lowered by the tolerance",
+			energy: &ladder.Energy{CPUHours: 3, Tolerance: 0.5, SavedCPUHours: 1,
+				Lowered: []ladder.LoweredRung{{Rung: 1, From: 1080, To: 720, VMAFLost: 0.4}}},
+			want: []string{"rung 2 at 720p instead of 1080p: 0.4 VMAF less, same bitrate", "energy tolerance 0.5 VMAF: about 1.0 core-h saved (25% of the ladder"},
+		},
+		{
+			name:   "a tolerance that moves nothing",
+			energy: &ladder.Energy{CPUHours: 3, Tolerance: 0.2},
+			want:   []string{"energy tolerance 0.2 VMAF: no lower resolution comes that close"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			res.Energy = testCase.energy
+
+			var out strings.Builder
+			require.NoError(t, RenderLadder(&out, res, ReportOptions{Width: 100}))
+
+			text := plain(out.String())
+			for _, want := range testCase.want {
+				assert.Contains(t, text, want)
+			}
+
+			for _, wantNot := range testCase.wantNot {
+				assert.NotContains(t, text, wantNot)
+			}
+		})
+	}
+}
+
+func TestEnergyBlockDecode(
+	t *testing.T,
+) {
+	res := sampleLadder(t)
+	res.Energy = &ladder.Energy{CPUHours: 3, DecodeCPUHours: 1, CoreWatts: 10, KWh: 0.04}
+
+	var out strings.Builder
+	require.NoError(t, RenderLadder(&out, res, ReportOptions{Width: 100}))
+
+	text := plain(out.String())
+	assert.Contains(t, text, "decoding the source  1.0 core-h, once if the rungs share one decode")
+	assert.Contains(t, text, "all rungs  4.0 core-h · 40.0 Wh at 10 W per core", "the source decoded once")
+}

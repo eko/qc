@@ -206,3 +206,23 @@ func TestRenditionSection(
 	assert.Equal(t, "94.8 ± 0.3", last.Table.Rows[0][5])
 	assert.Equal(t, "–", last.Table.Rows[1][5], "unchecked")
 }
+
+func TestEnergySection(
+	t *testing.T,
+) {
+	res := sampleLadder(t, "h264")
+
+	_, ok := energySection(res)
+	assert.False(t, ok, "no energy measured")
+
+	res.Rungs[0].Encode = &ladder.EncodeCost{CPUHours: 2}
+	res.Energy = &ladder.Energy{CPUHours: 2, CoreWatts: 15, KWh: 0.03, Tolerance: 1, SavedCPUHours: 0.5,
+		Lowered: []ladder.LoweredRung{{Rung: 0, From: 1080, To: 720, VMAFLost: 0.6}}}
+
+	html := markup(renderHTML(t, res))
+
+	for _, want := range []string{"<h3>Energy</h3>", "2.0 core-h", "its verification encode", "30.0 Wh", "Energy at 15 W per core",
+		"Saved by a 1 VMAF tolerance", "Rung 1 is encoded at 720p instead of 1080p: 0.6 VMAF less, at the same bitrate."} {
+		assert.Contains(t, html, want)
+	}
+}

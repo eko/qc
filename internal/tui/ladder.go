@@ -60,6 +60,10 @@ func RenderLadder(
 		blocks = append(blocks, table)
 	}
 
+	if block := energyBlock(res); block != "" {
+		blocks = append(blocks, block)
+	}
+
 	if table := programTable(res); table != "" {
 		blocks = append(blocks, table)
 	}
@@ -767,6 +771,93 @@ func rungRow(
 
 	return line
 }
+
+// energyBlock tells what encoding each rung on the whole title costs, in
+// CPU time and, at a power per core, in energy; and which rungs the energy
+// tolerance moved to a lower resolution, for what saving.
+func energyBlock(
+	res *ladder.Result,
+) string {
+	e := res.Energy
+	if e == nil {
+		return ""
+	}
+
+	lines := []string{section.Render("Energy") + Subtle.Render("  (encoding the whole title, from the CPU time of the encodes of the digest)")}
+
+	for i, r := range res.Rungs {
+		if r.Encode == nil {
+			continue
+		}
+
+		cost := cpuHours(r.Encode.CPUHours)
+		if r.Encode.Estimated {
+			cost += Subtle.Render("  estimated from the encodes of its resolution")
+		}
+
+		lines = append(lines, fmt.Sprintf("  %-3d %-11s %s", i+1, fmt.Sprintf("%d×%d", r.Width, r.Height), cost))
+	}
+
+	if e.DecodeCPUHours > 0 {
+		lines = append(lines, Subtle.Render("      decoding the source  "+cpuHours(e.DecodeCPUHours)+", once if the rungs share one decode, per rung otherwise"))
+	}
+
+	if e.CPUHours > 0 {
+		total := "  " + Bold.Render("all rungs  "+cpuHours(e.CPUHours+e.DecodeCPUHours))
+		if e.KWh > 0 {
+			total += Bold.Render(" · "+energyLabel(e.KWh)) + Subtle.Render(fmt.Sprintf(" at %g W per core", e.CoreWatts))
+		} else {
+			total += Subtle.Render("  (--core-watts gives the energy)")
+		}
+
+		lines = append(lines, total)
+	}
+
+	for _, l := range e.Lowered {
+		lines = append(lines, Subtle.Render(fmt.Sprintf("  rung %d at %dp instead of %dp: %.1f VMAF less, same bitrate", l.Rung+1, l.To, l.From, l.VMAFLost)))
+	}
+
+	switch {
+	case e.SavedCPUHours > 0:
+		lines = append(lines, Green.Render(fmt.Sprintf("  energy tolerance %g VMAF: about %s saved (%.0f%% of the ladder, in proportion of pixels)",
+			e.Tolerance, cpuHours(e.SavedCPUHours), 100*e.SavedCPUHours/(e.CPUHours+e.SavedCPUHours))))
+	case e.Tolerance > 0 && len(e.Lowered) == 0:
+		lines = append(lines, Subtle.Render(fmt.Sprintf("  energy tolerance %g VMAF: no lower resolution comes that close", e.Tolerance)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// cpuHours writes a CPU time in core-hours, core-minutes or core-seconds.
+func cpuHours(
+	h float64,
+) string {
+	switch {
+	case h >= 1:
+		return fmt.Sprintf("%.1f core-h", h)
+	case h*minutesPerHour >= 1:
+		return fmt.Sprintf("%.1f core-min", h*minutesPerHour)
+	}
+
+	return fmt.Sprintf("%.0f core-s", h*secondsPerHour)
+}
+
+// energyLabel writes an energy in kWh, or Wh under one.
+func energyLabel(
+	kWh float64,
+) string {
+	if kWh >= 1 {
+		return fmt.Sprintf("%.2f kWh", kWh)
+	}
+
+	return fmt.Sprintf("%.1f Wh", kWh*wattsPerKilowatt)
+}
+
+const (
+	minutesPerHour   = 60
+	secondsPerHour   = 3600
+	wattsPerKilowatt = 1000
+)
 
 func ladderCommands(
 	rungs []ladder.Rung,

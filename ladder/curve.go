@@ -24,6 +24,9 @@ type Probe struct {
 	// (ProbingModel) instead of an encode: HalfWidth is then the error of
 	// the model at that point on the titles it was validated on.
 	Predicted bool `json:"predicted,omitempty"`
+	// EncodeCPU is the CPU time of encoding the digest, in seconds; zero
+	// for a predicted probe.
+	EncodeCPU float64 `json:"encodeCpu,omitempty"`
 }
 
 // Curve is the rate-quality curve of one resolution: VMAF and CRF as

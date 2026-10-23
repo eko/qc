@@ -117,6 +117,9 @@ type wizardAnswers struct {
 	Digest      string
 	PerShot     bool
 	FilmGrain   string
+	// EnergyTolerance (VMAF) and CoreWatts are empty for none.
+	EnergyTolerance string
+	CoreWatts       string
 }
 
 // isProgram reports whether several videos were picked: they get one ladder
@@ -420,7 +423,24 @@ func (a wizardAnswers) ladderArgs() []string {
 		args = append(args, "--no-verify")
 	}
 
+	args = append(args, a.energyArgs()...)
+
 	return append(args, a.innovationArgs()...)
+}
+
+// energyArgs are the flags of the energy answers, when not left at zero.
+func (a wizardAnswers) energyArgs() []string {
+	var args []string
+
+	if changed(a.EnergyTolerance, "0") {
+		args = append(args, "--energy-tolerance", strings.TrimSpace(a.EnergyTolerance))
+	}
+
+	if changed(a.CoreWatts, "0") {
+		args = append(args, "--core-watts", strings.TrimSpace(a.CoreWatts))
+	}
+
+	return args
 }
 
 // innovationArgs are the flags of the probing, per-shot and film grain

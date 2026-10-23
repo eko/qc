@@ -178,7 +178,7 @@ func libvmafError(
 	rc int,
 ) error {
 	if rc < 0 {
-		return syscall.Errno(-rc)
+		return fmt.Errorf("%w", syscall.Errno(-rc))
 	}
 
 	return fmt.Errorf("error %d", rc)

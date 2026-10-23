@@ -495,6 +495,11 @@ func TestConfigValidate(
 			wantErr: ErrInvalidDigestDuration.Error(),
 		},
 		{
+			name:    "core watts",
+			config:  Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{CoreWatts: -1}},
+			wantErr: ErrInvalidCoreWatts.Error(),
+		},
+		{
 			name:    "digest sampling",
 			config:  Config{Tools: ToolsConfig{LogLevel: "warn"}, Ladder: LadderConfig{Digest: "random"}},
 			wantErr: ladder.ErrInvalidDigestSampling.Error(),

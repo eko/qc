@@ -301,6 +301,8 @@ func (b *build) makeProgramDigest(
 
 	// An earlier build of the program extracted these segments already:
 	// every codec reads the same file.
+	b.digestParts = parts
+
 	if path, report, ok := b.prepared.sharedDigest(digest.Segments); ok {
 		b.useDigest(path, report)
 

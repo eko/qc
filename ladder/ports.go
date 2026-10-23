@@ -8,11 +8,12 @@ import (
 	"github.com/eko/qc/analyze/grain"
 	"github.com/eko/qc/encode"
 	"github.com/eko/qc/ladder/features"
+	"github.com/eko/qc/media"
 )
 
 // The engine's ports: each is the narrow part of an adapter the engine
 // uses, declared here, on the consumer side, so that an implementation
-// (encode.FFmpeg satisfies Encoder, Digester and GrainLab) or a test double
+// (encode.FFmpeg satisfies Encoder, Digester, Decoder and GrainLab) or a test double
 // provides only what a ladder build calls.
 
 // Inspector inspects and compares media files.
@@ -53,6 +54,17 @@ type Digester interface {
 	Digest(
 		ctx context.Context,
 		spec encode.DigestSpec,
+	) error
+}
+
+// Decoder decodes a stretch of a source and drops its frames: what that
+// costs tells what encoding the whole title costs on top of its encodes
+// (see Energy). It is optional: without it, the energy leaves decoding out.
+type Decoder interface {
+	Decode(
+		ctx context.Context,
+		source string,
+		start, length media.Duration,
 	) error
 }
 
@@ -109,5 +121,15 @@ func WithFeatures(
 ) Option {
 	return func(e *Engine) {
 		e.featurer = featurer
+	}
+}
+
+// WithDecoder gives the engine what counting the decode of the source in
+// the energy of a ladder needs.
+func WithDecoder(
+	decoder Decoder,
+) Option {
+	return func(e *Engine) {
+		e.decoder = decoder
 	}
 }

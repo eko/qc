@@ -47,6 +47,9 @@ type Prepared struct {
 	digest       []media.Interval
 	digestPath   string
 	digestReport *analysis.Report
+	// decodeCPU is the CPU time decoding its segments from the source
+	// takes (Digest.DecodeCPU), once a build measured it.
+	decodeCPU float64
 }
 
 // preparedTitle is what the builds share of a video of a program.
@@ -202,6 +205,35 @@ func (p *Prepared) sharedDigest(
 	return p.digestPath, p.digestReport, true
 }
 
+// sharedDecode returns the CPU time of decoding these segments of the
+// digest from the source, when a build measured it already.
+func (p *Prepared) sharedDecode(
+	segments []media.Interval,
+) (float64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.decodeCPU == 0 || !slices.Equal(p.digest, segments) {
+		return 0, false
+	}
+
+	return p.decodeCPU, true
+}
+
+// keepDecode records the CPU time of decoding the segments of the digest
+// from the source.
+func (p *Prepared) keepDecode(
+	segments []media.Interval,
+	cpu float64,
+) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if slices.Equal(p.digest, segments) {
+		p.decodeCPU = cpu
+	}
+}
+
 // digestDir returns the directory the digest is written to: its own, or
 // buildDir, the work directory of the build, for the Prepared that build
 // made for itself.
@@ -227,5 +259,5 @@ func (p *Prepared) keepDigest(
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.digest, p.digestPath, p.digestReport = slices.Clone(segments), path, report
+	p.digest, p.digestPath, p.digestReport, p.decodeCPU = slices.Clone(segments), path, report, 0
 }

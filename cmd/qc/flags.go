@@ -118,6 +118,8 @@ func addLadderFlags(
 	flags.Int("max-rungs", 8, "maximum number of rungs of the automatic shape")
 	flags.Int64("min-bitrate", 145_000, "lowest rung bitrate (bits/s)")
 	flags.Int64("max-bitrate", 0, "highest rung bitrate (bits/s, 0 = no cap)")
+	flags.Float64("energy-tolerance", 0, "VMAF a rung may lose to be encoded at a lower resolution, at the same bitrate: fewer pixels to encode and decode (0: the best resolution)")
+	flags.Float64("core-watts", 0, "power of one CPU core of the machine that will encode the ladder, in watts: the report then gives its energy, not only its CPU time")
 	flags.IntSlice("heights", ladder.DefaultHeights(), "candidate resolutions (heights above the source are dropped)")
 	flags.Bool("no-verify", false, "skip the verification encode of each rung")
 	flags.Bool("commands", false, "print the ffmpeg command of each rung")
@@ -291,7 +293,10 @@ func ladderOptions(
 			Resolutions: resolutions,
 			MinBitrate:  l.MinBitrate,
 			MaxBitrate:  l.MaxBitrate,
+			// Validated with the source (ladder.Constraints.Validate).
+			EnergyTolerance: l.EnergyTolerance,
 		},
+		CoreWatts:      l.CoreWatts,
 		Heights:        l.Heights,
 		SkipVerify:     l.NoVerify || l.Instant,
 		Model:          config.Quality.Model,

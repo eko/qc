@@ -41,7 +41,7 @@ Caveats:
 | Network-optimal rung placement: ladder = quantisation of the bandwidth distribution, exact dynamic program (Reznik, Aug 2026) | Optimal expected quality for a given audience; principled rung count | Paper only, no implementation known |
 | Multi-codec ladders with device share (MCBE, Reznik) | −56% encode energy, −95% storage energy | Research |
 | AV1 film grain synthesis | −36% bitrate at 1080p+ on grainy titles (Netflix 2025) | Production at Netflix; no standard metric |
-| Energy-aware ladders | −51% encode energy for −5% VMAF | Research |
+| Energy-aware ladders | −51% encode energy for −5% VMAF | Research; in qc: [energy report and `--energy-tolerance`](ladder.md#13-energy) |
 | Uncertainty-driven (active-learning) probe placement | — | **No published work found** |
 | Codecs | AV2 spec v1.0 (May 2026, −30% BD-rate vs AV1, no production encoder yet); VVC/VVenC; LCEVC enhancement layers | Watch |
 

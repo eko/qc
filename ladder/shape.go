@@ -44,6 +44,10 @@ func (c Constraints) Validate(
 		return fmt.Errorf("%w: %d rungs", ErrInvalidShape, c.Rungs)
 	}
 
+	if step := c.WithDefaults().Step; c.EnergyTolerance < 0 || c.EnergyTolerance >= step {
+		return fmt.Errorf("%w: an energy tolerance of %g VMAF (from 0 to under the step between rungs, %g)", ErrInvalidShape, c.EnergyTolerance, step)
+	}
+
 	if len(c.Resolutions) > 0 && c.Rungs > 0 && c.Rungs != len(c.Resolutions) {
 		return fmt.Errorf("%w: %d rungs requested but %d resolutions given", ErrInvalidShape, c.Rungs, len(c.Resolutions))
 	}

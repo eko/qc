@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/eko/qc/internal/cputime"
 )
 
 const (
@@ -177,6 +179,10 @@ func run(
 	drain(outputs)
 
 	waitErr := cmd.Wait()
+
+	if cmd.ProcessState != nil {
+		cputime.Add(parent, cmd.ProcessState.UserTime()+cmd.ProcessState.SystemTime())
+	}
 
 	switch {
 	case parent.Err() != nil:
