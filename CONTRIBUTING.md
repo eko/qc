@@ -16,7 +16,7 @@ You need:
 - ffmpeg and ffprobe built with libx264, libx265 and libsvtav1 (and
   libass for the annotated videos of `--overlay`: their tests skip without
   it)
-- libvmaf ≥ 3.2.1 with its models and `pkg-config` (3.2.0 cannot load the VMAF v1 models)
+- libvmaf ≥ 3.2.1 with its models and `pkg-config` (3.2.0 cannot load the VMAF v1 models; 3.2.1 still reports itself as 3.2.0, and `qc version --check` loads the default model to tell them apart)
 - [golangci-lint](https://golangci-lint.run/) v2
 
 On macOS: `brew install ffmpeg libvmaf pkg-config golangci-lint`.

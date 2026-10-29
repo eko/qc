@@ -314,7 +314,7 @@ Loudness and defects of the audio tracks, decoded while the frames are
 | `--model-dir` | Homebrew/`/usr/local`/`/usr` model dirs | where model files are searched |
 | `--vmaf-bit-depth` | 0 (auto) | 8 or 10 |
 | `--workers` | 0 (half the CPUs) | clips scored concurrently |
-| `--metrics` | xpsnr,cambi,psnr | metrics measured on the frames VMAF decodes, each with its own CI: `xpsnr`, `cambi`, `psnr`, `psnr-hvs`, `ssim`, `ms-ssim`, `ciede2000`; `--metrics=` for VMAF only |
+| `--metrics` | xpsnr,cambi,psnr | metrics measured on the frames VMAF decodes, each with its own CI: `xpsnr`, `cambi`, `psnr`, `psnr-hvs`, `ssim`, `ms-ssim`, `ciede2000`; `--metrics=` for VMAF only. The defaults add about 5% of CPU to an exact measurement of a 1080p video; `ms-ssim` and `ciede2000` cost several times VMAF |
 | `--av2-ctc` | off | add the AOM AV2 CTC set: PSNR Y/Cb/Cr and PSNR-YUV 14:1:1, PSNR-HVS, SSIM, MS-SSIM, CIEDE2000, CAMBI (MS-SSIM and CIEDE2000 cost 4× and 9× VMAF) |
 | `--devices` | none | also score the VMAF v1 model of `phone`, `tv`, `4k` (HFR variants above 30 fps); `4k` against a 1080p primary is a second pass at 2160p |
 | `--hdr-metric` | pq | VMAF on HDR (PQ/HLG) references: `pq` (on the HDR signal, fast, not HDR-calibrated) or `tonemap` (on an SDR BT.709 tone mapping of both videos, slower); HDR references always get wPSNR and ΔE ITP — see [HDR](hdr.md#4-vmaf-on-hdr) |

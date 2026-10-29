@@ -139,7 +139,7 @@ memory, or lower `--cpus` or `--parallel`.
 | Component | Version | Source |
 |---|---|---|
 | qc | the release | built with cgo, `-trimpath` |
-| libvmaf | 3.2.1 + v1.0.16 models | built from the release tarball, checksum pinned |
+| libvmaf | 3.2.1 + v1.0.16 models | built from the release tarball, checksum pinned; it reports itself as 3.2.0 (`qc version`), as its 3.2.1 sources declare: the `✓ vmaf model` line of `qc version --check` is what shows the v1 models load |
 | ffmpeg, ffprobe | 9.0.2 | built from the release tarball, checksum pinned: every native decoder, demuxer and filter, lavfi, libass (`--overlay`); no network, no hardware acceleration |
 | SVT-AV1 | 4.2.0 | built from the tag, commit pinned (Debian ships 2.3) |
 | x264, x265, dav1d, libass, DejaVu Sans Mono | Debian trixie | Debian packages and their security updates |
