@@ -111,3 +111,25 @@ func TestBackendName(
 	assert.Empty(t, backendName(vmaf.BackendCPU))
 	assert.Equal(t, "cuda", backendName(vmaf.BackendCUDA))
 }
+
+// TestMeasurePortrait scores a vertical 1080×1920 short: it gets the 1080p
+// model, evaluated upright, not the 4K one stretched to landscape (whose
+// scores reach 110).
+func TestMeasurePortrait(
+	t *testing.T,
+) {
+	clip := testutil.Clip{Width: 1080, Height: 1920, Seconds: 0.2}
+	ref := probeInput(t, testutil.Generate(t, clip))
+
+	clip.Name, clip.Args = "dist.mp4", []string{"-crf", "38"}
+	dist := probeInput(t, testutil.Generate(t, clip))
+
+	res, err := measureWithin(t, decodedMeter(), ref, dist, Options{Exact: true, Metrics: []string{}})
+	require.NoError(t, err)
+
+	assert.Equal(t, "vmaf_v1.0.16_3d0h", res.Model.Name)
+	assert.Equal(t, 1080, res.Model.Width)
+	assert.Equal(t, 1920, res.Model.Height)
+	assert.Positive(t, res.Mean)
+	assert.LessOrEqual(t, res.Mean, 100.0)
+}

@@ -101,18 +101,69 @@ type ModelSpec struct {
 	Height   int    `json:"evalHeight"`
 }
 
-// ResolveModel picks the model to use. name may be "" or "auto" (VMAF v1:
-// 4K model above 1080p, high frame rate variant above 30 fps), a model name
-// found in dirs (e.g. "vmaf_v1.0.16_5d0h"), a path to a JSON model, or a
-// libvmaf built-in version (e.g. "vmaf_v0.6.1").
+// ResolveModel picks the model to use for a landscape source of
+// sourceHeight lines. See ResolveModelForSize, which also knows portrait
+// sources.
+//
+// Deprecated: use ResolveModelForSize, which picks the model of a portrait
+// source on its short side and evaluates it upright.
 func ResolveModel(
 	name string,
 	sourceHeight int,
 	fps float64,
 	dirs []string,
 ) (ModelSpec, error) {
+	return ResolveModelForSize(name, 0, sourceHeight, fps, dirs)
+}
+
+// ResolveModelForSize picks the model to use for a source of width ×
+// height. name may be "" or "auto" (VMAF v1: 4K model when the short side
+// of the picture is above 1080, high frame rate variant above 30 fps), a
+// model name found in dirs (e.g. "vmaf_v1.0.16_5d0h"), a path to a JSON
+// model, or a libvmaf built-in version (e.g. "vmaf_v0.6.1"). A portrait
+// source (taller than wide) is evaluated upright: 1080×1920 for a 1080p
+// model, so that its pictures are not stretched to landscape. A width of 0
+// stands for a landscape source.
+func ResolveModelForSize(
+	name string,
+	width, height int,
+	fps float64,
+	dirs []string,
+) (ModelSpec, error) {
+	s, err := resolveModel(name, shortSide(width, height), fps, dirs)
+	if err != nil {
+		return ModelSpec{}, err
+	}
+
+	if height > width && width > 0 {
+		s.Width, s.Height = s.Height, s.Width
+	}
+
+	return s, nil
+}
+
+// shortSide is the short side of a picture of width × height, its height
+// when the width is unknown (0).
+func shortSide(
+	width, height int,
+) int {
+	if width <= 0 {
+		return height
+	}
+
+	return min(width, height)
+}
+
+// resolveModel resolves name for a source whose picture's short side is
+// side lines, evaluated in landscape.
+func resolveModel(
+	name string,
+	side int,
+	fps float64,
+	dirs []string,
+) (ModelSpec, error) {
 	if name == "" || name == "auto" {
-		name = autoModel(sourceHeight, fps)
+		name = autoModel(side, fps)
 	}
 
 	if strings.HasSuffix(name, ".json") {
@@ -135,14 +186,16 @@ func ResolveModel(
 	return spec(name, name, false), nil
 }
 
-// autoModel is the VMAF v1 model matching the source: the 4K variant above
-// 1080p, the high frame rate variant above 30 fps.
+// autoModel is the VMAF v1 model matching the source, from the short side
+// of its picture: the 4K variant above 1080 (a 1080×1920 short is a 1080p
+// picture held upright, not a 4K one), the high frame rate variant above
+// 30 fps.
 func autoModel(
-	sourceHeight int,
+	side int,
 	fps float64,
 ) string {
 	device := DeviceTV
-	if sourceHeight > hdHeight {
+	if side > hdHeight {
 		device = Device4K
 	}
 

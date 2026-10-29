@@ -86,6 +86,38 @@ func TestResolveModel(
 	}
 }
 
+func TestResolveModelForSize(
+	t *testing.T,
+) {
+	testCases := []struct {
+		name          string
+		model         string
+		width, height int
+		wantName      string
+		wantWidth     int
+		wantHeight    int
+	}{
+		{name: "landscape 1080p", width: 1920, height: 1080, wantName: "vmaf_v1.0.16_3d0h", wantWidth: 1920, wantHeight: 1080},
+		{name: "landscape 2160p", width: 3840, height: 2160, wantName: "vmaf_v1.0.16_3d0h_2160", wantWidth: 3840, wantHeight: 2160},
+		{name: "portrait 1080x1920 is a 1080p picture, upright", width: 1080, height: 1920, wantName: "vmaf_v1.0.16_3d0h", wantWidth: 1080, wantHeight: 1920},
+		{name: "portrait 2160x3840 is a 4K picture, upright", width: 2160, height: 3840, wantName: "vmaf_v1.0.16_3d0h_2160", wantWidth: 2160, wantHeight: 3840},
+		{name: "portrait 720x1280", width: 720, height: 1280, wantName: "vmaf_v1.0.16_3d0h", wantWidth: 1080, wantHeight: 1920},
+		{name: "square", width: 1080, height: 1080, wantName: "vmaf_v1.0.16_3d0h", wantWidth: 1920, wantHeight: 1080},
+		{name: "unknown width reads as landscape", height: 1920, wantName: "vmaf_v1.0.16_3d0h_2160", wantWidth: 3840, wantHeight: 2160},
+		{name: "named model, portrait source", model: builtinModel, width: 1080, height: 1920, wantName: builtinModel, wantWidth: 1080, wantHeight: 1920},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			spec, err := ResolveModelForSize(testCase.model, testCase.width, testCase.height, 30, nil)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.wantName, spec.Name)
+			assert.Equal(t, testCase.wantWidth, spec.Width)
+			assert.Equal(t, testCase.wantHeight, spec.Height)
+		})
+	}
+}
+
 func TestDeviceModel(
 	t *testing.T,
 ) {
@@ -117,7 +149,7 @@ func TestDeviceModel(
 			require.NoError(t, err)
 			assert.Equal(t, testCase.want, got)
 
-			spec, err := ResolveModel(got, 1080, testCase.fps, DefaultModelDirs())
+			spec, err := ResolveModelForSize(got, 0, 1080, testCase.fps, DefaultModelDirs())
 			require.NoError(t, err)
 			assert.True(t, spec.FromPath, "installed with libvmaf")
 		})

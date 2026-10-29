@@ -23,7 +23,7 @@ func TestLoadModel(
 	invalid := filepath.Join(dir, "invalid.json")
 	require.NoError(t, os.WriteFile(invalid, []byte("{"), 0o600))
 
-	installed, err := vmaf.ResolveModel(builtinModel, 1080, 25, vmaf.DefaultModelDirs())
+	installed, err := vmaf.ResolveModelForSize(builtinModel, 0, 1080, 25, vmaf.DefaultModelDirs())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -297,7 +297,7 @@ func TestScorerErrors(
 		{
 			name: "model missing extracted features",
 			run: func(t *testing.T) error {
-				spec, err := vmaf.ResolveModel("vmaf_float_v0.6.1", 1080, 25, vmaf.DefaultModelDirs())
+				spec, err := vmaf.ResolveModelForSize("vmaf_float_v0.6.1", 0, 1080, 25, vmaf.DefaultModelDirs())
 				require.NoError(t, err)
 
 				other, err := LoadModel(spec)
@@ -337,7 +337,7 @@ func loadDevice(
 	name, err := vmaf.DeviceModel(device, 25)
 	require.NoError(t, err)
 
-	spec, err := vmaf.ResolveModel(name, 1080, 25, vmaf.DefaultModelDirs())
+	spec, err := vmaf.ResolveModelForSize(name, 0, 1080, 25, vmaf.DefaultModelDirs())
 	require.NoError(t, err)
 
 	model, err := LoadModel(spec)

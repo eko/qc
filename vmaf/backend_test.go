@@ -110,7 +110,7 @@ func TestCUDAUnsupported(
 func TestInstalledV1ModelsNeedCPU(
 	t *testing.T,
 ) {
-	spec, err := ResolveModel("auto", 1080, 25, DefaultModelDirs())
+	spec, err := ResolveModelForSize("auto", 0, 1080, 25, DefaultModelDirs())
 	require.NoError(t, err)
 
 	if !spec.FromPath {

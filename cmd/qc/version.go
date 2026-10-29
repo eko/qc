@@ -398,7 +398,7 @@ func parseEncoders(
 func loadDefaultModel(
 	dirs []string,
 ) (string, error) {
-	spec, err := vmaf.ResolveModel("", checkModelHeight, checkModelFPS, dirs)
+	spec, err := vmaf.ResolveModelForSize("", 0, checkModelHeight, checkModelFPS, dirs)
 	if err != nil {
 		return "", err
 	}

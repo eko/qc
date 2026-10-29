@@ -319,7 +319,7 @@ func TestLoadModel(
 func TestLoadDefaultModelFromFile(
 	t *testing.T,
 ) {
-	spec, err := vmaf.ResolveModel("", checkModelHeight, checkModelFPS, vmaf.DefaultModelDirs())
+	spec, err := vmaf.ResolveModelForSize("", 0, checkModelHeight, checkModelFPS, vmaf.DefaultModelDirs())
 	require.NoError(t, err)
 
 	if !spec.FromPath {

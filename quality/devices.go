@@ -49,7 +49,7 @@ func (r *run) configureMetrics() error {
 		// Device names are valid and their models are names, not paths:
 		// neither call can fail (a missing model fails when loaded).
 		model, _ := vmaf.DeviceModel(name, fps)
-		spec, _ := vmaf.ResolveModel(model, r.ref.Video.Height, fps, r.opts.ModelDirs)
+		spec, _ := vmaf.ResolveModelForSize(model, r.ref.Video.Width, r.ref.Video.Height, fps, r.opts.ModelDirs)
 
 		r.addDevice(device{name: name, spec: spec, series: seriesDevice + name}, passes)
 	}

@@ -249,7 +249,7 @@ func (m *Meter) newRun(
 			ErrNoFramesToCompare, ref.Path, ref.Bitstream.PacketCount, dist.Path, dist.Bitstream.PacketCount)
 	}
 
-	spec, err := vmaf.ResolveModel(opts.Model, ref.Video.Height, ref.Video.AvgFrameRate.Float(), opts.ModelDirs)
+	spec, err := vmaf.ResolveModelForSize(opts.Model, ref.Video.Width, ref.Video.Height, ref.Video.AvgFrameRate.Float(), opts.ModelDirs)
 	if err != nil {
 		return nil, err
 	}

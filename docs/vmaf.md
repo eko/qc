@@ -18,14 +18,23 @@ HDR-calibrated or scored on an SDR tone mapping (`--hdr-metric`): see
 
 ## 1. Scoring setup
 
-### Model and resolution (`vmaf.ResolveModel`)
+### Model and resolution (`vmaf.ResolveModelForSize`)
 
 | Situation | Model | Evaluation resolution |
 |---|---|---|
-| default, source ≤ 1080p, ≤ 30 fps | `vmaf_v1.0.16_3d0h` | 1920×1080 |
-| source above 1080p | `vmaf_v1.0.16_3d0h_2160` | 3840×2160 |
+| default, short side of the picture ≤ 1080, ≤ 30 fps | `vmaf_v1.0.16_3d0h` | 1920×1080 |
+| short side above 1080 | `vmaf_v1.0.16_3d0h_2160` | 3840×2160 |
 | above 30 fps | `vmaf_v1.0.16_hfr_3d0h[_2160]` | as above |
 | `--model name`, a `.json` path or a built-in version (`vmaf_v0.6.1`) | as given | 4K models at 2160p, others at 1080p |
+| portrait source (taller than wide) | as above | upright: 1080×1920, or 2160×3840 |
+
+The model is chosen on the short side of the picture: a vertical 1080×1920
+short is a 1080p picture held upright, not a 4K one, and it is scored
+upright instead of stretched to landscape. On such a short (H.264, 15 s)
+qc's exact score matches Netflix's `vmaf` tool run at the native size to
+the third decimal: 97.113 with the default model, 95.512 with
+`vmaf_v0.6.1`. qc 1.4.0 and earlier picked the 4K model for it (100.7, the
+4K model adds 5 points and clips at 110) and stretched it.
 
 VMAF v1 models use four features (`cambi`, `speed_chroma_uv`, `adm3`,
 `motion3`): VIF, the most expensive v0 feature, is gone, and NEG (no
@@ -673,7 +682,7 @@ clips). Formulas, validation and costs: [hdr.md](hdr.md).
 - A device whose model is the primary one reuses its scores.
 
 **The primary VMAF** is the `--model` one (default `auto`: the TV model at
-1080p for sources up to 1080p, the 4K model above, HFR variants above
+1080p for pictures whose short side is up to 1080, the 4K model above, HFR variants above
 30 fps). It is the model of the display the source was made for, it sets the
 evaluation resolution of every other metric, and it alone drives the sampling
 and the stopping rule: one variance has to size the sample, and replays show
