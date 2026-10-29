@@ -9,6 +9,31 @@ The release notes of each GitHub release are taken from its section here
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-29
+
+### Fixed
+
+- **Vertical videos are scored with the right model, upright**
+  ([#2](https://github.com/eko/qc/issues/2), [#3](https://github.com/eko/qc/issues/3)).
+  The automatic model looked at the height only: a 1080×1920 short got the
+  4K model (`vmaf_v1.0.16_3d0h_2160`, which adds 5 points and clips at 110,
+  hence scores above 100), and every portrait source was stretched to a
+  landscape evaluation size. The model is now chosen on the short side of
+  the picture, and a portrait source is evaluated upright (1080×1920). On
+  the short of #2, the exact score matches Netflix's `vmaf` tool at the
+  native size to the third decimal (97.113, 95.512 with `vmaf_v0.6.1`),
+  instead of 100.7. Scores of portrait videos change; landscape ones do
+  not. Ladders of portrait sources are measured the same way. Library:
+  `vmaf.ResolveModelForSize`; `vmaf.ResolveModel` is deprecated.
+- **A container without a memory limit no longer gets killed for lack of
+  memory** ([#1](https://github.com/eko/qc/issues/1)). Without `--memory`
+  nor a cgroup limit (Docker Desktop's default), qc now sizes its workers
+  on the memory the system has available (`MemAvailable`, Linux) instead
+  of not at all. With the fix above, `qc vmaf` on a 1080×1920 short peaks
+  at 1.5 GB with 6 workers, where 1.4.0 took more than 4 GB with 2.
+- Docs: the memory of a vertical video, what the default `--metrics` cost,
+  and why libvmaf 3.2.1 reports itself as 3.2.0.
+
 ## [1.4.0] - 2026-10-23
 
 ### Added
@@ -702,7 +727,8 @@ The packages of the first release, for Go programs that embed qc:
   `quality.Result.GPUSummary`, and package `nvidia` to check the GPU before
   a long run (`nvidia.Check`, `nvidia.Available`).
 
-[Unreleased]: https://github.com/eko/qc/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/eko/qc/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/eko/qc/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/eko/qc/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/eko/qc/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/eko/qc/compare/v1.2.0...v1.2.1
