@@ -97,6 +97,37 @@ func ContainerMemory(
 	return 0
 }
 
+// AvailableMemory is the memory the system can give to new processes
+// without swapping, read from MemAvailable in the meminfo file of a Linux
+// proc file system (os.DirFS("/proc")), or 0 on another system. In a
+// container without a memory limit it is that of the machine, or of the
+// virtual machine of Docker Desktop: the most the run can take before the
+// kernel kills it.
+func AvailableMemory(
+	proc fs.FS,
+) int64 {
+	content, err := fs.ReadFile(proc, "meminfo")
+	if err != nil {
+		return 0
+	}
+
+	for line := range strings.Lines(string(content)) {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "MemAvailable:" {
+			continue
+		}
+
+		kib, err := strconv.ParseInt(fields[1], 10, 64)
+		if err != nil || kib <= 0 {
+			return 0
+		}
+
+		return kib * kibibyte
+	}
+
+	return 0
+}
+
 // FormatMemory spells a size for messages: "4.0 GiB", "512 MiB".
 func FormatMemory(
 	bytes int64,

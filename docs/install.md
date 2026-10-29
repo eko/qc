@@ -105,8 +105,11 @@ ladders) but a native install is faster on long titles, and the VM only sees the
 qc follows the limits of its container: `docker run --cpus 4` sizes its
 workers, libvmaf threads and ffmpeg threads on 4 CPUs, and `docker run
 --memory 4g` lowers how many clips are scored and probes encoded at once
-until the run fits. `--cpus` and `--memory` set the same limits by hand, in
-or out of a container. The results do not change, only the time.
+until the run fits. A container without a memory limit (the default of
+Docker Desktop) is sized on the memory the system has available, that of
+Docker Desktop's virtual machine. `--cpus` and `--memory` set the same
+limits by hand, in or out of a container. The results do not change, only
+the time.
 
 Measured in this image on an H.264 ladder of a 1080p title (12 CPUs): about
 4.2 GB at its peak without a limit — some 165 MB per libvmaf thread (a
@@ -114,7 +117,8 @@ ladder runs two measurements at a time, each on every CPU), 620 MB per
 probe encoded at once, 0.8 GB otherwise. The same ladder peaked at 3.5 GB
 under `--memory 4g`, 1.7 GB under `3g` and 1.3 GB under `2g`, with the same
 rungs. Memory grows with the resolution (count four times as much for
-2160p) and the ladder's work directory (`/tmp` of the container) held 3 GB.
+2160p; a vertical 1080×1920 video is a 1080p one) and the ladder's work
+directory (`/tmp` of the container) held 3 GB.
 
 On an hour-long 1080p title (H.264 at 25 Mb/s), under `--cpus 2 --memory
 4g`, nothing was killed. The memory of the processes peaked at 1.33 GB for

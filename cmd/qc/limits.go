@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"log/slog"
 	"os"
 	"runtime"
@@ -12,8 +13,12 @@ import (
 )
 
 // cgroupRoot is where Linux mounts the control groups of the process: a
-// container's memory limit is read there.
-const cgroupRoot = "/sys/fs/cgroup"
+// container's memory limit is read there. procRoot holds the memory the
+// system has available, read when there is no such limit.
+const (
+	cgroupRoot = "/sys/fs/cgroup"
+	procRoot   = "/proc"
+)
 
 // Shares of the memory limit, in percent. The libvmaf threads of the
 // measurements get scoringShare (quality.WithMemory) and the ffmpeg
@@ -26,18 +31,33 @@ const (
 	percent      = 100
 )
 
-// resourceLimits are the limits of the run: --cpus, and --memory or, by
-// default, the memory limit of the container qc runs in.
+// resourceLimits are the limits of the run: --cpus, and the memory of
+// memoryLimit.
 func resourceLimits(
 	tools ToolsConfig,
 ) limits.Limits {
+	return limits.Limits{CPUs: tools.CPUs, Memory: memoryLimit(tools.Memory, os.DirFS(cgroupRoot), os.DirFS(procRoot))}
+}
+
+// memoryLimit is the memory of the run: --memory, or the memory limit of
+// the container qc runs in, or else the memory the system has available
+// (Linux). Docker Desktop runs containers without a limit by default, in a
+// virtual machine of a few GB: sized for every CPU, the measurements then
+// outgrew it and the kernel killed qc without a word.
+func memoryLimit(
+	asked string,
+	cgroup, proc fs.FS,
+) int64 {
 	// validate already rejected a malformed --memory.
-	memory, _ := limits.ParseMemory(tools.Memory)
-	if memory == 0 {
-		memory = limits.ContainerMemory(os.DirFS(cgroupRoot))
+	if memory, _ := limits.ParseMemory(asked); memory > 0 {
+		return memory
 	}
 
-	return limits.Limits{CPUs: tools.CPUs, Memory: memory}
+	if memory := limits.ContainerMemory(cgroup); memory > 0 {
+		return memory
+	}
+
+	return limits.AvailableMemory(proc)
 }
 
 // toolThreads is the thread cap of the ffmpeg processes (0: none).

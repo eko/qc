@@ -72,6 +72,29 @@ func TestContainerMemory(
 	}
 }
 
+func TestAvailableMemory(
+	t *testing.T,
+) {
+	meminfo := "MemTotal:        8039596 kB\nMemFree:          512000 kB\nMemAvailable:    4718592 kB\n"
+
+	testCases := []struct {
+		name  string
+		files fstest.MapFS
+		want  int64
+	}{
+		{name: "no proc", files: fstest.MapFS{}, want: 0},
+		{name: "available", files: fstest.MapFS{"meminfo": {Data: []byte(meminfo)}}, want: 4718592 << 10},
+		{name: "old kernel without MemAvailable", files: fstest.MapFS{"meminfo": {Data: []byte("MemTotal: 8039596 kB\n")}}, want: 0},
+		{name: "malformed", files: fstest.MapFS{"meminfo": {Data: []byte("MemAvailable: lots kB\n")}}, want: 0},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, AvailableMemory(testCase.files))
+		})
+	}
+}
+
 func TestFormatMemory(
 	t *testing.T,
 ) {
